@@ -3249,6 +3249,166 @@ textarea:focus-visible {
   color: #facc15;
   white-space: nowrap;
 }
+.ch-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.ch-filter-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #0d131f;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #1e293b;
+}
+
+.ch-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.ch-filter-tab:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ch-filter-tab.active {
+  color: #0b0e14;
+  background: #facc15;
+  box-shadow: 0 2px 8px rgba(250, 204, 21, 0.25);
+}
+
+.ch-filter-count {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+.ch-filter-tab.active .ch-filter-count {
+  background: #0b0e14;
+  color: #facc15;
+}
+
+.ch-filter-count.open {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+}
+
+.ch-filter-tab.active .ch-filter-count.open {
+  background: #0b0e14;
+  color: #22c55e;
+}
+
+.ch-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 240px;
+  flex: 1;
+  max-width: 320px;
+}
+
+.ch-search-input {
+  width: 100%;
+  background: #0d131f;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 9px 30px 9px 34px;
+  color: #f8fafc;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ch-search-input:focus {
+  border-color: #facc15;
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.15);
+}
+
+.ch-search-icon {
+  position: absolute;
+  left: 11px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.ch-search-clear {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+.ch-search-clear:hover {
+  color: #f8fafc;
+}
+
+.ch-empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  background: #111722;
+  border: 1px dashed #26354c;
+  border-radius: 12px;
+  color: #94a3b8;
+}
+
+.ch-empty-state h3 {
+  font-size: 18px;
+  font-weight: 650;
+  color: #f8fafc;
+  margin: 14px 0 6px;
+}
+
+.ch-empty-state p {
+  font-size: 13px;
+  max-width: 440px;
+  margin: 0 auto 20px;
+  line-height: 1.6;
+}
+
+.ch-empty-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: #1a2333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.ch-badge-active {
+  outline: 2px solid #facc15;
+  outline-offset: 2px;
+}
+
 .ch-list {
   list-style: none;
   padding: 0;
@@ -3789,6 +3949,26 @@ textarea:focus-visible {
   }
   .ch-cycle {
     font-size: 10px;
+  }
+  .ch-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .ch-filter-tabs {
+    display: flex;
+    width: 100%;
+  }
+  .ch-filter-tab {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 8px;
+    font-size: 11px;
+    gap: 5px;
+  }
+  .ch-search-wrap {
+    max-width: none;
+    width: 100%;
   }
   .ch-row {
     grid-template-columns: minmax(0, 1fr) 115px;

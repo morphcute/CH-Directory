@@ -7,6 +7,7 @@ import {
   LoaderCircle,
   LockKeyhole,
   MapPin,
+  Search,
 } from "lucide-react";
 import type { AppState, CHPlayer } from "@/types";
 import {
@@ -27,6 +28,9 @@ export function Portal({ initialState }: { initialState: AppState }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [offline, setOffline] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
+  const [searchQuery, setSearchQuery] = useState("");
+
   const players = listedPlayers(state);
   const month = (state.activeTabName || "September 5, 2026").replace(
     /\s+\d{1,2},/,
@@ -35,16 +39,33 @@ export function Portal({ initialState }: { initialState: AppState }) {
   const datePassed = isTabDatePassed(state.activeTabName);
   const openCount = datePassed
     ? 0
-    : players.filter(
-        (p) =>
-          tournamentStatus(p, state.activeTabName) === "open" ||
-          tournamentStatus(p, state.activeTabName) === "closing",
-      ).length;
-  const fullCount = datePassed
-    ? 0
-    : players.filter(
-        (p) => tournamentStatus(p, state.activeTabName) === "full",
-      ).length;
+    : players.filter((p) => {
+        const s = tournamentStatus(p, state.activeTabName);
+        return s === "open" || s === "closing";
+      }).length;
+
+  const closedCount = datePassed
+    ? players.length
+    : players.filter((p) => {
+        const s = tournamentStatus(p, state.activeTabName);
+        return s === "full" || s === "closed";
+      }).length;
+
+  const filteredPlayers = players.filter((p) => {
+    const s = tournamentStatus(p, state.activeTabName);
+    const isOpen = s === "open" || s === "closing";
+    if (statusFilter === "open" && !isOpen) return false;
+    if (statusFilter === "closed" && isOpen) return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchNick = (p.chNickname || "").toLowerCase().includes(q);
+      const matchArea = (p.area || "").toLowerCase().includes(q);
+      const matchName = (p.fullName || "").toLowerCase().includes(q);
+      return matchNick || matchArea || matchName;
+    }
+    return true;
+  });
   const syncTime = state.lastHourlySync
     ? new Intl.DateTimeFormat("en-PH", {
         timeZone: "Asia/Manila",
@@ -216,12 +237,26 @@ export function Portal({ initialState }: { initialState: AppState }) {
                   </span>
                 ) : (
                   <>
-                    <span className="ch-ribbon-badge open">
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("open")}
+                      className={`ch-ribbon-badge open ${statusFilter === "open" ? "ch-badge-active" : ""}`}
+                      style={{ cursor: "pointer", border: "none", font: "inherit" }}
+                      title="Filter by open tournaments"
+                    >
                       <span className="ch-pulse-dot" />
                       {openCount} Open
-                    </span>
-                    {fullCount > 0 && (
-                      <span className="ch-ribbon-badge full">{fullCount} Full</span>
+                    </button>
+                    {closedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilter("closed")}
+                        className={`ch-ribbon-badge full ${statusFilter === "closed" ? "ch-badge-active" : ""}`}
+                        style={{ cursor: "pointer", border: "none", font: "inherit" }}
+                        title="Filter by full or closed tournaments"
+                      >
+                        {closedCount} Full / Closed
+                      </button>
                     )}
                   </>
                 )}
@@ -240,7 +275,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
           <div className="ch-list-heading">
             <div>
               <h2 id="ch-list-title">
-                Community Heroes <span>{players.length}</span>
+                Community Heroes <span>{filteredPlayers.length}</span>
               </h2>
               <p>
                 {datePassed
@@ -264,9 +299,59 @@ export function Portal({ initialState }: { initialState: AppState }) {
               registration.
             </p>
           )}
-          {players.length ? (
+
+          {/* Status Filter Tabs & Quick Search */}
+          <div className="ch-filter-bar">
+            <div className="ch-filter-tabs" role="tablist" aria-label="Tournament status filter">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === "open"}
+                className={`ch-filter-tab ${statusFilter === "open" ? "active" : ""}`}
+                onClick={() => setStatusFilter("open")}
+              >
+                {openCount > 0 && <span className="ch-pulse-dot" />}
+                Open Slots
+                <span className={`ch-filter-count ${openCount > 0 ? "open" : ""}`}>{openCount}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === "closed"}
+                className={`ch-filter-tab ${statusFilter === "closed" ? "active" : ""}`}
+                onClick={() => setStatusFilter("closed")}
+              >
+                Full / Closed
+                <span className="ch-filter-count closed">{closedCount}</span>
+              </button>
+            </div>
+
+            <div className="ch-search-wrap">
+              <Search size={14} className="ch-search-icon" />
+              <input
+                type="text"
+                placeholder="Search hero or area..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="ch-search-input"
+                aria-label="Search tournaments by hero nickname or area"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="ch-search-clear"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+
+          {filteredPlayers.length ? (
             <ul className="ch-list">
-              {players.map((p) => {
+              {filteredPlayers.map((p) => {
                 const regCount = registeredTeamsCount(p);
                 const status = tournamentStatus(p, state.activeTabName);
                 const full = status === "full";
@@ -380,9 +465,38 @@ export function Portal({ initialState }: { initialState: AppState }) {
               })}
             </ul>
           ) : (
-            <div className="empty-state">
-              <h3>No Community Heroes listed yet.</h3>
-              <p>Please check back once the next lineup is published.</p>
+            <div className="ch-empty-state">
+              <div className="ch-empty-icon">
+                {statusFilter === "open" ? <LockKeyhole size={24} /> : <Search size={24} />}
+              </div>
+              <h3>
+                {statusFilter === "open"
+                  ? "No Open Tournament Slots"
+                  : searchQuery
+                    ? `No matches for "${searchQuery}"`
+                    : "No Tournaments Found"}
+              </h3>
+              <p>
+                {statusFilter === "open"
+                  ? datePassed
+                    ? "This tournament cycle has concluded. Registration will reopen for next month."
+                    : "All current Community Heroes tournament slots are fully booked or closed."
+                  : searchQuery
+                    ? "Try searching for a different hero nickname or city."
+                    : "There are currently no tournaments matching this filter."}
+              </p>
+              <button
+                type="button"
+                className="button outline"
+                onClick={() => {
+                  setStatusFilter(statusFilter === "open" ? "closed" : "open");
+                  setSearchQuery("");
+                }}
+              >
+                {statusFilter === "open"
+                  ? `View Full / Closed Tournaments (${closedCount})`
+                  : `View Open Slots (${openCount})`}
+              </button>
             </div>
           )}
         </section>
