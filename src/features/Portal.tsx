@@ -114,11 +114,13 @@ export function Portal({ initialState }: { initialState: AppState }) {
           />
           <div className="ch-banner-shade" />
           <div className="ch-banner-copy">
-            <span className="eyebrow">MLBB PH · COMMUNITY HEROES</span>
+            <span className="eyebrow">CH DIRECTORY · MLBB PH COMMUNITY HEROES</span>
             <h1 id="directory-title">
-              Choose your CH.
+              CH Directory
               <br />
-              Join the game.
+              <span style={{ fontSize: "0.85em", color: "#facc15" }}>
+                Choose your CH. Join the game.
+              </span>
             </h1>
             <p>Select your Community Hero below to register your team.</p>
           </div>

@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 
 export function Brand({ logoUrl }: { logoUrl?: string } = {}) {
   return (
-    <Link className="brand" href="/" aria-label="Community Heroes home">
+    <Link className="brand" href="/" aria-label="CH Directory home">
       <span className="brand-mark">
         {logoUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -24,9 +24,9 @@ export function Brand({ logoUrl }: { logoUrl?: string } = {}) {
         )}
       </span>
       <span>
-        COMMUNITY
+        CH DIRECTORY
         <span>
-          HEROES<span className="brand-ph">PH</span>
+          COMMUNITY HEROES<span className="brand-ph">PH</span>
         </span>
       </span>
     </Link>
@@ -69,7 +69,7 @@ export function Footer({ logoUrl }: { logoUrl?: string } = {}) {
         Find us on Facebook <ArrowUpRight size={15} />
       </a>
       <span className="footer-note">
-        A community tournament directory for MLBB players.
+        CH Directory — A community tournament directory for MLBB players.
       </span>
     </footer>
   );
