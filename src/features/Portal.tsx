@@ -15,6 +15,7 @@ import {
   slotsLeft,
   tournamentStatus,
   isTabDatePassed,
+  registeredTeamsCount,
 } from "@/lib/tournaments";
 import { Brand } from "./shared";
 import { cleanAreaString } from "@/utils/sheetDetector";
@@ -266,6 +267,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
           {players.length ? (
             <ul className="ch-list">
               {players.map((p) => {
+                const regCount = registeredTeamsCount(p);
                 const status = tournamentStatus(p, state.activeTabName);
                 const full = status === "full";
                 const allowed = canRegister(p, state.activeTabName);
@@ -318,7 +320,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
                     <div className="ch-capacity">
                       <div>
                         <span>
-                          <strong>{p.teamsRegistered}</strong> / {p.maxTeams}{" "}
+                          <strong>{regCount}</strong> / {p.maxTeams}{" "}
                           teams
                         </span>
                         <span className={full ? "ch-full-label" : ""}>
@@ -333,13 +335,13 @@ export function Portal({ initialState }: { initialState: AppState }) {
                         className="capacity-track"
                         role="progressbar"
                         aria-label={`${p.chNickname} team capacity`}
-                        aria-valuenow={Math.min(p.teamsRegistered, p.maxTeams)}
+                        aria-valuenow={Math.min(regCount, p.maxTeams)}
                         aria-valuemin={0}
                         aria-valuemax={p.maxTeams}
                       >
                         <span
                           style={{
-                            width: `${Math.min(100, (p.teamsRegistered / p.maxTeams) * 100)}%`,
+                            width: `${Math.min(100, (regCount / p.maxTeams) * 100)}%`,
                           }}
                         />
                       </div>

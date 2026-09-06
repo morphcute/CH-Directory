@@ -323,7 +323,7 @@ export async function inspectPlayer(
         const responseRowCount = Math.max(0, nonempty.length - 1);
         if (extracted.length > 0) {
           updated.registeredTeams = extracted;
-          updated.teamsRegistered = Math.max(extracted.length, responseRowCount);
+          updated.teamsRegistered = extracted.length;
         } else if (responseRowCount > 0) {
           updated.teamsRegistered = responseRowCount;
         } else {

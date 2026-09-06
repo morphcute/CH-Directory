@@ -72,13 +72,24 @@ export function CHCardModal({
   const [copiedTeams, setCopiedTeams] = useState(false);
   const [teamsError, setTeamsError] = useState("");
 
-  const registered = player.teamsRegistered || 0;
+  const registered =
+    teams.length > 0
+      ? teams.length
+      : Array.isArray(player.registeredTeams) && player.registeredTeams.length > 0
+        ? player.registeredTeams.length
+        : player.teamsRegistered || 0;
   const maxTeams = player.maxTeams || 16;
   const datePassed = isTabDatePassed(activeTabName);
-  const status = tournamentStatus(player, activeTabName);
+  const status = tournamentStatus(
+    { ...player, teamsRegistered: registered },
+    activeTabName,
+  );
   const full = status === "full" || registered >= maxTeams;
-  const allowed = canRegister(player, activeTabName);
-  const slots = slotsLeft(player);
+  const allowed = canRegister(
+    { ...player, teamsRegistered: registered },
+    activeTabName,
+  );
+  const slots = Math.max(0, maxTeams - registered);
   const initials = player.chNickname.slice(0, 2).toUpperCase();
 
   const fbUrl = (player.facebookProfileUrl || "").replace(/\.mlbb\/?$/i, "");
@@ -230,7 +241,7 @@ export function CHCardModal({
               {datePassed
                 ? "Tournament ended"
                 : full
-                  ? "Full slots (16/16)"
+                  ? `Full slots (${registered}/${maxTeams})`
                   : status === "closed"
                     ? "Closed"
                     : `${slots} slots left`}
@@ -371,7 +382,7 @@ export function CHCardModal({
               {datePassed
                 ? "Registration Closed — Tournament Date Passed"
                 : full
-                  ? "Full slots (16/16) — Registration Closed"
+                  ? `Full slots (${registered}/${maxTeams}) — Registration Closed`
                   : status === "closed"
                     ? "Registration Closed by Organizer"
                     : "Registration Unavailable"}

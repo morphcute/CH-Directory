@@ -80,15 +80,19 @@ export async function syncSpreadsheetBackground(): Promise<{
                 );
 
                 if (existing) {
+                  const regTeams = existing.registeredTeams || sp.registeredTeams;
+                  const count =
+                    regTeams && regTeams.length > 0
+                      ? regTeams.length
+                      : sp.teamsRegistered > 0
+                        ? sp.teamsRegistered
+                        : 0;
                   merged.push({
                     ...sp,
                     id: existing.id,
                     active: existing.active !== undefined ? existing.active : sp.active,
-                    teamsRegistered:
-                      sp.teamsRegistered > 0
-                        ? sp.teamsRegistered
-                        : (existing.registeredTeams?.length ?? 0),
-                    registeredTeams: existing.registeredTeams || sp.registeredTeams,
+                    teamsRegistered: count,
+                    registeredTeams: regTeams,
                     avatarUrl: existing.avatarUrl || sp.avatarUrl,
                     remarks: existing.remarks || sp.remarks,
                     facebookProfileUrl:
@@ -137,6 +141,11 @@ export async function syncSpreadsheetBackground(): Promise<{
             const inspected = await inspectPlayer(player, token);
 
             // Mark status accurately based on actual registered slots vs max teams
+            const regCount =
+              Array.isArray(inspected.registeredTeams) && inspected.registeredTeams.length > 0
+                ? inspected.registeredTeams.length
+                : inspected.teamsRegistered;
+            inspected.teamsRegistered = regCount;
             const max = inspected.maxTeams || 16;
             if (inspected.teamsRegistered >= max) {
               inspected.formStatus = "full";

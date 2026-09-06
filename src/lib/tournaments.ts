@@ -33,15 +33,25 @@ export function canRegister(player: CHPlayer, tabName?: string) {
   );
 }
 
+export function registeredTeamsCount(player: CHPlayer): number {
+  if (Array.isArray(player.registeredTeams) && player.registeredTeams.length > 0) {
+    return player.registeredTeams.length;
+  }
+  return player.teamsRegistered || 0;
+}
+
 export type TournamentStatus = "open" | "closing" | "full" | "closed";
+
 export function slotsLeft(player: CHPlayer) {
-  return Math.max(0, player.maxTeams - player.teamsRegistered);
+  return Math.max(0, player.maxTeams - registeredTeamsCount(player));
 }
 export function tournamentStatus(player: CHPlayer, tabName?: string): TournamentStatus {
   if (isTabDatePassed(tabName)) return "closed";
   if (!player.active || player.formStatus === "closed") return "closed";
-  if (player.formStatus === "full" || slotsLeft(player) === 0) return "full";
-  return slotsLeft(player) <= 4 ? "closing" : "open";
+  const registered = registeredTeamsCount(player);
+  if (player.formStatus === "full" || registered >= player.maxTeams) return "full";
+  const remaining = Math.max(0, player.maxTeams - registered);
+  return remaining <= 4 ? "closing" : "open";
 }
 export function registrationUrl(player: CHPlayer) {
   return safeLink(
@@ -66,7 +76,7 @@ export function regionOf(player: CHPlayer) {
   if (player.area === "MIMAROPA") return "MIMAROPA";
   return "Metro Manila";
 }
-export const statusLabels = {
+export const statusLabels: Record<TournamentStatus, string> = {
   open: "Registration open",
   closing: "Filling fast",
   full: "Fully booked",

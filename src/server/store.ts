@@ -22,12 +22,29 @@ function statePath() {
   return path.join(process.cwd(), "data", "app-state.json");
 }
 
+function normalizePlayerCounts(players: any[]): any[] {
+  if (!Array.isArray(players)) return [];
+  return players.map((p) => {
+    if (Array.isArray(p.registeredTeams) && p.registeredTeams.length > 0) {
+      return {
+        ...p,
+        teamsRegistered: p.registeredTeams.length,
+      };
+    }
+    return p;
+  });
+}
+
 export async function readState(): Promise<AppState> {
   // 1. Try Neon Database first
   try {
     const dbState = await readDbState();
     if (dbState && Array.isArray(dbState.players)) {
-      return { ...defaultState, ...dbState };
+      return {
+        ...defaultState,
+        ...dbState,
+        players: normalizePlayerCounts(dbState.players),
+      };
     }
   } catch (err) {
     console.error("Neon DB read error, falling back to local file:", err);
@@ -45,7 +62,11 @@ export async function readState(): Promise<AppState> {
     }
     const data = JSON.parse(content);
     if (!Array.isArray(data.players)) throw new Error("Invalid directory data");
-    return { ...defaultState, ...data };
+    return {
+      ...defaultState,
+      ...data,
+      players: normalizePlayerCounts(data.players),
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return defaultState;
     throw error;
@@ -60,6 +81,7 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
     const state: AppState = {
       ...currentState,
       ...update,
+      players: normalizePlayerCounts(update.players ?? currentState.players),
       lastUpdated: Date.now(),
     };
 

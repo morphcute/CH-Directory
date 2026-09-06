@@ -124,7 +124,7 @@ export async function GET(request: Request, context: Context) {
           );
           if (liveTeams.length > 0) {
             player.registeredTeams = liveTeams;
-            player.teamsRegistered = Math.max(player.teamsRegistered, liveTeams.length);
+            player.teamsRegistered = liveTeams.length;
             await saveState({ players: state.players });
             return json({ teams: liveTeams, count: liveTeams.length, source: "sheet" });
           }
