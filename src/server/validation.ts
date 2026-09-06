@@ -50,6 +50,7 @@ export const updateSchema = z.object({
   rawTabsList: z.array(z.string().max(150)).max(200).optional(),
   lastHourlySync: z.number().optional(),
   googleAccessToken: z.string().optional(),
-  logoUrl: z.string().max(3000000).optional(),
-  bannerUrl: z.string().max(3000000).optional(),
-});
+  logoUrl: z.string().max(5000000).optional(),
+  bannerUrl: z.string().max(5000000).optional(),
+  bannerSettings: z.any().optional(),
+}).passthrough();

@@ -79,10 +79,10 @@ export async function syncSpreadsheetBackground(): Promise<{
                   ...sp,
                   id: existing.id,
                   active: existing.active, // Retain admin's toggle
-                  teamsRegistered: Math.max(
-                    existing.teamsRegistered || 0,
-                    sp.teamsRegistered || 0,
-                  ),
+                  teamsRegistered:
+                    sp.teamsRegistered > 0
+                      ? sp.teamsRegistered
+                      : existing.teamsRegistered || 0,
                   registeredTeams: existing.registeredTeams || sp.registeredTeams,
                   avatarUrl: existing.avatarUrl || sp.avatarUrl,
                   remarks: existing.remarks || sp.remarks,

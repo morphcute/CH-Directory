@@ -14,6 +14,9 @@ async function main() {
       console.log("Inactive players:", s.players?.filter((p) => !p.active).length);
       console.log("Active nicknames:", s.players?.filter((p) => p.active).map((p) => p.chNickname));
       console.log("Inactive nicknames:", s.players?.filter((p) => !p.active).map((p) => p.chNickname));
+      console.log("logoUrl:", s.logoUrl?.slice(0, 80));
+      console.log("bannerUrl:", s.bannerUrl?.slice(0, 80));
+      console.log("bannerSettings:", s.bannerSettings);
     } else {
       console.log("app_state table is empty in Neon DB");
     }

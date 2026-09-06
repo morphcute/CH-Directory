@@ -209,21 +209,50 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
   const players: CHPlayer[] = [];
   let lastSeenArea = "";
 
-  // Inspect starting row to skip header
+  // Inspect starting rows to find header row and map columns
   let headerIndex = -1;
+  let colActiveIdx = -1;
+  let colAreaIdx = -1;
+  let colNameIdx = -1;
+  let colNickIdx = -1;
+  let colTeamsIdx = -1;
+  let colPostingIdx = -1;
+  let colRegIdx = -1;
+  let colResponseIdx = -1;
+
   for (let i = 0; i < Math.min(rows.length, 5); i++) {
-    const rowStr = rows[i].map((c) => String(typeof c === "object" ? c?.formattedValue || c?.value || "" : c).toLowerCase()).join(" ");
-    if (
-      rowStr.includes("nickname") ||
-      rowStr.includes("registration") ||
-      rowStr.includes("response sheet") ||
-      rowStr.includes("tournament posting") ||
-      rowStr.includes("area")
-    ) {
+    const row = rows[i] || [];
+    const rowCells = row.map((c) =>
+      String(typeof c === "object" ? c?.formattedValue || c?.value || "" : c)
+        .toLowerCase()
+        .trim(),
+    );
+
+    const hasNickname = rowCells.some((c) => c.includes("nickname") || c === "ch nickname");
+    const hasArea = rowCells.some((c) => c.includes("area") || c.includes("location"));
+    const hasReg = rowCells.some((c) => c.includes("registration") || c.includes("form"));
+
+    if (hasNickname || (hasArea && hasReg)) {
       headerIndex = i;
+      rowCells.forEach((header, idx) => {
+        if (/^(active|status|list|included)$/i.test(header)) colActiveIdx = idx;
+        else if (/^(area|location|province|region|city)$/i.test(header)) colAreaIdx = idx;
+        else if (/^(full\s*name|ch\s*full\s*name|real\s*name|name|pangalan)$/i.test(header)) colNameIdx = idx;
+        else if (/^(nickname|ch\s*nickname|alias|ign)$/i.test(header)) colNickIdx = idx;
+        else if (/^(teams?|teams?\s*registered|no\.?\s*of\s*teams?|registered|slots?|capacity)$/i.test(header)) colTeamsIdx = idx;
+        else if (/^(posting|tournament\s*posting|announcement|post\s*link)$/i.test(header)) colPostingIdx = idx;
+        else if (/^(registration|form\s*link|reg\s*link|google\s*form)$/i.test(header)) colRegIdx = idx;
+        else if (/^(response|response\s*sheet|responses|result\s*sheet)$/i.test(header)) colResponseIdx = idx;
+      });
       break;
     }
   }
+
+  // Fallbacks for column indexes if header didn't specify them
+  if (colActiveIdx === -1) colActiveIdx = 0;
+  if (colAreaIdx === -1) colAreaIdx = 1;
+  if (colNameIdx === -1) colNameIdx = 2;
+  if (colNickIdx === -1) colNickIdx = 3;
 
   const startIndex = headerIndex >= 0 ? headerIndex + 1 : 0;
 
@@ -240,22 +269,18 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
       return String(val).trim();
     };
 
-    // Col A (0): Active indicator (1 or blank)
-    const colA = getCellStr(row[0]);
-    // Col B (1): Area
-    const colB = getCellStr(row[1]);
-    // Col C (2): CH Full Name
-    const colC = getCellStr(row[2]);
+    const colA = getCellStr(row[colActiveIdx]);
+    const colB = getCellStr(row[colAreaIdx]);
+    const colC = getCellStr(row[colNameIdx]);
 
-    // Handle merged/combined AREA cells:
-    // If colB has text and is not the header "AREA", remember it for all combined rows below it
+    // Handle merged/combined AREA cells
     if (colB && colB.toLowerCase() !== "area" && colB.toLowerCase() !== "location") {
       lastSeenArea = colB;
     }
-    const area = (colB && colB.toLowerCase() !== "area") ? colB : lastSeenArea;
+    const area = colB && colB.toLowerCase() !== "area" ? colB : lastSeenArea;
 
-    // Col D (3): CH Nickname (can be `=HYPERLINK("fb_url", "nickname")`, `<a href="...">`, object, or text)
-    const rawCellD = row[3];
+    // Col Nickname (can be `=HYPERLINK("fb_url", "nickname")`, `<a href="...">`, object, or text)
+    const rawCellD = row[colNickIdx];
     let nickname = "";
     let fbProfileUrl = "";
 
@@ -266,7 +291,6 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
       const rawColD = String(rawCellD || "").trim();
       nickname = rawColD;
 
-      // 1. Check if colD is a formula =HYPERLINK("url", "text")
       const formulaMatch = rawColD.match(
         /=HYPERLINK\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)/i,
       );
@@ -274,7 +298,6 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
         fbProfileUrl = formulaMatch[1].trim();
         nickname = formulaMatch[2].trim();
       } else {
-        // 2. Check for HTML link <a href="url">text</a>
         const htmlMatch = rawColD.match(
           /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([^<]+)<\/a>/i,
         );
@@ -282,13 +305,11 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
           fbProfileUrl = htmlMatch[1].trim();
           nickname = htmlMatch[2].trim();
         } else {
-          // 3. Check for Markdown link [text](url)
           const mdMatch = rawColD.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/i);
           if (mdMatch) {
             nickname = mdMatch[1].trim();
             fbProfileUrl = mdMatch[2].trim();
           } else {
-            // 4. Check for "Nickname (url)" format
             const parenMatch = rawColD.match(/^(.*?)\s*\((https?:\/\/[^\s)]+)\)/i);
             if (parenMatch) {
               nickname = parenMatch[1].trim();
@@ -302,26 +323,48 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
     // Clean up nickname from any residual quotes or HTML
     nickname = nickname.replace(/<[^>]+>/g, "").replace(/^["']|["']$/g, "").trim();
 
-    // Col E (4): Tournament Posting Link
-    // Col F (5): Registration Form Link
-    // Col G (6): Tournament Response Sheet
-    // Col H (7): Pre Registered List Link
-    let postingLink = "";
-    let regLink = "";
-    let responseLink = "";
+    // Parse team count and links
+    let teamsCount = 0;
+    let postingLink = colPostingIdx >= 0 ? getCellStr(row[colPostingIdx]) : "";
+    let regLink = colRegIdx >= 0 ? getCellStr(row[colRegIdx]) : "";
+    let responseLink = colResponseIdx >= 0 ? getCellStr(row[colResponseIdx]) : "";
 
-    if (row.length >= 7) {
-      postingLink = getCellStr(row[4]);
-      regLink = getCellStr(row[5]);
-      responseLink = getCellStr(row[6]);
-    } else if (row.length >= 6) {
-      postingLink = getCellStr(row[4]);
-      regLink = getCellStr(row[5]);
-    } else if (row.length >= 5) {
-      regLink = getCellStr(row[4]);
+    // Explicit Teams column
+    if (colTeamsIdx >= 0 && row[colTeamsIdx] !== undefined) {
+      const tStr = getCellStr(row[colTeamsIdx]);
+      const match = tStr.match(/\b\d+\b/);
+      if (match) teamsCount = parseInt(match[0], 10);
     }
 
-    // Skip empty separator rows or header duplicates (e.g. summary row 3 with count "48")
+    // Scan remaining cells for URLs and numeric team counts if not set
+    for (let c = 4; c < row.length; c++) {
+      const val = getCellStr(row[c]);
+      if (!val) continue;
+
+      // Check if this cell is a pure number (teams registered)
+      if (teamsCount === 0 && /^\d+(\s*\/\s*\d+)?(\s*teams?)?$/i.test(val)) {
+        const numMatch = val.match(/\b\d+\b/);
+        if (numMatch) {
+          teamsCount = parseInt(numMatch[0], 10);
+          continue;
+        }
+      }
+
+      // Check URL types
+      if (/forms\.gle|docs\.google\.com\/forms/i.test(val)) {
+        if (!regLink) regLink = val;
+      } else if (/docs\.google\.com\/spreadsheets/i.test(val)) {
+        if (!responseLink) responseLink = val;
+      } else if (/facebook\.com|fb\.watch|fb\.me/i.test(val)) {
+        if (!postingLink) postingLink = val;
+      } else if (/^https?:\/\//i.test(val)) {
+        if (!regLink) regLink = val;
+        else if (!responseLink) responseLink = val;
+        else if (!postingLink) postingLink = val;
+      }
+    }
+
+    // Skip empty separator rows or header duplicates
     if (!colC && !nickname && !regLink && !postingLink) continue;
     if (colC.toLowerCase().includes("full name") || nickname.toLowerCase() === "ch nickname") continue;
     if (colA === "48" && !colC && !nickname) continue;
@@ -349,7 +392,7 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
       registrationFormLink: regLink || postingLink,
       tournamentPostingLink: postingLink || regLink,
       tournamentResponseSheet: responseLink,
-      teamsRegistered: 0,
+      teamsRegistered: teamsCount,
       maxTeams: 16,
       rowIndex: i + 1,
     });

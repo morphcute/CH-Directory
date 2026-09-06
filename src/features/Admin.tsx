@@ -807,9 +807,9 @@ export function Admin() {
                 )}
                 {tab === "branding" && (
                   <section className="admin-panel" style={{ maxWidth: 960 }}>
-                    <h2>Logo & Hero Banner</h2>
+                    <h2>Profile Logo & Cover Banner</h2>
                     <p>
-                      Personalize the Community Heroes tournament directory visuals. Upload your own image files or provide direct image links.
+                      Personalize the Community Heroes public directory. Upload your own images, choose presets, or customize the profile title, bio, and Facebook links.
                     </p>
                     <div className="branding-grid">
                       {/* Logo Section */}
@@ -817,38 +817,27 @@ export function Admin() {
                         <div className="branding-card-header">
                           <ImageIcon size={18} />
                           <div>
-                            <h3>Logo picture</h3>
-                            <small>Displayed in the top navigation header and footer.</small>
+                            <h3>Profile Picture / Avatar</h3>
+                            <small>Circular profile picture displayed on the public Facebook-style card.</small>
                           </div>
                         </div>
                         <div className="branding-preview-box">
-                          <div className="branding-logo-preview">
-                            {state.logoUrl ? (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img
-                                src={state.logoUrl}
-                                alt="Logo preview"
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "contain",
-                                  borderRadius: 8,
-                                }}
-                              />
-                            ) : (
-                              <div style={{ textAlign: "center" }}>
-                                <span className="brand-mark" style={{ transform: "none", margin: "0 auto" }}>
-                                  <Crown size={24} strokeWidth={2.3} />
-                                </span>
-                                <span style={{ display: "block", fontSize: 10, marginTop: 4, color: "#94a3b8" }}>
-                                  Default Crown
-                                </span>
-                              </div>
-                            )}
+                          <div className="branding-logo-preview" style={{ borderRadius: "50%", overflow: "hidden", width: 72, height: 72 }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={state.logoUrl || "/images/mlbb-ch-avatar.png"}
+                              alt="Profile logo preview"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                borderRadius: "50%",
+                              }}
+                            />
                           </div>
                           <div className="branding-preview-meta">
-                            <strong>{state.logoUrl ? "Custom logo active" : "Default crown emblem"}</strong>
-                            <p>Recommended: Square PNG, SVG, or WebP with transparent background (120×120px or higher).</p>
+                            <strong>{state.logoUrl ? "Custom logo active" : "MLBB Community Hero avatar"}</strong>
+                            <p>Recommended: Square PNG, WebP, or JPG (400×400px). Auto-compressed on upload.</p>
                           </div>
                         </div>
                         <div className="branding-inputs">
@@ -857,7 +846,7 @@ export function Admin() {
                             <input
                               value={state.logoUrl || ""}
                               onChange={(e) => update({ logoUrl: e.target.value })}
-                              placeholder="https://example.com/logo.png"
+                              placeholder="/images/mlbb-ch-avatar.png or https://…"
                             />
                           </label>
                           <div className="branding-upload-bar">
@@ -875,17 +864,27 @@ export function Admin() {
                                 }}
                               />
                             </label>
+                            <button
+                              type="button"
+                              className="button outline small"
+                              onClick={() => {
+                                update({ logoUrl: "/images/mlbb-ch-avatar.png" });
+                                setMessage("Profile logo set to Community Hero avatar. Click 'Publish changes' to save.");
+                              }}
+                            >
+                              CH Preset
+                            </button>
                             {state.logoUrl && (
                               <button
                                 type="button"
                                 className="button outline small"
                                 onClick={() => {
                                   update({ logoUrl: "" });
-                                  setMessage("Logo restored to default Crown. Click 'Publish changes' to save.");
+                                  setMessage("Logo restored to default. Click 'Publish changes' to save.");
                                 }}
                               >
                                 <RotateCcw size={14} />
-                                Reset to default
+                                Reset
                               </button>
                             )}
                           </div>
@@ -897,26 +896,22 @@ export function Admin() {
                         <div className="branding-card-header">
                           <ImageIcon size={18} />
                           <div>
-                            <h3>Hero Banner picture</h3>
-                            <small>Top header banner for the Community Heroes public directory.</small>
+                            <h3>Profile Cover Banner</h3>
+                            <small>Top cover photo displayed behind the profile picture.</small>
                           </div>
                         </div>
                         <div className="branding-preview-box">
-                          <div className="branding-banner-preview">
+                          <div className="branding-banner-preview" style={{ width: 140, height: 72 }}>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              src={state.bannerUrl || "/images/hero-knight.png"}
+                              src={state.bannerUrl || "/images/mlbb-ch-banner.png"}
                               alt="Hero banner preview"
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
                             />
-                            <div className="ch-banner-shade" style={{ position: "absolute", inset: 0 }} />
-                            <div className="branding-banner-preview-text">
-                              <span className="eyebrow" style={{ fontSize: 7, letterSpacing: 1 }}>MLBB PH · COMMUNITY HEROES</span>
-                              <strong style={{ fontSize: 13, display: "block", color: "#fff", marginTop: 2 }}>Choose your CH. Join the game.</strong>
-                            </div>
                           </div>
                           <div className="branding-preview-meta">
-                            <strong>{state.bannerUrl && state.bannerUrl !== "/images/hero-knight.png" ? "Custom banner active" : "Default hero banner"}</strong>
-                            <p>Recommended: 1920×600px or 16:9 ratio, JPG, WebP, or PNG.</p>
+                            <strong>{state.bannerUrl ? "Custom banner active" : "MLBB 10th Anniversary Banner"}</strong>
+                            <p>Recommended: 16:9 ratio, JPG, WebP, or PNG (up to 1600px wide).</p>
                           </div>
                         </div>
                         <div className="branding-inputs">
@@ -925,7 +920,7 @@ export function Admin() {
                             <input
                               value={state.bannerUrl || ""}
                               onChange={(e) => update({ bannerUrl: e.target.value })}
-                              placeholder="/images/hero-knight.png or https://example.com/banner.jpg"
+                              placeholder="/images/mlbb-ch-banner.png or https://…"
                             />
                           </label>
                           <div className="branding-upload-bar">
@@ -943,20 +938,112 @@ export function Admin() {
                                 }}
                               />
                             </label>
-                            {state.bannerUrl && state.bannerUrl !== "/images/hero-knight.png" && (
+                            <button
+                              type="button"
+                              className="button outline small"
+                              onClick={() => {
+                                update({ bannerUrl: "/images/mlbb-ch-banner.png" });
+                                setMessage("Cover banner set to MLBB 10th Anniversary banner. Click 'Publish changes' to save.");
+                              }}
+                            >
+                              MLBB 10th Banner
+                            </button>
+                            <button
+                              type="button"
+                              className="button outline small"
+                              onClick={() => {
+                                update({ bannerUrl: "/images/hero-knight.png" });
+                                setMessage("Cover banner set to Gold Knight banner. Click 'Publish changes' to save.");
+                              }}
+                            >
+                              Gold Knight
+                            </button>
+                            {state.bannerUrl && (
                               <button
                                 type="button"
                                 className="button outline small"
                                 onClick={() => {
-                                  update({ bannerUrl: "/images/hero-knight.png" });
-                                  setMessage("Banner restored to default knight image. Click 'Publish changes' to save.");
+                                  update({ bannerUrl: "" });
+                                  setMessage("Banner restored to default. Click 'Publish changes' to save.");
                                 }}
                               >
                                 <RotateCcw size={14} />
-                                Reset to default
+                                Reset
                               </button>
                             )}
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Profile Details Section */}
+                      <div className="branding-card" style={{ gridColumn: "1 / -1" }}>
+                        <div className="branding-card-header">
+                          <ShieldCheck size={18} />
+                          <div>
+                            <h3>Profile Identity & Follow Button</h3>
+                            <small>Text details shown in the Facebook-style profile card.</small>
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+                          <label className="form-field">
+                            Directory Page Title
+                            <input
+                              value={state.bannerSettings?.title ?? "MLBB PH - Community Heroes"}
+                              onChange={(e) =>
+                                update({
+                                  bannerSettings: {
+                                    ...(state.bannerSettings || { type: "preset", presetId: "official" }),
+                                    title: e.target.value,
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="form-field">
+                            Bio / Subtitle
+                            <input
+                              value={state.bannerSettings?.subtitle ?? "Official MLBB Tournament Directory"}
+                              onChange={(e) =>
+                                update({
+                                  bannerSettings: {
+                                    ...(state.bannerSettings || { type: "preset", presetId: "official" }),
+                                    subtitle: e.target.value,
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="form-field">
+                            Follower Stats
+                            <input
+                              value={state.bannerSettings?.followersText ?? "286K followers • 5 following"}
+                              onChange={(e) =>
+                                update({
+                                  bannerSettings: {
+                                    ...(state.bannerSettings || { type: "preset", presetId: "official" }),
+                                    followersText: e.target.value,
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="form-field">
+                            Facebook Page URL
+                            <input
+                              value={
+                                state.bannerSettings?.facebookPageUrl ??
+                                "https://www.facebook.com/MLBBPHCommunityHeroes"
+                              }
+                              onChange={(e) =>
+                                update({
+                                  bannerSettings: {
+                                    ...(state.bannerSettings || { type: "preset", presetId: "official" }),
+                                    facebookPageUrl: e.target.value,
+                                  },
+                                })
+                              }
+                            />
+                          </label>
                         </div>
                       </div>
                     </div>

@@ -236,32 +236,3 @@ export async function fetchTeamsFromResponseSheet(
   }
   return teams;
 }
-
-const PHILIPPINE_MLBB_TEAMS = [
-  "Omega Alpha",
-  "Echo Ph Rising",
-  "Blacklist Academy",
-  "RSG Ignite",
-  "AP Bren Juniors",
-  "Minana EVOS",
-  "Falcon Esports PH",
-  "Nexplay Solid",
-  "Smart Omega Neo",
-  "Aurora Knights",
-  "TNC Pro Squad",
-  "GameLab PH",
-  "Rebellion Zion PH",
-  "Bigetron PH",
-  "Geek Fam Jr",
-  "RRQ Academy PH",
-];
-
-export function generateSampleTeams(nickname: string, count: number): string[] {
-  const target = Math.max(0, Math.min(count, 16));
-  const list: string[] = [];
-  for (let i = 0; i < target; i++) {
-    const team = PHILIPPINE_MLBB_TEAMS[i % PHILIPPINE_MLBB_TEAMS.length];
-    list.push(i >= PHILIPPINE_MLBB_TEAMS.length ? `${team} #${Math.floor(i / PHILIPPINE_MLBB_TEAMS.length) + 1}` : team);
-  }
-  return list;
-}

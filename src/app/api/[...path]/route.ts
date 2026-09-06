@@ -11,7 +11,7 @@ import {
   ADMIN_EMAIL,
 } from "@/server/auth";
 import { playerSchema, updateSchema } from "@/server/validation";
-import { inspectPlayer, sheetRows, fetchTeamsFromResponseSheet, generateSampleTeams } from "@/server/sheets";
+import { inspectPlayer, sheetRows, fetchTeamsFromResponseSheet } from "@/server/sheets";
 import {
   ensureSyncSchedulerRunning,
   checkAndTriggerHourlySync,
@@ -108,11 +108,10 @@ export async function GET(request: Request, context: Context) {
             return json({ teams: liveTeams, count: liveTeams.length, source: "sheet" });
           }
         } catch {
-          // fallback to sample below
+          // Response sheet could not be read
         }
       }
-      const teams = generateSampleTeams(player.chNickname, player.teamsRegistered || 0);
-      return json({ teams, count: teams.length, source: "roster" });
+      return json({ teams: [], count: 0, source: "none" });
     }
     return json({ error: "Endpoint not found." }, 404);
   } catch (error) {

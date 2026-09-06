@@ -114,7 +114,11 @@ export function Portal({ initialState }: { initialState: AppState }) {
           <div className="ch-fb-cover">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={state.bannerUrl || "/images/hero-knight.png"}
+              src={
+                state.bannerUrl ||
+                state.bannerSettings?.customUrl ||
+                "/images/mlbb-ch-banner.png"
+              }
               alt="Community Heroes Tournament Banner"
               className="ch-fb-cover-img"
             />
@@ -137,18 +141,16 @@ export function Portal({ initialState }: { initialState: AppState }) {
           <div className="ch-fb-profile-content">
             <div className="ch-fb-avatar-center">
               <div className="ch-fb-avatar-box">
-                {state.logoUrl ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={state.logoUrl}
-                    alt="MLBB PH - Community Heroes Profile"
-                    className="ch-fb-avatar-img"
-                  />
-                ) : (
-                  <div className="ch-fb-avatar-fallback">
-                    <Brand logoUrl="" />
-                  </div>
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    state.logoUrl ||
+                    state.bannerSettings?.avatarCustomUrl ||
+                    "/images/mlbb-ch-avatar.png"
+                  }
+                  alt="MLBB PH - Community Heroes Profile"
+                  className="ch-fb-avatar-img"
+                />
               </div>
               <span className="ch-fb-active-dot" title="Active Now" />
             </div>
@@ -157,16 +159,16 @@ export function Portal({ initialState }: { initialState: AppState }) {
               <div className="ch-fb-name-row">
                 <h1 className="ch-fb-name">
                   {state.bannerSettings?.title || "MLBB PH - Community Heroes"}
+                  <span className="verified-badge" title="Verified Page">
+                    <svg className="verified-badge-icon" viewBox="0 0 20 20" fill="currentColor">
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </span>
                 </h1>
-                <span className="verified-badge" title="Verified Page">
-                  <svg className="verified-badge-icon" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </span>
               </div>
               <p className="ch-fb-bio">
                 {state.bannerSettings?.subtitle || "Official MLBB Tournament Directory"}

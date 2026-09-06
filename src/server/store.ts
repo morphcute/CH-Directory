@@ -1,19 +1,15 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { INITIAL_SEPTEMBER_PLAYERS, INITIAL_TABS } from "@/data/initialData";
 import { readDbState, writeDbState } from "@/server/db";
 import type { AppState } from "@/types";
 
 export const defaultState: AppState = {
-  players: INITIAL_SEPTEMBER_PLAYERS,
-  selectedNicknames: INITIAL_SEPTEMBER_PLAYERS.filter((p) => p.active).map(
-    (p) => p.chNickname,
-  ),
-  activeTabName: "September 5, 2026",
-  spreadsheetUrl:
-    "https://docs.google.com/spreadsheets/d/1HUANmtnLjlGiNjyiYs4Dgp5rmm_71oH2qFuXMeZXkZw/edit",
-  rawTabsList: INITIAL_TABS,
+  players: [],
+  selectedNicknames: [],
+  activeTabName: "",
+  spreadsheetUrl: "",
+  rawTabsList: [],
 };
 
 function statePath() {
