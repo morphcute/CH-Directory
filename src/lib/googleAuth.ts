@@ -9,7 +9,7 @@ export const GOOGLE_SHEETS_SCOPE =
 const DEFAULT_CLIENT_ID =
   process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
   process.env.GOOGLE_CLIENT_ID ||
-  "768953954112-h8goecduf4tnu7paiahmu31985hq2mmq.apps.googleusercontent.com";
+  "258026102388-qt7roag98lboej25gl1c372053amcuoc.apps.googleusercontent.com";
 
 let cachedAccessToken: string | null = null;
 let cachedUser: { email: string; name?: string; picture?: string } | null =
