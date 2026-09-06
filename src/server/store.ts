@@ -15,14 +15,25 @@ export const defaultState: AppState = {
   rawTabsList: INITIAL_TABS,
 };
 function statePath() {
-  return path.join(
-    process.env.DATA_DIR || path.join(process.cwd(), "data"),
-    "app-state.json",
-  );
+  if (process.env.DATA_DIR) {
+    return path.join(process.env.DATA_DIR, "app-state.json");
+  }
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "app-state.json");
+  }
+  return path.join(process.cwd(), "data", "app-state.json");
 }
 export async function readState(): Promise<AppState> {
   try {
-    const data = JSON.parse(await readFile(statePath(), "utf8"));
+    const file = statePath();
+    let content: string;
+    try {
+      content = await readFile(file, "utf8");
+    } catch {
+      const bundled = path.join(process.cwd(), "data", "app-state.json");
+      content = await readFile(bundled, "utf8");
+    }
+    const data = JSON.parse(content);
     if (!Array.isArray(data.players)) throw new Error("Invalid directory data");
     return { ...defaultState, ...data };
   } catch (error) {
