@@ -70,12 +70,13 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
       console.error("Neon DB write error:", err);
     }
 
-    // 2. Backup to local file
+    // 2. Backup to local file (sanitize tokens so secrets never leak to disk or git)
     try {
       const file = statePath();
       await mkdir(path.dirname(file), { recursive: true });
       const temporary = `${file}.${randomUUID()}.tmp`;
-      await writeFile(temporary, JSON.stringify(state, null, 2), "utf8");
+      const { googleAccessToken: _a, googleRefreshToken: _r, ...safeState } = state;
+      await writeFile(temporary, JSON.stringify(safeState, null, 2), "utf8");
       await rename(temporary, file);
     } catch (err) {
       // Non-critical if running in readonly environment

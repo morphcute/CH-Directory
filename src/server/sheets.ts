@@ -4,12 +4,23 @@ import { readState } from "./store";
 
 const allowedHosts = new Set([
   "docs.google.com",
+  "drive.google.com",
   "forms.google.com",
   "forms.gle",
   "tinyurl.com",
   "www.tinyurl.com",
   "bit.ly",
   "www.bit.ly",
+  "facebook.com",
+  "www.facebook.com",
+  "web.facebook.com",
+  "m.facebook.com",
+  "fb.me",
+  "fb.watch",
+  "t.co",
+  "cutt.ly",
+  "rb.gy",
+  "shorturl.at",
 ]);
 export function allowedRemote(value: string) {
   const url = new URL(value);
@@ -21,7 +32,7 @@ export function allowedRemote(value: string) {
     !allowedHosts.has(url.hostname)
   )
     throw new Error(
-      "Only Google Sheets, Google Forms, TinyURL, and Bitly links are supported.",
+      "Only Google Sheets, Google Forms, TinyURL, Bitly, and Facebook links are supported.",
     );
   return url;
 }
@@ -30,7 +41,7 @@ export async function safeFetch(value: string): Promise<Response> {
   for (let i = 0; i < 6; i++) {
     const response = await fetch(url, {
       redirect: "manual",
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(5000),
       headers: { "User-Agent": "CommunityHeroes/1.0" },
       cache: "no-store",
     });
@@ -87,8 +98,22 @@ export async function getSpreadsheetTabs(value: string, token?: string) {
             .map((s: any) => s.properties?.title)
             .filter((t: any) => typeof t === "string" && t.trim().length > 0);
         }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        const errMsg = errJson?.error?.message || "";
+        if (
+          errMsg.includes("Google Sheets API has not been used in project") ||
+          errMsg.includes("disabled")
+        ) {
+          throw new Error(
+            `Google Sheets API is not enabled in your Google Cloud project (258026102388). Enable it at: https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=258026102388 or set the spreadsheet sharing to "Anyone with the link can view".`,
+          );
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.message?.includes("console.developers.google.com")) {
+        throw err;
+      }
       console.warn("Google Sheets API metadata failed:", err);
     }
   }
@@ -229,10 +254,21 @@ export async function sheetRows(value: string, tab?: string, token?: string) {
         cache: "no-store",
       },
     );
-    if (!res.ok)
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const errMsg = errJson?.error?.message || "";
+      if (
+        errMsg.includes("Google Sheets API has not been used in project") ||
+        errMsg.includes("disabled")
+      ) {
+        throw new Error(
+          `Google Sheets API is not enabled in your Google Cloud project (258026102388). Enable it at: https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=258026102388 or set the spreadsheet sharing to "Anyone with the link can view".`,
+        );
+      }
       throw new Error(
-        "Google could not read this sheet. Sign in again or check sharing permissions.",
+        errMsg || "Google could not read this sheet. Sign in again or check sharing permissions.",
       );
+    }
     return (await res.json()).values || [];
   }
   const res = await safeFetch(
@@ -262,7 +298,15 @@ export async function inspectPlayer(
           (cell) => cell !== null && cell !== undefined && String(cell).trim(),
         ),
       );
-      updated.teamsRegistered = Math.max(0, nonempty.length - 1);
+      if (nonempty.length > 1) {
+        const responseCount = nonempty.length - 1;
+        updated.teamsRegistered = Math.max(
+          player.teamsRegistered || 0,
+          responseCount,
+        );
+      } else {
+        updated.teamsRegistered = player.teamsRegistered || 0;
+      }
       updated.resolvedResponseSheetUrl = url;
       if (rows.length > 1) {
         const header = (rows[0] as unknown[]).map((c: unknown) => String(c || "").trim());
@@ -283,7 +327,13 @@ export async function inspectPlayer(
           const tName = val !== null && val !== undefined ? String(val).trim() : "";
           if (tName && !extracted.includes(tName)) extracted.push(tName);
         }
-        if (extracted.length > 0) updated.registeredTeams = extracted;
+        if (extracted.length > 0) {
+          updated.registeredTeams = extracted;
+          updated.teamsRegistered = Math.max(
+            updated.teamsRegistered,
+            extracted.length,
+          );
+        }
       }
     } catch (error) {
       errors.push((error as Error).message);

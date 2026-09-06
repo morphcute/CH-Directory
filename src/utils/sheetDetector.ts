@@ -199,9 +199,90 @@ export function parseGvizResponse(rawText: string): any[][] {
  * Column F (Registration Form Link), and Column G (Tournament Response Sheet)
  */
 /**
+ * Helper to extract clean text and URL from any cell format:
+ * string, object, =HYPERLINK("url", "text"), <a href="url">text</a>, [text](url)
+ */
+export function parseCellContent(val: any): { text: string; url: string } {
+  if (val === null || val === undefined) return { text: "", url: "" };
+  if (typeof val === "object") {
+    const text = String(val.formattedValue || val.value || val.v || "").trim();
+    const url = String(val.hyperlink || val.link || val.url || "").trim();
+    return { text, url };
+  }
+
+  const str = String(val).trim();
+
+  // Check =HYPERLINK("url", "text")
+  const formulaMatch = str.match(
+    /=HYPERLINK\s*\(\s*["']([^"']+)["'](?:\s*,\s*["']([^"']*)["'])?\s*\)/i,
+  );
+  if (formulaMatch) {
+    const url = formulaMatch[1].trim();
+    const text = (formulaMatch[2] !== undefined ? formulaMatch[2] : url).trim();
+    return { text, url };
+  }
+
+  // Check HTML <a href="url">text</a>
+  const htmlMatch = str.match(
+    /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/i,
+  );
+  if (htmlMatch) {
+    return { text: htmlMatch[2].trim(), url: htmlMatch[1].trim() };
+  }
+
+  // Check Markdown [text](url)
+  const mdMatch = str.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/i);
+  if (mdMatch) {
+    return { text: mdMatch[1].trim(), url: mdMatch[2].trim() };
+  }
+
+  // Check text (https://...)
+  const parenMatch = str.match(/^(.*?)\s*\((https?:\/\/[^\s)]+)\)/i);
+  if (parenMatch) {
+    return { text: parenMatch[1].trim(), url: parenMatch[2].trim() };
+  }
+
+  if (/^https?:\/\//i.test(str)) {
+    return { text: str, url: str };
+  }
+
+  return { text: str, url: "" };
+}
+
+/**
+ * Cleans any area string, unwrapping =HYPERLINK("...", "Area Name"),
+ * HTML anchors, markdown links, or extra quotes, ensuring only clean location text
+ */
+export function cleanAreaString(val: any): string {
+  if (!val) return "";
+  const parsed = parseCellContent(val);
+  let text = parsed.text || "";
+  // Check if text still contains formula or markdown
+  const formulaMatch = text.match(/=HYPERLINK\s*\(\s*["'][^"']+["']\s*,\s*["']([^"']+)["']\s*\)/i);
+  if (formulaMatch) text = formulaMatch[1].trim();
+  const htmlMatch = text.match(/<a\s+[^>]*>([^<]+)<\/a>/i);
+  if (htmlMatch) text = htmlMatch[1].trim();
+  const mdMatch = text.match(/^\[([^\]]+)\]/i);
+  if (mdMatch) text = mdMatch[1].trim();
+  return text
+    .replace(/<[^>]+>/g, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
+
+/**
+ * Ensures any link value is a valid http(s) URL string or empty
+ */
+export function cleanUrl(val: any): string {
+  if (!val) return "";
+  const parsed = parseCellContent(val);
+  const candidate = (parsed.url || parsed.text || "").trim();
+  return /^https?:\/\//i.test(candidate) ? candidate : "";
+}
+
+/**
  * Converts raw rows into CHPlayer models
- * Handles Column A (Active), Column B (Area with merged/combined cells),
- * Column C (Full Name), Column D (Nickname with Facebook hyperlink),
+ * Handles Column A (Active), Column B (Area), Column C (Full Name), Column D (Nickname with Facebook hyperlink),
  * Column E (Tournament Posting Link), Column F (Registration Form Link),
  * Column G (Tournament Response Sheet), Column H (Pre Registered List Link)
  */
@@ -222,27 +303,44 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
 
   for (let i = 0; i < Math.min(rows.length, 5); i++) {
     const row = rows[i] || [];
-    const rowCells = row.map((c) =>
-      String(typeof c === "object" ? c?.formattedValue || c?.value || "" : c)
+    const rowCells = row.map((c) => {
+      const parsed = parseCellContent(c);
+      return (parsed.text || parsed.url || "")
+        .replace(/[\r\n]+/g, " ")
+        .replace(/\s+/g, " ")
         .toLowerCase()
-        .trim(),
-    );
+        .trim();
+    });
 
-    const hasNickname = rowCells.some((c) => c.includes("nickname") || c === "ch nickname");
-    const hasArea = rowCells.some((c) => c.includes("area") || c.includes("location"));
-    const hasReg = rowCells.some((c) => c.includes("registration") || c.includes("form"));
+    const hasNickname = rowCells.some(
+      (c) => c.includes("nickname") || c === "ch nickname",
+    );
+    const hasArea = rowCells.some(
+      (c) => c.includes("area") || c.includes("location"),
+    );
+    const hasReg = rowCells.some(
+      (c) => c.includes("registration") || c.includes("form"),
+    );
 
     if (hasNickname || (hasArea && hasReg)) {
       headerIndex = i;
       rowCells.forEach((header, idx) => {
         if (/^(active|status|list|included)$/i.test(header)) colActiveIdx = idx;
         else if (/^(area|location|province|region|city)$/i.test(header)) colAreaIdx = idx;
-        else if (/^(full\s*name|ch\s*full\s*name|real\s*name|name|pangalan)$/i.test(header)) colNameIdx = idx;
-        else if (/^(nickname|ch\s*nickname|alias|ign)$/i.test(header)) colNickIdx = idx;
-        else if (/^(teams?|teams?\s*registered|no\.?\s*of\s*teams?|registered|slots?|capacity)$/i.test(header)) colTeamsIdx = idx;
-        else if (/^(posting|tournament\s*posting|announcement|post\s*link)$/i.test(header)) colPostingIdx = idx;
-        else if (/^(registration|form\s*link|reg\s*link|google\s*form)$/i.test(header)) colRegIdx = idx;
-        else if (/^(response|response\s*sheet|responses|result\s*sheet)$/i.test(header)) colResponseIdx = idx;
+        else if (/nickname|alias|ign/i.test(header)) colNickIdx = idx;
+        else if (
+          /(ch\s*)?full\s*name|real\s*name|pangalan|\bname\b/i.test(header) &&
+          !/team|nick|tournament/i.test(header)
+        )
+          colNameIdx = idx;
+        else if (/response/i.test(header)) colResponseIdx = idx;
+        else if (/posting|announcement|post\s*link/i.test(header)) colPostingIdx = idx;
+        else if (/registration|form/i.test(header)) colRegIdx = idx;
+        else if (
+          /registered\s*teams|teams?\s*registered|no\.?\s*of\s*teams?|teams?\s*count/i.test(header) &&
+          !/total|player|prize|diamond/i.test(header)
+        )
+          colTeamsIdx = idx;
       });
       break;
     }
@@ -260,114 +358,82 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
     const row = rows[i];
     if (!row || row.length === 0) continue;
 
-    // Helper to get string or object value
-    const getCellStr = (val: any): string => {
-      if (!val) return "";
-      if (typeof val === "object") {
-        return String(val.formattedValue || val.value || val.v || "").trim();
-      }
-      return String(val).trim();
-    };
+    const colA = parseCellContent(row[colActiveIdx]).text;
+    const areaClean = cleanAreaString(row[colAreaIdx]);
+    const colC = parseCellContent(row[colNameIdx]).text;
 
-    const colA = getCellStr(row[colActiveIdx]);
-    const colB = getCellStr(row[colAreaIdx]);
-    const colC = getCellStr(row[colNameIdx]);
-
-    // Handle merged/combined AREA cells
-    if (colB && colB.toLowerCase() !== "area" && colB.toLowerCase() !== "location") {
-      lastSeenArea = colB;
+    // Handle merged/combined AREA cells (always clean string, no =HYPERLINK)
+    if (areaClean && !/^(area|location|province|region)$/i.test(areaClean)) {
+      lastSeenArea = areaClean;
     }
-    const area = colB && colB.toLowerCase() !== "area" ? colB : lastSeenArea;
+    const area = lastSeenArea || "Unassigned";
 
-    // Col Nickname (can be `=HYPERLINK("fb_url", "nickname")`, `<a href="...">`, object, or text)
-    const rawCellD = row[colNickIdx];
-    let nickname = "";
-    let fbProfileUrl = "";
-
-    if (rawCellD && typeof rawCellD === "object") {
-      nickname = String(rawCellD.formattedValue || rawCellD.value || rawCellD.v || "").trim();
-      fbProfileUrl = String(rawCellD.hyperlink || rawCellD.link || rawCellD.url || "").trim();
-    } else {
-      const rawColD = String(rawCellD || "").trim();
-      nickname = rawColD;
-
-      const formulaMatch = rawColD.match(
-        /=HYPERLINK\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)/i,
-      );
-      if (formulaMatch) {
-        fbProfileUrl = formulaMatch[1].trim();
-        nickname = formulaMatch[2].trim();
-      } else {
-        const htmlMatch = rawColD.match(
-          /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([^<]+)<\/a>/i,
-        );
-        if (htmlMatch) {
-          fbProfileUrl = htmlMatch[1].trim();
-          nickname = htmlMatch[2].trim();
-        } else {
-          const mdMatch = rawColD.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/i);
-          if (mdMatch) {
-            nickname = mdMatch[1].trim();
-            fbProfileUrl = mdMatch[2].trim();
-          } else {
-            const parenMatch = rawColD.match(/^(.*?)\s*\((https?:\/\/[^\s)]+)\)/i);
-            if (parenMatch) {
-              nickname = parenMatch[1].trim();
-              fbProfileUrl = parenMatch[2].trim();
-            }
-          }
-        }
-      }
-    }
-
-    // Clean up nickname from any residual quotes or HTML
-    nickname = nickname.replace(/<[^>]+>/g, "").replace(/^["']|["']$/g, "").trim();
+    // Nickname & Facebook Profile
+    const nickParsed = parseCellContent(row[colNickIdx]);
+    let nickname = nickParsed.text
+      .replace(/<[^>]+>/g, "")
+      .replace(/^["']|["']$/g, "")
+      .trim();
+    let fbProfileUrl = cleanUrl(nickParsed.url).replace(/\.mlbb\/?$/i, "");
 
     // Parse team count and links
     let teamsCount = 0;
-    let postingLink = colPostingIdx >= 0 ? getCellStr(row[colPostingIdx]) : "";
-    let regLink = colRegIdx >= 0 ? getCellStr(row[colRegIdx]) : "";
-    let responseLink = colResponseIdx >= 0 ? getCellStr(row[colResponseIdx]) : "";
+    let postingLink = colPostingIdx >= 0 ? cleanUrl(row[colPostingIdx]) : "";
+    let regLink = colRegIdx >= 0 ? cleanUrl(row[colRegIdx]) : "";
+    let responseLink = colResponseIdx >= 0 ? cleanUrl(row[colResponseIdx]) : "";
 
-    // Explicit Teams column
+    // Explicit Teams column (must be <= 32 to avoid diamond rewards like 4000)
     if (colTeamsIdx >= 0 && row[colTeamsIdx] !== undefined) {
-      const tStr = getCellStr(row[colTeamsIdx]);
+      const tStr = parseCellContent(row[colTeamsIdx]).text;
       const match = tStr.match(/\b\d+\b/);
-      if (match) teamsCount = parseInt(match[0], 10);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num <= 32) teamsCount = num;
+      }
     }
 
     // Scan remaining cells for URLs and numeric team counts if not set
     for (let c = 4; c < row.length; c++) {
-      const val = getCellStr(row[c]);
-      if (!val) continue;
+      const parsed = parseCellContent(row[c]);
+      const text = parsed.text;
+      const url = cleanUrl(parsed.url || text);
 
-      // Check if this cell is a pure number (teams registered)
-      if (teamsCount === 0 && /^\d+(\s*\/\s*\d+)?(\s*teams?)?$/i.test(val)) {
-        const numMatch = val.match(/\b\d+\b/);
+      // Check if this cell is a pure team count (must be <= 32)
+      if (teamsCount === 0 && /^\d+(\s*\/\s*\d+)?(\s*teams?)?$/i.test(text)) {
+        const numMatch = text.match(/\b\d+\b/);
         if (numMatch) {
-          teamsCount = parseInt(numMatch[0], 10);
-          continue;
+          const num = parseInt(numMatch[0], 10);
+          if (num <= 32) {
+            teamsCount = num;
+            continue;
+          }
         }
       }
 
       // Check URL types
-      if (/forms\.gle|docs\.google\.com\/forms/i.test(val)) {
-        if (!regLink) regLink = val;
-      } else if (/docs\.google\.com\/spreadsheets/i.test(val)) {
-        if (!responseLink) responseLink = val;
-      } else if (/facebook\.com|fb\.watch|fb\.me/i.test(val)) {
-        if (!postingLink) postingLink = val;
-      } else if (/^https?:\/\//i.test(val)) {
-        if (!regLink) regLink = val;
-        else if (!responseLink) responseLink = val;
-        else if (!postingLink) postingLink = val;
+      if (url) {
+        if (/forms\.gle|docs\.google\.com\/forms/i.test(url)) {
+          if (!regLink) regLink = url;
+        } else if (/docs\.google\.com\/spreadsheets/i.test(url)) {
+          if (!responseLink) responseLink = url;
+        } else if (/facebook\.com|fb\.watch|fb\.me/i.test(url)) {
+          if (!postingLink) postingLink = url;
+        } else {
+          if (!regLink && c === colRegIdx) regLink = url;
+          else if (!responseLink && c === colResponseIdx) responseLink = url;
+          else if (!postingLink && c === colPostingIdx) postingLink = url;
+        }
       }
     }
 
-    // Skip empty separator rows or header duplicates
+    // Skip empty separator rows or header duplicates or total rows
     if (!colC && !nickname && !regLink && !postingLink) continue;
-    if (colC.toLowerCase().includes("full name") || nickname.toLowerCase() === "ch nickname") continue;
-    if (colA === "48" && !colC && !nickname) continue;
+    if (
+      colC.toLowerCase().includes("full name") ||
+      nickname.toLowerCase() === "ch nickname"
+    )
+      continue;
+    if (colA === "46" || (colA === "48" && !colC && !nickname)) continue;
 
     // Check if active (1 in Col A)
     const isActive =

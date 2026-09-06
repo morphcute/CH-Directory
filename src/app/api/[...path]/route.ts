@@ -44,6 +44,14 @@ export async function GET(request: Request, context: Context) {
       void checkAndTriggerHourlySync();
       return json(await readState());
     }
+    if (route === "cron/sync" || route === "sync") {
+      const authHeader = request.headers.get("authorization");
+      const cronSecret = process.env.CRON_SECRET;
+      if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+        return json({ error: "Unauthorized cron execution." }, 401);
+      }
+      return json(await syncSpreadsheetBackground());
+    }
     if (route === "register") {
       const id = new URL(request.url).searchParams.get("id");
       const player = listedPlayers(await readState()).find(
@@ -106,9 +114,12 @@ export async function GET(request: Request, context: Context) {
       }
       if (player.tournamentResponseSheet) {
         try {
+          const { getValidGoogleAccessToken } = await import("@/server/googleToken");
+          const serverToken = (await getValidGoogleAccessToken()) || state.googleAccessToken;
+          const token = request.headers.get("authorization") || serverToken;
           const liveTeams = await fetchTeamsFromResponseSheet(
             player.tournamentResponseSheet,
-            request.headers.get("authorization") || undefined,
+            token,
           );
           if (liveTeams.length > 0) {
             player.registeredTeams = liveTeams;
@@ -263,6 +274,14 @@ export async function POST(request: Request, context: Context) {
         return response;
       }
       return json({ error: "Please sign in with Google." }, 400);
+    }
+    if (route === "cron/sync" || route === "sync") {
+      const authHeader = request.headers.get("authorization");
+      const cronSecret = process.env.CRON_SECRET;
+      if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+        return json({ error: "Unauthorized cron execution." }, 401);
+      }
+      return json(await syncSpreadsheetBackground());
     }
     if (!(await isOrganizer()))
       return json(

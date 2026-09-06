@@ -16,6 +16,7 @@ import {
   tournamentStatus,
 } from "@/lib/tournaments";
 import { Brand } from "./shared";
+import { cleanAreaString } from "@/utils/sheetDetector";
 import { CHCardModal } from "./CHCardModal";
 
 export function Portal({ initialState }: { initialState: AppState }) {
@@ -274,7 +275,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
                           <h3>{p.chNickname}</h3>
                           {p.facebookProfileUrl && (
                             <a
-                              href={p.facebookProfileUrl}
+                              href={p.facebookProfileUrl.replace(/\.mlbb\/?$/i, "")}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
@@ -289,7 +290,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
                         </div>
                         <span>
                           <MapPin size={13} />
-                          {p.area}
+                          {cleanAreaString(p.area)}
                         </span>
                       </div>
                     </div>

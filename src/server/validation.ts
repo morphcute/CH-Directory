@@ -1,15 +1,31 @@
 import { z } from "zod";
-const link = z
-  .string()
-  .max(2048)
-  .refine((value) => {
-    if (!value) return true;
-    try {
-      return ["https:", "http:"].includes(new URL(value).protocol);
-    } catch {
-      return false;
-    }
-  }, "Enter a valid HTTP or HTTPS link.");
+
+function sanitizeUrlString(value: unknown): string {
+  if (!value || typeof value !== "string") return "";
+  let s = value.trim();
+  const formulaMatch = s.match(/=HYPERLINK\s*\(\s*["']([^"']+)["']/i);
+  if (formulaMatch) s = formulaMatch[1].trim();
+  const htmlMatch = s.match(/href=["']([^"']+)["']/i);
+  if (htmlMatch) s = htmlMatch[1].trim();
+  const mdMatch = s.match(/\((https?:\/\/[^\s)]+)\)/i);
+  if (mdMatch) s = mdMatch[1].trim();
+  return s;
+}
+
+const link = z.preprocess(
+  sanitizeUrlString,
+  z
+    .string()
+    .max(2048)
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        return ["https:", "http:"].includes(new URL(value).protocol);
+      } catch {
+        return false;
+      }
+    }, "Enter a valid HTTP or HTTPS link."),
+);
 export const playerSchema = z.object({
   id: z.string().max(100).default(() => `player-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
   active: z.boolean().default(true),

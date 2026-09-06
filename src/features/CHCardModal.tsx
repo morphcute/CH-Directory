@@ -21,16 +21,26 @@ import {
   slotsLeft,
   tournamentStatus,
 } from "@/lib/tournaments";
+import { cleanAreaString } from "@/utils/sheetDetector";
 import { Modal } from "./shared";
 
-const FacebookIcon = ({ size = 16 }: { size?: number }) => (
+const FacebookIcon = ({
+  size = 16,
+  style,
+  className,
+}: {
+  size?: number;
+  style?: React.CSSProperties;
+  className?: string;
+}) => (
   <svg
     width={size}
     height={size}
     viewBox="0 0 24 24"
     fill="currentColor"
     aria-hidden="true"
-    style={{ flexShrink: 0 }}
+    className={className}
+    style={{ flexShrink: 0, ...style }}
   >
     <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
   </svg>
@@ -67,7 +77,7 @@ export function CHCardModal({
   const slots = slotsLeft(player);
   const initials = player.chNickname.slice(0, 2).toUpperCase();
 
-  const fbUrl = player.facebookProfileUrl || "";
+  const fbUrl = (player.facebookProfileUrl || "").replace(/\.mlbb\/?$/i, "");
   const regLink = registrationUrl(player);
 
   useEffect(() => {
@@ -145,25 +155,25 @@ export function CHCardModal({
           <div className="ch-modal-avatar">{initials}</div>
           <div className="ch-modal-identity">
             <div className="ch-modal-title-row">
-              <h2>{player.chNickname}</h2>
-              {player.facebookProfileUrl && (
+              {fbUrl ? (
                 <a
-                  href={player.facebookProfileUrl}
+                  href={fbUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="ch-fb-profile-link"
-                  title={`View ${player.chNickname}'s Facebook profile`}
                   style={{
+                    textDecoration: "none",
+                    color: "inherit",
                     display: "inline-flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    color: "#1877F2",
-                    marginLeft: 6,
-                    verticalAlign: "middle",
+                    gap: 8,
                   }}
+                  title={`Open ${player.chNickname}'s Facebook profile`}
                 >
-                  <FacebookIcon size={18} />
+                  <h2 style={{ margin: 0 }}>{player.chNickname}</h2>
+                  <FacebookIcon size={18} style={{ color: "#1877F2", flexShrink: 0 }} />
                 </a>
+              ) : (
+                <h2>{player.chNickname}</h2>
               )}
               {player.isCalabarzon && (
                 <span className="ch-modal-calabarzon">CALABARZON</span>
@@ -179,7 +189,7 @@ export function CHCardModal({
                     marginRight: 4,
                   }}
                 />
-                {player.area || "Philippines"}
+                {cleanAreaString(player.area) || "Philippines"}
               </span>
               {player.fullName && (
                 <>

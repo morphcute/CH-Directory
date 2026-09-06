@@ -26,7 +26,7 @@ import {
   Users,
 } from "lucide-react";
 import type { AppState, CHPlayer } from "@/types";
-import { parseCsvOrTsv, transformRowsToPlayers } from "@/utils/sheetDetector";
+import { parseCsvOrTsv, transformRowsToPlayers, cleanAreaString } from "@/utils/sheetDetector";
 import { compressImageFile } from "@/utils/imageUtils";
 import { slotsLeft, statusLabels, tournamentStatus } from "@/lib/tournaments";
 import { Brand, Footer, Modal } from "./shared";
@@ -361,7 +361,32 @@ export function Admin() {
     <>
       {error && (
         <div className="feedback error" role="alert">
-          {error}
+          {error.includes("http") ? (
+            <span>
+              {error.split(/(https?:\/\/[^\s)]+)/g).map((part, i) =>
+                part.startsWith("http") ? (
+                  <a
+                    key={i}
+                    href={part}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      color: "#60a5fa",
+                      textDecoration: "underline",
+                      fontWeight: 600,
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {part}
+                  </a>
+                ) : (
+                  part
+                ),
+              )}
+            </span>
+          ) : (
+            error
+          )}
         </div>
       )}
       {message && (
@@ -738,7 +763,7 @@ export function Admin() {
                                     </span>
                                   </div>
                                 </td>
-                                <td>{p.area}</td>
+                                <td>{cleanAreaString(p.area)}</td>
                                 <td>
                                   <strong>
                                     {p.teamsRegistered}{" "}
@@ -1434,7 +1459,7 @@ export function Admin() {
               </tbody>
             </table>
           </div>
-          <div className="modal-footer">
+          <div className="modal-footer" style={{ gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button
               className="button outline"
               onClick={() => setImported(null)}
@@ -1442,7 +1467,7 @@ export function Admin() {
               Cancel
             </button>
             <button
-              className="button primary"
+              className="button outline"
               onClick={() => {
                 update({
                   players: imported,
@@ -1459,11 +1484,50 @@ export function Admin() {
                 setImported(null);
                 setTab("directory");
                 setMessage(
-                  "Import applied to your draft. Review the listings and publish when ready.",
+                  "Import saved as draft. You can review the listings and click 'Publish changes' whenever ready.",
                 );
               }}
             >
-              Apply to draft <CheckCircle2 size={15} />
+              Save as draft <CheckCircle2 size={15} />
+            </button>
+            <button
+              className="button primary"
+              disabled={!!busy}
+              onClick={async () => {
+                await run("publish-import", async () => {
+                  const nextState: AppState = {
+                    ...state,
+                    players: imported,
+                    selectedNicknames: imported
+                      .filter((p) => p.active)
+                      .map((p) => p.chNickname),
+                    rawTabsList: [
+                      ...new Set([
+                        ...(state.rawTabsList || []),
+                        state.activeTabName || "",
+                      ]),
+                    ].filter(Boolean),
+                  };
+                  const saved = await api("/api/app-state", post(nextState));
+                  setState(saved);
+                  setDirty(false);
+                  setImported(null);
+                  setTab("directory");
+                  setMessage(
+                    `Saved to database and published! ${imported.filter((p) => p.active).length} Community Heroes are now live in the directory.`,
+                  );
+                  // Fire background sync to inspect response sheets and update rosters
+                  void api("/api/sync-now", post({})).then(async () => {
+                    try {
+                      const fresh = await api("/api/app-state");
+                      setState(fresh);
+                    } catch {}
+                  });
+                });
+              }}
+            >
+              <Upload size={15} />
+              {busy === "publish-import" ? "Saving to database…" : "Publish to directory now"}
             </button>
           </div>
         </Modal>

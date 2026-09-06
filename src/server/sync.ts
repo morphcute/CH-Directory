@@ -32,18 +32,19 @@ export async function syncSpreadsheetBackground(): Promise<{
   syncInProgress = true;
   try {
     const state = await readState();
-    if (!state.players || state.players.length === 0) {
+    let basePlayers = [...(state.players || [])];
+
+    if (basePlayers.length === 0 && !state.spreadsheetUrl) {
       return {
         synced: false,
         count: 0,
         lastHourlySync: Date.now(),
-        message: "No players in directory",
+        message: "No players in directory and no spreadsheet configured",
       };
     }
 
     const { getValidGoogleAccessToken } = await import("./googleToken");
     const token = (await getValidGoogleAccessToken()) || state.googleAccessToken;
-    let basePlayers = [...(state.players || [])];
 
     // 1. If a master spreadsheet is configured, pull the full lineup from the sheet tab!
     if (state.spreadsheetUrl) {
@@ -58,51 +59,55 @@ export async function syncSpreadsheetBackground(): Promise<{
         if (Array.isArray(rows) && rows.length > 0) {
           const sheetPlayers = transformRowsToPlayers(rows);
           if (sheetPlayers.length > 0) {
-            // Merge sheet players with existing state (preserving manual overrides)
-            const merged: CHPlayer[] = [];
-            const seenNicks = new Set<string>();
+            if (basePlayers.length === 0) {
+              basePlayers = sheetPlayers;
+            } else {
+              // Merge sheet players with existing state (preserving manual overrides)
+              const merged: CHPlayer[] = [];
+              const seenNicks = new Set<string>();
 
-            for (const sp of sheetPlayers) {
-              const normNick = sp.chNickname.toLowerCase().trim();
-              seenNicks.add(normNick);
+              for (const sp of sheetPlayers) {
+                const normNick = sp.chNickname.toLowerCase().trim();
+                seenNicks.add(normNick);
 
-              const existing = basePlayers.find(
-                (p) =>
-                  p.chNickname.toLowerCase().trim() === normNick ||
-                  (p.fullName &&
-                    sp.fullName &&
-                    p.fullName.toLowerCase().trim() ===
-                      sp.fullName.toLowerCase().trim()),
-              );
+                const existing = basePlayers.find(
+                  (p) =>
+                    p.chNickname.toLowerCase().trim() === normNick ||
+                    (p.fullName &&
+                      sp.fullName &&
+                      p.fullName.toLowerCase().trim() ===
+                        sp.fullName.toLowerCase().trim()),
+                );
 
-              if (existing) {
-                merged.push({
-                  ...sp,
-                  id: existing.id,
-                  active: existing.active, // Retain admin's toggle
-                  teamsRegistered:
-                    sp.teamsRegistered > 0
-                      ? sp.teamsRegistered
-                      : existing.teamsRegistered || 0,
-                  registeredTeams: existing.registeredTeams || sp.registeredTeams,
-                  avatarUrl: existing.avatarUrl || sp.avatarUrl,
-                  remarks: existing.remarks || sp.remarks,
-                  facebookProfileUrl:
-                    sp.facebookProfileUrl || existing.facebookProfileUrl,
-                });
-              } else {
-                merged.push(sp);
+                if (existing) {
+                  merged.push({
+                    ...sp,
+                    id: existing.id,
+                    active: existing.active !== undefined ? existing.active : sp.active,
+                    teamsRegistered:
+                      sp.teamsRegistered > 0
+                        ? sp.teamsRegistered
+                        : existing.teamsRegistered || 0,
+                    registeredTeams: existing.registeredTeams || sp.registeredTeams,
+                    avatarUrl: existing.avatarUrl || sp.avatarUrl,
+                    remarks: existing.remarks || sp.remarks,
+                    facebookProfileUrl:
+                      sp.facebookProfileUrl || existing.facebookProfileUrl,
+                  });
+                } else {
+                  merged.push(sp);
+                }
               }
-            }
 
-            // Keep any custom heroes manually added in admin that aren't in the sheet
-            for (const ep of basePlayers) {
-              if (!seenNicks.has(ep.chNickname.toLowerCase().trim())) {
-                merged.push(ep);
+              // Keep any custom heroes manually added in admin that aren't in the sheet
+              for (const ep of basePlayers) {
+                if (!seenNicks.has(ep.chNickname.toLowerCase().trim())) {
+                  merged.push(ep);
+                }
               }
-            }
 
-            basePlayers = merged;
+              basePlayers = merged;
+            }
           }
         }
       } catch (sheetErr) {
@@ -121,34 +126,15 @@ export async function syncSpreadsheetBackground(): Promise<{
 
     const updatedPlayers: CHPlayer[] = [];
 
-    // 2. Inspect active players with tournament response sheets in parallel chunks of 5
-    for (let i = 0; i < basePlayers.length; i += 5) {
-      const chunk = basePlayers.slice(i, i + 5);
+    // 2. Inspect active players with tournament response sheets in parallel chunks of 10
+    for (let i = 0; i < basePlayers.length; i += 10) {
+      const chunk = basePlayers.slice(i, i + 10);
       const results = await Promise.all(
         chunk.map(async (player) => {
           if (!player.active) return player;
           try {
-            // Inspect capacity and response sheet counts
+            // Inspect capacity and response sheet counts (and extracts registeredTeams)
             const inspected = await inspectPlayer(player, token);
-
-            // Fetch live teams if response sheet exists
-            if (player.tournamentResponseSheet) {
-              try {
-                const teams = await fetchTeamsFromResponseSheet(
-                  player.tournamentResponseSheet,
-                  token,
-                );
-                if (teams && teams.length > 0) {
-                  inspected.registeredTeams = teams;
-                  inspected.teamsRegistered = Math.max(
-                    inspected.teamsRegistered,
-                    teams.length,
-                  );
-                }
-              } catch {
-                // Keep existing registered teams
-              }
-            }
 
             // Mark status accurately based on slots
             if (inspected.teamsRegistered >= (inspected.maxTeams || 16)) {
