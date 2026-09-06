@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/* Globally hide scrollbars while preserving scrolling functionality */
+html,
+body,
+* {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0px;
+  height: 0px;
+}
+
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari, Opera, Edge, Firefox, iOS */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+    width: 0px;
+    height: 0px;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  
+  /* 3D Glass Surface */
+  .glass-3d {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(13, 18, 31, 0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.25),
+      inset 0 -1px 1px 0 rgba(0, 0, 0, 0.5),
+      0 12px 30px -8px rgba(0, 0, 0, 0.7);
+  }
+
+  /* 3D Frosted Inset Panel */
+  .glass-inset-panel {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(0, 0, 0, 0.25) 100%), rgba(11, 15, 25, 0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.1),
+      0 2px 8px -2px rgba(0, 0, 0, 0.4);
+  }
+
+  /* 3D Gold Action Button - Compact & Sleek */
+  .btn-3d-gold {
+    background: linear-gradient(180deg, #fde047 0%, #eab308 45%, #ca8a04 100%);
+    box-shadow: 
+      inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.6),
+      0 2px 0 0 #854d0e,
+      0 3px 8px 0 rgba(202, 138, 4, 0.25);
+    transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-3d-gold:hover {
+    background: linear-gradient(180deg, #fef08a 0%, #facc15 45%, #d97706 100%);
+    box-shadow: 
+      inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.7),
+      0 2px 0 0 #854d0e,
+      0 4px 10px 0 rgba(202, 138, 4, 0.35);
+  }
+  .btn-3d-gold:active {
+    transform: translateY(1.5px);
+    box-shadow: 
+      inset 0 1px 1px 0 rgba(0, 0, 0, 0.3),
+      0 0.5px 0 0 #854d0e;
+  }
+
+  /* 3D Blue Social Button - Compact & Sleek */
+  .btn-3d-blue {
+    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+    box-shadow: 
+      inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.4),
+      0 2px 0 0 #1e3a8a,
+      0 3px 8px 0 rgba(37, 99, 235, 0.25);
+    transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-3d-blue:hover {
+    background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%);
+    box-shadow: 
+      inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.5),
+      0 2px 0 0 #1e3a8a,
+      0 4px 10px 0 rgba(37, 99, 235, 0.35);
+  }
+  .btn-3d-blue:active {
+    transform: translateY(1.5px);
+    box-shadow: 
+      inset 0 1px 1px 0 rgba(0, 0, 0, 0.3),
+      0 0.5px 0 0 #1e3a8a;
+  }
+
+  /* 3D Glass Secondary Button - Compact & Sleek */
+  .btn-3d-glass {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(23, 28, 45, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 
+      inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.2),
+      0 2px 0 0 rgba(10, 13, 22, 0.85),
+      0 3px 6px 0 rgba(0, 0, 0, 0.25);
+    transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn-3d-glass:hover {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%), rgba(30, 37, 60, 0.9);
+    border-color: rgba(251, 191, 36, 0.4);
+    box-shadow: 
+      inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.25),
+      0 2px 0 0 rgba(10, 13, 22, 0.85),
+      0 4px 10px 0 rgba(0, 0, 0, 0.35);
+  }
+  .btn-3d-glass:active {
+    transform: translateY(1.5px);
+    box-shadow: 
+      inset 0 1px 1px 0 rgba(0, 0, 0, 0.4),
+      0 0.5px 0 0 rgba(10, 13, 22, 0.85);
+  }
+}
+

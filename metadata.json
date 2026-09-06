@@ -1,0 +1,8 @@
+{
+  "name": "Remix Community Heroes Tournament Directory",
+  "description": "Official Mobile Legends: Bang Bang Community Heroes Tournament Directory with Google Forms header banner, admin-managed CH Nicknames, and real-time 16/16 slot tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

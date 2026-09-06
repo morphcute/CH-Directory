@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Community Heroes Tournament Directory</title>
+    <meta name="description" content="Official Mobile Legends: Bang Bang Community Heroes Tournament Directory with Google Forms header banner, admin-managed CH Nicknames, and real-time 16/16 slot tracking." />
+    <meta property="og:title" content="Community Heroes Tournament Directory" />
+    <meta property="og:description" content="Official Mobile Legends: Bang Bang Community Heroes Tournament Directory with Google Forms header banner, admin-managed CH Nicknames, and real-time 16/16 slot tracking." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <script>
+      // Safeguard against iframe/sandbox scripts attempting to overwrite read-only window.fetch
+      (function() {
+        try {
+          var currentFetch = window.fetch;
+          var desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (!desc || !desc.set) {
+            Object.defineProperty(window, 'fetch', {
+              get: function() {
+                return currentFetch;
+              },
+              set: function(fn) {
+                currentFetch = fn;
+              },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {
+          // Fallback if window is frozen
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
