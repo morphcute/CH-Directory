@@ -3156,8 +3156,8 @@ textarea:focus-visible {
   min-height: 80px;
 }
 .simple-directory {
-  max-width: 620px;
-  width: 92%;
+  max-width: 860px;
+  width: 94%;
   margin: 16px auto 0;
 }
 .ch-banner {
@@ -3261,10 +3261,10 @@ textarea:focus-visible {
 }
 .ch-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 230px 130px;
-  gap: 32px;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(200px, 1fr) 130px;
+  gap: 20px;
   align-items: center;
-  padding: 20px 24px;
+  padding: 18px 24px;
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
@@ -3284,10 +3284,15 @@ textarea:focus-visible {
   gap: 14px;
   min-width: 0;
 }
+.ch-identity > div {
+  min-width: 0;
+}
 .ch-identity h3 {
   font-size: 17px;
   font-weight: 650;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #f8fafc;
 }
 .ch-identity > div > span {

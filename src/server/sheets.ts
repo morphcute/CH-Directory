@@ -298,16 +298,8 @@ export async function inspectPlayer(
           (cell) => cell !== null && cell !== undefined && String(cell).trim(),
         ),
       );
-      if (nonempty.length > 1) {
-        const responseCount = nonempty.length - 1;
-        updated.teamsRegistered = Math.max(
-          player.teamsRegistered || 0,
-          responseCount,
-        );
-      } else {
-        updated.teamsRegistered = player.teamsRegistered || 0;
-      }
       updated.resolvedResponseSheetUrl = url;
+
       if (rows.length > 1) {
         const header = (rows[0] as unknown[]).map((c: unknown) => String(c || "").trim());
         let teamColIdx = header.findIndex((col: string) =>
@@ -327,13 +319,20 @@ export async function inspectPlayer(
           const tName = val !== null && val !== undefined ? String(val).trim() : "";
           if (tName && !extracted.includes(tName)) extracted.push(tName);
         }
+
+        const responseRowCount = Math.max(0, nonempty.length - 1);
         if (extracted.length > 0) {
           updated.registeredTeams = extracted;
-          updated.teamsRegistered = Math.max(
-            updated.teamsRegistered,
-            extracted.length,
-          );
+          updated.teamsRegistered = Math.max(extracted.length, responseRowCount);
+        } else if (responseRowCount > 0) {
+          updated.teamsRegistered = responseRowCount;
+        } else {
+          updated.registeredTeams = [];
+          updated.teamsRegistered = 0;
         }
+      } else {
+        updated.registeredTeams = [];
+        updated.teamsRegistered = 0;
       }
     } catch (error) {
       errors.push((error as Error).message);

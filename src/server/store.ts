@@ -75,7 +75,7 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
       const file = statePath();
       await mkdir(path.dirname(file), { recursive: true });
       const temporary = `${file}.${randomUUID()}.tmp`;
-      const { googleAccessToken: _a, googleRefreshToken: _r, ...safeState } = state;
+      const { googleAccessToken: _a, googleRefreshToken: _r, googleTokenExpiresAt: _e, ...safeState } = state;
       await writeFile(temporary, JSON.stringify(safeState, null, 2), "utf8");
       await rename(temporary, file);
     } catch (err) {

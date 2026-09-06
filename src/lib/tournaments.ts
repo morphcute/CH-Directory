@@ -1,12 +1,34 @@
 import type { AppState, CHPlayer } from "../types";
+import { parseTabDate } from "@/utils/sheetDetector";
 
 export function listedPlayers(state: AppState) {
   return state.players.filter((player) => Boolean(player.active));
 }
 
-export function canRegister(player: CHPlayer) {
+/**
+ * Checks if the tournament date encoded in the sheet tab name (e.g. "September 5, 2026")
+ * has already passed in Philippine Time (UTC+8).
+ * If the date has passed, the directory becomes closed to all until the next month tab is set.
+ */
+export function isTabDatePassed(tabName?: string): boolean {
+  if (!tabName) return false;
+  const parsed = parseTabDate(tabName);
+  if (!parsed) return false;
+
+  const now = new Date();
+  const year = parsed.year;
+  const month = parsed.monthIndex;
+  // If specific day exists (e.g. September 5), deadline is 23:59:59 PHT (15:59:59 UTC)
+  const day = parsed.day !== undefined ? parsed.day : new Date(year, month + 1, 0).getDate();
+  const deadlineUtcMs = Date.UTC(year, month, day, 15, 59, 59);
+
+  return now.getTime() > deadlineUtcMs;
+}
+
+export function canRegister(player: CHPlayer, tabName?: string) {
+  if (isTabDatePassed(tabName)) return false;
   return (
-    ["open", "closing"].includes(tournamentStatus(player)) &&
+    ["open", "closing"].includes(tournamentStatus(player, tabName)) &&
     !!registrationUrl(player)
   );
 }
@@ -15,7 +37,8 @@ export type TournamentStatus = "open" | "closing" | "full" | "closed";
 export function slotsLeft(player: CHPlayer) {
   return Math.max(0, player.maxTeams - player.teamsRegistered);
 }
-export function tournamentStatus(player: CHPlayer): TournamentStatus {
+export function tournamentStatus(player: CHPlayer, tabName?: string): TournamentStatus {
+  if (isTabDatePassed(tabName)) return "closed";
   if (!player.active || player.formStatus === "closed") return "closed";
   if (player.formStatus === "full" || slotsLeft(player) === 0) return "full";
   return slotsLeft(player) <= 4 ? "closing" : "open";

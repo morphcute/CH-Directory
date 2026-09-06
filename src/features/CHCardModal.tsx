@@ -20,6 +20,7 @@ import {
   registrationUrl,
   slotsLeft,
   tournamentStatus,
+  isTabDatePassed,
 } from "@/lib/tournaments";
 import { cleanAreaString } from "@/utils/sheetDetector";
 import { Modal } from "./shared";
@@ -48,6 +49,7 @@ const FacebookIcon = ({
 
 interface CHCardModalProps {
   player: CHPlayer;
+  activeTabName?: string;
   onClose: () => void;
   onRegister: (id: string) => void;
   busy: string | null;
@@ -55,6 +57,7 @@ interface CHCardModalProps {
 
 export function CHCardModal({
   player,
+  activeTabName,
   onClose,
   onRegister,
   busy,
@@ -71,9 +74,10 @@ export function CHCardModal({
 
   const registered = player.teamsRegistered || 0;
   const maxTeams = player.maxTeams || 16;
-  const status = tournamentStatus(player);
+  const datePassed = isTabDatePassed(activeTabName);
+  const status = tournamentStatus(player, activeTabName);
   const full = status === "full" || registered >= maxTeams;
-  const allowed = canRegister(player);
+  const allowed = canRegister(player, activeTabName);
   const slots = slotsLeft(player);
   const initials = player.chNickname.slice(0, 2).toUpperCase();
 
@@ -154,7 +158,7 @@ export function CHCardModal({
         <div className="ch-modal-header">
           <div className="ch-modal-avatar">{initials}</div>
           <div className="ch-modal-identity">
-            <div className="ch-modal-title-row">
+            <div className="ch-modal-title-row" style={{ flexWrap: "nowrap", whiteSpace: "nowrap" }}>
               {fbUrl ? (
                 <a
                   href={fbUrl}
@@ -166,14 +170,15 @@ export function CHCardModal({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 8,
+                    whiteSpace: "nowrap",
                   }}
                   title={`Open ${player.chNickname}'s Facebook profile`}
                 >
-                  <h2 style={{ margin: 0 }}>{player.chNickname}</h2>
+                  <h2 style={{ margin: 0, whiteSpace: "nowrap" }}>{player.chNickname}</h2>
                   <FacebookIcon size={18} style={{ color: "#1877F2", flexShrink: 0 }} />
                 </a>
               ) : (
-                <h2>{player.chNickname}</h2>
+                <h2 style={{ margin: 0, whiteSpace: "nowrap" }}>{player.chNickname}</h2>
               )}
               {player.isCalabarzon && (
                 <span className="ch-modal-calabarzon">CALABARZON</span>
@@ -213,18 +218,22 @@ export function CHCardModal({
               style={{
                 fontWeight: 650,
                 fontSize: "12px",
-                color: full
-                  ? "#ef4444"
-                  : status === "closing"
-                    ? "#fb923c"
-                    : "#facc15",
+                color: datePassed
+                  ? "#94a3b8"
+                  : full
+                    ? "#ef4444"
+                    : status === "closing"
+                      ? "#fb923c"
+                      : "#facc15",
               }}
             >
-              {full
-                ? "Full slots (16/16)"
-                : status === "closed"
-                  ? "Closed"
-                  : `${slots} slots left`}
+              {datePassed
+                ? "Tournament ended"
+                : full
+                  ? "Full slots (16/16)"
+                  : status === "closed"
+                    ? "Closed"
+                    : `${slots} slots left`}
             </span>
           </div>
           <div
@@ -359,11 +368,13 @@ export function CHCardModal({
               }}
             >
               <LockKeyhole size={16} />
-              {full
-                ? "Full slots (16/16) — Registration Closed"
-                : status === "closed"
-                  ? "Registration Closed by Organizer"
-                  : "Registration Unavailable"}
+              {datePassed
+                ? "Registration Closed — Tournament Date Passed"
+                : full
+                  ? "Full slots (16/16) — Registration Closed"
+                  : status === "closed"
+                    ? "Registration Closed by Organizer"
+                    : "Registration Unavailable"}
             </button>
           )}
 

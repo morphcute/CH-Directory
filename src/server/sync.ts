@@ -87,7 +87,7 @@ export async function syncSpreadsheetBackground(): Promise<{
                     teamsRegistered:
                       sp.teamsRegistered > 0
                         ? sp.teamsRegistered
-                        : existing.teamsRegistered || 0,
+                        : (existing.registeredTeams?.length ?? 0),
                     registeredTeams: existing.registeredTeams || sp.registeredTeams,
                     avatarUrl: existing.avatarUrl || sp.avatarUrl,
                     remarks: existing.remarks || sp.remarks,
@@ -136,9 +136,12 @@ export async function syncSpreadsheetBackground(): Promise<{
             // Inspect capacity and response sheet counts (and extracts registeredTeams)
             const inspected = await inspectPlayer(player, token);
 
-            // Mark status accurately based on slots
-            if (inspected.teamsRegistered >= (inspected.maxTeams || 16)) {
+            // Mark status accurately based on actual registered slots vs max teams
+            const max = inspected.maxTeams || 16;
+            if (inspected.teamsRegistered >= max) {
               inspected.formStatus = "full";
+            } else if (inspected.formStatus !== "closed") {
+              inspected.formStatus = "open";
             }
 
             return inspected;

@@ -54,15 +54,16 @@ export async function GET(request: Request, context: Context) {
     }
     if (route === "register") {
       const id = new URL(request.url).searchParams.get("id");
-      const player = listedPlayers(await readState()).find(
+      const state = await readState();
+      const player = listedPlayers(state).find(
         (player) => player.id === id,
       );
       if (!player)
         return json({ error: "This Community Hero is no longer listed." }, 404);
-      if (!canRegister(player))
+      if (!canRegister(player, state.activeTabName))
         return json(
           {
-            error: `${player.chNickname} is not accepting registrations. The slots may be full or registration has closed.`,
+            error: `${player.chNickname} is not accepting registrations. This month's tournament cycle has ended or the slots are full.`,
           },
           409,
         );

@@ -28,7 +28,7 @@ import {
 import type { AppState, CHPlayer } from "@/types";
 import { parseCsvOrTsv, transformRowsToPlayers, cleanAreaString } from "@/utils/sheetDetector";
 import { compressImageFile } from "@/utils/imageUtils";
-import { slotsLeft, statusLabels, tournamentStatus } from "@/lib/tournaments";
+import { slotsLeft, statusLabels, tournamentStatus, isTabDatePassed } from "@/lib/tournaments";
 import { Brand, Footer, Modal } from "./shared";
 
 const GoogleIcon = ({ size = 18 }: { size?: number }) => (
@@ -1103,6 +1103,23 @@ export function Admin() {
                         ))}
                       </datalist>
                     </label>
+                    {isTabDatePassed(state.activeTabName) && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          marginBottom: 14,
+                          padding: "10px 14px",
+                          background: "#2a1515",
+                          border: "1px solid #7f1d1d",
+                          borderRadius: 8,
+                          color: "#fca5a5",
+                          fontSize: 12,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        ⚠️ <strong>Tournament date passed:</strong> The date in &quot;{state.activeTabName}&quot; has already passed, so all public tournament registrations are automatically closed. When you select next month&apos;s tab and publish, registrations will reopen for that month.
+                      </div>
+                    )}
                     <p className="info-note">
                       Use the visibility switch in Directory to control which
                       tournaments appear publicly. Existing registration and

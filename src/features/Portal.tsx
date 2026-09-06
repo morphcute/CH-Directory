@@ -14,6 +14,7 @@ import {
   listedPlayers,
   slotsLeft,
   tournamentStatus,
+  isTabDatePassed,
 } from "@/lib/tournaments";
 import { Brand } from "./shared";
 import { cleanAreaString } from "@/utils/sheetDetector";
@@ -30,13 +31,19 @@ export function Portal({ initialState }: { initialState: AppState }) {
     /\s+\d{1,2},/,
     "",
   );
-  const openCount = players.filter(
-    (p) =>
-      tournamentStatus(p) === "open" || tournamentStatus(p) === "closing",
-  ).length;
-  const fullCount = players.filter(
-    (p) => tournamentStatus(p) === "full",
-  ).length;
+  const datePassed = isTabDatePassed(state.activeTabName);
+  const openCount = datePassed
+    ? 0
+    : players.filter(
+        (p) =>
+          tournamentStatus(p, state.activeTabName) === "open" ||
+          tournamentStatus(p, state.activeTabName) === "closing",
+      ).length;
+  const fullCount = datePassed
+    ? 0
+    : players.filter(
+        (p) => tournamentStatus(p, state.activeTabName) === "full",
+      ).length;
   const syncTime = state.lastHourlySync
     ? new Intl.DateTimeFormat("en-PH", {
         timeZone: "Asia/Manila",
@@ -201,12 +208,21 @@ export function Portal({ initialState }: { initialState: AppState }) {
             {/* Status Ribbon inside Card */}
             <div className="ch-fb-ribbon">
               <div className="ch-ribbon-left">
-                <span className="ch-ribbon-badge open">
-                  <span className="ch-pulse-dot" />
-                  {openCount} Open
-                </span>
-                {fullCount > 0 && (
-                  <span className="ch-ribbon-badge full">{fullCount} Full</span>
+                {datePassed ? (
+                  <span className="ch-ribbon-badge full">
+                    <LockKeyhole size={11} />
+                    Registration Closed (Tournament Ended)
+                  </span>
+                ) : (
+                  <>
+                    <span className="ch-ribbon-badge open">
+                      <span className="ch-pulse-dot" />
+                      {openCount} Open
+                    </span>
+                    {fullCount > 0 && (
+                      <span className="ch-ribbon-badge full">{fullCount} Full</span>
+                    )}
+                  </>
                 )}
               </div>
               <div className="ch-ribbon-right">
@@ -225,7 +241,11 @@ export function Portal({ initialState }: { initialState: AppState }) {
               <h2 id="ch-list-title">
                 Community Heroes <span>{players.length}</span>
               </h2>
-              <p>Registration closes when all team slots are filled.</p>
+              <p>
+                {datePassed
+                  ? "This tournament cycle has concluded. Registration will reopen for next month."
+                  : "Registration closes when all team slots are filled."}
+              </p>
             </div>
             <span className="ch-cycle">
               <CalendarDays size={15} />
@@ -246,9 +266,9 @@ export function Portal({ initialState }: { initialState: AppState }) {
           {players.length ? (
             <ul className="ch-list">
               {players.map((p) => {
-                const status = tournamentStatus(p);
+                const status = tournamentStatus(p, state.activeTabName);
                 const full = status === "full";
-                const allowed = canRegister(p);
+                const allowed = canRegister(p, state.activeTabName);
                 return (
                   <li
                     key={p.id}
@@ -270,9 +290,9 @@ export function Portal({ initialState }: { initialState: AppState }) {
                       <span className="hero-avatar" aria-hidden="true">
                         {p.chNickname.slice(0, 2).toUpperCase()}
                       </span>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <h3>{p.chNickname}</h3>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap", whiteSpace: "nowrap" }}>
+                          <h3 style={{ whiteSpace: "nowrap", margin: 0 }}>{p.chNickname}</h3>
                           {p.facebookProfileUrl && (
                             <a
                               href={p.facebookProfileUrl.replace(/\.mlbb\/?$/i, "")}
@@ -280,6 +300,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
                               className="ch-row-fb-link"
+                              style={{ flexShrink: 0, display: "inline-flex", alignItems: "center" }}
                               title={`Open ${p.chNickname}'s Facebook profile`}
                             >
                               <svg viewBox="0 0 24 24" width="13" height="13" fill="#1877F2">
@@ -368,6 +389,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
             player={
               players.find((p) => p.id === selectedPlayer.id) || selectedPlayer
             }
+            activeTabName={state.activeTabName}
             onClose={() => setSelectedPlayer(null)}
             onRegister={register}
             busy={busy}

@@ -398,18 +398,6 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
       const text = parsed.text;
       const url = cleanUrl(parsed.url || text);
 
-      // Check if this cell is a pure team count (must be <= 32)
-      if (teamsCount === 0 && /^\d+(\s*\/\s*\d+)?(\s*teams?)?$/i.test(text)) {
-        const numMatch = text.match(/\b\d+\b/);
-        if (numMatch) {
-          const num = parseInt(numMatch[0], 10);
-          if (num <= 32) {
-            teamsCount = num;
-            continue;
-          }
-        }
-      }
-
       // Check URL types
       if (url) {
         if (/forms\.gle|docs\.google\.com\/forms/i.test(url)) {
