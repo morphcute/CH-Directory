@@ -11,7 +11,7 @@ import {
   ADMIN_EMAIL,
 } from "@/server/auth";
 import { playerSchema, updateSchema } from "@/server/validation";
-import { inspectPlayer, sheetRows, fetchTeamsFromResponseSheet } from "@/server/sheets";
+import { inspectPlayer, sheetRows, fetchTeamsFromResponseSheet, getSpreadsheetTabs } from "@/server/sheets";
 import {
   ensureSyncSchedulerRunning,
   checkAndTriggerHourlySync,
@@ -72,6 +72,15 @@ export async function GET(request: Request, context: Context) {
     if (route === "sync-now") {
       return json(await syncSpreadsheetBackground());
     }
+    if (route === "sheets/tabs") {
+      if (!(await isOrganizer()))
+        return json({ error: "Sign in to the organizer workspace." }, 401);
+      const url = new URL(request.url);
+      const targetUrl = url.searchParams.get("url") || "";
+      const authHeader = request.headers.get("authorization") || undefined;
+      const result = await getSpreadsheetTabs(targetUrl, authHeader);
+      return json(result);
+    }
     if (route === "sheets/data") {
       if (!(await isOrganizer()))
         return json({ error: "Sign in to the organizer workspace." }, 401);
@@ -119,7 +128,7 @@ export async function GET(request: Request, context: Context) {
     return json(
       {
         error:
-          route === "sheets/data"
+          route === "sheets/data" || route === "sheets/tabs"
             ? (error as Error).message
             : "Could not load the directory. Please try again.",
       },
@@ -143,12 +152,35 @@ export async function POST(request: Request, context: Context) {
       return response;
     }
     if (route === "auth/google") {
+      const body = (await request.json()) as any;
+      if (body.code) {
+        const { exchangeGoogleAuthCode } = await import("@/server/googleToken");
+        const exchanged = await exchangeGoogleAuthCode(body.code);
+        if (exchanged.email && exchanged.email.toLowerCase().trim() !== ADMIN_EMAIL) {
+          return json(
+            {
+              error: `Access denied. Only ${ADMIN_EMAIL} is authorized to access the organizer workspace.`,
+            },
+            403,
+          );
+        }
+        const response = json({ success: true, email: ADMIN_EMAIL, accessToken: exchanged.accessToken });
+        response.cookies.set(SESSION_COOKIE, createSession(), {
+          httpOnly: true,
+          sameSite: "strict",
+          secure: process.env.NODE_ENV === "production",
+          path: "/",
+          maxAge: SESSION_SECONDS,
+        });
+        return response;
+      }
+
       const { email, accessToken } = z
         .object({
           email: z.string().email(),
           accessToken: z.string().optional(),
         })
-        .parse(await request.json());
+        .parse(body);
       if (email.toLowerCase().trim() !== ADMIN_EMAIL) {
         return json(
           {
@@ -159,7 +191,11 @@ export async function POST(request: Request, context: Context) {
       }
       if (accessToken) {
         try {
-          await saveState({ googleAccessToken: accessToken });
+          await saveState({
+            googleAccessToken: accessToken,
+            googleConnectedEmail: email,
+            googleTokenExpiresAt: Date.now() + 3600 * 1000,
+          });
         } catch {
           // non-fatal
         }
@@ -236,6 +272,32 @@ export async function POST(request: Request, context: Context) {
     if (route === "app-state") {
       const update = updateSchema.parse(await request.json());
       return json(await saveState(update));
+    }
+    if (route === "sheets/connect-google") {
+      const body = (await request.json()) as any;
+      if (body.code) {
+        const { exchangeGoogleAuthCode } = await import("@/server/googleToken");
+        const exchanged = await exchangeGoogleAuthCode(body.code);
+        return json({
+          success: true,
+          email: exchanged.email || ADMIN_EMAIL,
+          accessToken: exchanged.accessToken,
+          permanent: true,
+        });
+      }
+      if (body.accessToken) {
+        await saveState({
+          googleAccessToken: body.accessToken,
+          googleConnectedEmail: body.email || ADMIN_EMAIL,
+          googleTokenExpiresAt: Date.now() + 3600 * 1000,
+        });
+        return json({
+          success: true,
+          email: body.email || ADMIN_EMAIL,
+          permanent: false,
+        });
+      }
+      return json({ error: "No code or access token provided." }, 400);
     }
     if (route === "detect-tournament-status") {
       const body = z

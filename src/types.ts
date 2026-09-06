@@ -32,6 +32,9 @@ export interface AppState {
   lastUpdated?: number;
   lastHourlySync?: number;
   googleAccessToken?: string;
+  googleRefreshToken?: string;
+  googleConnectedEmail?: string;
+  googleTokenExpiresAt?: number;
   logoUrl?: string;
   bannerUrl?: string;
 }

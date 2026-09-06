@@ -1213,23 +1213,24 @@ textarea:focus-visible {
   margin-top: 11px;
 }
 .empty-state {
-  border: 1px dashed #ccd6c3;
-  background: #f0f3ea;
-  padding: 60px 25px;
+  border: 1px dashed #243044;
+  background: #111724;
+  padding: 40px 20px;
   text-align: center;
-  border-radius: 10px;
-  color: #59674e;
+  border-radius: 14px;
+  color: #94a3b8;
 }
 .empty-state h3 {
   font-family: var(--display);
-  font-size: 28px;
-  color: var(--green);
-  margin: 16px 0 9px;
+  font-size: 22px;
+  color: #f8fafc;
+  margin: 10px 0 6px;
 }
 .empty-state p {
-  font-size: 11px;
-  line-height: 1.8;
-  margin-bottom: 20px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.6;
+  margin-bottom: 0;
 }
 .community-banner {
   margin: 50px 0 0;

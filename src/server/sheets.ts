@@ -1,5 +1,6 @@
-import { extractSpreadsheetId, parseCsvOrTsv } from "@/utils/sheetDetector";
+import { extractSpreadsheetId, parseCsvOrTsv, analyzeTabs } from "@/utils/sheetDetector";
 import type { CHPlayer } from "@/types";
+import { readState } from "./store";
 
 const allowedHosts = new Set([
   "docs.google.com",
@@ -50,13 +51,140 @@ export async function safeFetch(value: string): Promise<Response> {
     "This link redirects too many times. Use the original Google URL.",
   );
 }
+
+import { getValidGoogleAccessToken } from "./googleToken";
+
+export async function getSpreadsheetTabs(value: string, token?: string) {
+  const id = extractSpreadsheetId(value);
+  if (!id || !/^[\w-]+$/.test(id))
+    throw new Error("Enter a valid Google Sheets URL.");
+
+  let authToken = token;
+  if (!authToken) {
+    try {
+      authToken = (await getValidGoogleAccessToken()) || undefined;
+    } catch {}
+  }
+
+  let tabs: string[] = [];
+
+  // 1. Google Sheets REST API v4
+  if (authToken) {
+    const bearer = authToken.startsWith("Bearer ") ? authToken : `Bearer ${authToken}`;
+    try {
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties(sheetId,title)`,
+        {
+          headers: { Authorization: bearer },
+          signal: AbortSignal.timeout(12000),
+          cache: "no-store",
+        },
+      );
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.sheets)) {
+          tabs = json.sheets
+            .map((s: any) => s.properties?.title)
+            .filter((t: any) => typeof t === "string" && t.trim().length > 0);
+        }
+      }
+    } catch (err) {
+      console.warn("Google Sheets API metadata failed:", err);
+    }
+  }
+
+  // 2. Public HTML / GViz fallback
+  if (tabs.length === 0) {
+    try {
+      const htmlRes = await fetch(`https://docs.google.com/spreadsheets/d/${id}/htmlview`, {
+        signal: AbortSignal.timeout(8000),
+        headers: { "User-Agent": "CommunityHeroes/1.0" },
+      });
+      if (htmlRes.ok) {
+        const html = await htmlRes.text();
+        const tabMatches = [...html.matchAll(/class="[^"]*doclist-sheet-tab[^"]*"[^>]*><a[^>]*>([^<]+)<\/a>/gi)];
+        if (tabMatches.length > 0) {
+          tabs = tabMatches.map((m) => m[1].trim()).filter(Boolean);
+        }
+        if (tabs.length === 0) {
+          const nameMatches = [...html.matchAll(/["']name["']\s*:\s*["']([^"']+)["']/g)];
+          const candidateNames = nameMatches
+            .map((m) => m[1])
+            .filter((name) => name.length > 0 && !name.startsWith("http") && name.length < 80);
+          if (candidateNames.length > 0) {
+            tabs = Array.from(new Set(candidateNames));
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Fallback: Check edit page
+  if (tabs.length === 0) {
+    try {
+      const editRes = await fetch(`https://docs.google.com/spreadsheets/d/${id}/edit`, {
+        signal: AbortSignal.timeout(8000),
+        headers: { "User-Agent": "CommunityHeroes/1.0" },
+      });
+      if (editRes.ok) {
+        const editHtml = await editRes.text();
+        const nameMatches = [...editHtml.matchAll(/name\\":\\"([^\\"]+)\\"/g)];
+        if (nameMatches.length > 0) {
+          tabs = Array.from(new Set(nameMatches.map((m) => m[1]))).filter(
+            (n) => !n.startsWith("http") && n.length < 80,
+          );
+        }
+      }
+    } catch {}
+  }
+
+  // Analyze tabs to find the best month directory
+  const analysis = analyzeTabs(tabs);
+  let autoDetected = analysis.autoDetectedTab?.name || null;
+
+  // Filter out guide tabs from being auto-detected if other tabs exist
+  const isGuideTab = (name: string) => /guide|instruction|rules|template|readme|uniformed/i.test(name);
+  if (tabs.length > 0 && (!autoDetected || isGuideTab(autoDetected))) {
+    const nonGuideTabs = tabs.filter((t) => !isGuideTab(t));
+    if (nonGuideTabs.length > 0) {
+      const subAnalysis = analyzeTabs(nonGuideTabs);
+      autoDetected = subAnalysis.autoDetectedTab?.name || nonGuideTabs[0];
+    }
+  }
+
+  return {
+    tabs,
+    autoDetectedTab: autoDetected,
+    datedTabs: analysis.tabs,
+  };
+}
+
 export async function sheetRows(value: string, tab?: string, token?: string) {
   const id = extractSpreadsheetId(value);
   if (!id || !/^[\w-]+$/.test(id))
     throw new Error("Enter a valid Google Sheets URL.");
-  if (token) {
-    const range = tab ? `'${tab.replace(/'/g, "''")}'!A:Z` : "A:Z";
-    const bearer = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+  let activeTab = tab?.trim();
+  let authToken = token;
+  if (!authToken) {
+    try {
+      authToken = (await getValidGoogleAccessToken()) || undefined;
+    } catch {}
+  }
+
+  // If no tab was specified or tab is empty, auto-detect the directory tab!
+  if (!activeTab) {
+    try {
+      const detected = await getSpreadsheetTabs(value, authToken);
+      if (detected.autoDetectedTab) {
+        activeTab = detected.autoDetectedTab;
+      }
+    } catch {}
+  }
+
+  if (authToken) {
+    const range = activeTab ? `'${activeTab.replace(/'/g, "''")}'!A:Z` : "A:Z";
+    const bearer = authToken.startsWith("Bearer ") ? authToken : `Bearer ${authToken}`;
 
     // 1. First attempt: Fetch full grid data to extract rich cell hyperlinks (for Facebook links)
     try {
@@ -108,7 +236,7 @@ export async function sheetRows(value: string, tab?: string, token?: string) {
     return (await res.json()).values || [];
   }
   const res = await safeFetch(
-    `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv${tab ? `&sheet=${encodeURIComponent(tab)}` : ""}`,
+    `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv${activeTab ? `&sheet=${encodeURIComponent(activeTab)}` : ""}`,
   );
   const content = await res.text();
   if (content.trimStart().startsWith("<"))

@@ -41,7 +41,8 @@ export async function syncSpreadsheetBackground(): Promise<{
       };
     }
 
-    const token = state.googleAccessToken;
+    const { getValidGoogleAccessToken } = await import("./googleToken");
+    const token = (await getValidGoogleAccessToken()) || state.googleAccessToken;
     let basePlayers = [...(state.players || [])];
 
     // 1. If a master spreadsheet is configured, pull the full lineup from the sheet tab!

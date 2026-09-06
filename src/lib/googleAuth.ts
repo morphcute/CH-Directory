@@ -190,6 +190,73 @@ export async function getAccessToken(): Promise<string | null> {
 }
 
 /**
+ * Requests offline authorization code using Google Identity Services Code Client.
+ * The code is exchanged server-side for a permanent refresh token.
+ */
+export async function requestGoogleOfflineCode(): Promise<string> {
+  await loadGsiScript();
+  const clientId = getGoogleClientId();
+  if (!clientId) {
+    throw new Error("Google OAuth Client ID is not configured.");
+  }
+  const google = (
+    window as unknown as {
+      google?: {
+        accounts?: {
+          oauth2?: {
+            initCodeClient: (config: {
+              client_id: string;
+              scope: string;
+              ux_mode?: string;
+              callback: (resp: {
+                code?: string;
+                error?: string;
+                error_description?: string;
+              }) => void;
+            }) => { requestCode: () => void };
+          };
+        };
+      };
+    }
+  ).google;
+
+  const oauth2 = google?.accounts?.oauth2;
+  if (!oauth2 || typeof oauth2.initCodeClient !== "function") {
+    throw new Error("Google Code Client is not available.");
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const codeClient = oauth2.initCodeClient({
+        client_id: clientId,
+        scope: `openid email profile ${GOOGLE_SHEETS_SCOPE}`,
+        ux_mode: "popup",
+        callback: (resp) => {
+          if (resp.error) {
+            reject(
+              new Error(
+                resp.error_description ||
+                  resp.error ||
+                  "Authorization cancelled.",
+              ),
+            );
+            return;
+          }
+          if (!resp.code) {
+            reject(new Error("No authorization code returned from Google."));
+            return;
+          }
+          resolve(resp.code);
+        },
+      });
+      codeClient.requestCode();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/**
  * Sign out and clear Google OAuth tokens
  */
 export async function logoutGoogle(): Promise<void> {
@@ -200,3 +267,4 @@ export async function logoutGoogle(): Promise<void> {
   cachedAccessToken = null;
   cachedUser = null;
 }
+

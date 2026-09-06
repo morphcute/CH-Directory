@@ -89,6 +89,8 @@ export function Admin() {
   const [googleEmail, setGoogleEmail] = useState("");
   const [imported, setImported] = useState<CHPlayer[] | null>(null);
   const [autoSync, setAutoSync] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
 
   useEffect(() => {
     api("/api/auth")
@@ -96,7 +98,22 @@ export function Admin() {
         setConfigured(data.configured);
         if (data.adminEmail) setAdminEmail(data.adminEmail);
         if (data.authenticated) {
-          setState(await api("/api/app-state"));
+          const appState = await api("/api/app-state");
+          setState(appState);
+          if (appState.googleAccessToken) {
+            setToken(appState.googleAccessToken);
+          }
+          if (
+            appState.googleConnectedEmail ||
+            appState.googleAccessToken ||
+            appState.googleRefreshToken
+          ) {
+            setGoogleEmail(
+              appState.googleConnectedEmail ||
+                data.adminEmail ||
+                "lester.chquezonprovince@gmail.com",
+            );
+          }
           setAuthenticated(true);
         }
       })
@@ -224,11 +241,54 @@ export function Admin() {
       setMessage(res.message || "Spreadsheet sources successfully synced.");
     });
   }
+  async function detectTabs(urlToDetect?: string) {
+    if (!state) return;
+    const url = (urlToDetect || state.spreadsheetUrl || "").trim();
+    if (!url) return;
+    await run("detect-tabs", async () => {
+      const data = await api(
+        `/api/sheets/tabs?url=${encodeURIComponent(url)}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      if (data.tabs && data.tabs.length > 0) {
+        const patch: Partial<AppState> = {
+          rawTabsList: data.tabs,
+        };
+        if (data.autoDetectedTab) {
+          patch.activeTabName = data.autoDetectedTab;
+        }
+        update(patch);
+        setMessage(
+          `Detected ${data.tabs.length} tabs. Active month set to: "${data.autoDetectedTab || data.tabs[0]}"`,
+        );
+      } else {
+        setMessage(
+          "No sheet tabs detected. Check that the link is accessible or connect your Google account.",
+        );
+      }
+    });
+  }
   async function importSheet() {
     if (!state) return;
     await run("import", async () => {
+      let targetTab = (state.activeTabName || "").trim();
+      if (!targetTab && state.spreadsheetUrl) {
+        try {
+          const tabData = await api(
+            `/api/sheets/tabs?url=${encodeURIComponent(state.spreadsheetUrl)}`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          );
+          if (tabData.autoDetectedTab) {
+            targetTab = tabData.autoDetectedTab;
+            update({ activeTabName: targetTab, rawTabsList: tabData.tabs });
+          }
+        } catch {
+          // fallback
+        }
+      }
+
       const data = await api(
-        `/api/sheets/data?url=${encodeURIComponent(state.spreadsheetUrl || "")}&sheet=${encodeURIComponent(state.activeTabName || "")}`,
+        `/api/sheets/data?url=${encodeURIComponent(state.spreadsheetUrl || "")}&sheet=${encodeURIComponent(targetTab || "")}`,
         { headers: token ? { Authorization: `Bearer ${token}` } : {} },
       );
       previewImport(data.rows);
@@ -245,12 +305,44 @@ export function Admin() {
   async function googleSignIn() {
     await run("google", async () => {
       const auth = await import("@/lib/googleAuth");
+      try {
+        // 1. Attempt offline code authorization for permanent refresh token
+        const code = await auth.requestGoogleOfflineCode();
+        const res = await api("/api/sheets/connect-google", post({ code }));
+        if (res.accessToken) setToken(res.accessToken);
+        const email = res.email || "lester.chquezonprovince@gmail.com";
+        setGoogleEmail(email);
+        setMessage(
+          `Google connected permanently (${email}). Background syncing stays active forever.`,
+        );
+        if (state?.spreadsheetUrl) {
+          void detectTabs(state.spreadsheetUrl);
+        }
+        return;
+      } catch (codeErr) {
+        console.warn(
+          "Offline code flow not available, falling back to popup token client...",
+          codeErr,
+        );
+      }
+
+      // 2. Fallback to standard token client
       const result = await auth.googleSignIn();
       setToken(result.accessToken);
-      setGoogleEmail(result.user.email || "Google account");
+      const email = result.user.email || "lester.chquezonprovince@gmail.com";
+      setGoogleEmail(email);
+      try {
+        await api(
+          "/api/sheets/connect-google",
+          post({ accessToken: result.accessToken, email }),
+        );
+      } catch {}
       setMessage(
-        "Google connected. You can now read sheets shared with this account.",
+        `Google connected (${email}). Detecting spreadsheet tabs...`,
       );
+      if (state?.spreadsheetUrl) {
+        void detectTabs(state.spreadsheetUrl);
+      }
     });
   }
   function exportData() {
@@ -389,6 +481,71 @@ export function Admin() {
                   </>
                 )}
               </button>
+
+              <div style={{ textAlign: "center", marginTop: 14 }}>
+                <button
+                  type="button"
+                  className="inline-link"
+                  style={{ fontSize: "0.8rem", color: "#94a3b8" }}
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword
+                    ? "Hide password option"
+                    : "Sign in with password instead"}
+                </button>
+              </div>
+
+              {showPassword && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    run("login", async () => {
+                      await api(
+                        "/api/auth/login",
+                        post({ password: passwordInput }),
+                      );
+                      const appState = await api("/api/app-state");
+                      setState(appState);
+                      if (appState.googleAccessToken) {
+                        setToken(appState.googleAccessToken);
+                      }
+                      if (
+                        appState.googleConnectedEmail ||
+                        appState.googleAccessToken ||
+                        appState.googleRefreshToken
+                      ) {
+                        setGoogleEmail(
+                          appState.googleConnectedEmail ||
+                            "lester.chquezonprovince@gmail.com",
+                        );
+                      }
+                      setAuthenticated(true);
+                    });
+                  }}
+                  style={{ marginTop: 14 }}
+                >
+                  <label className="form-field">
+                    Password
+                    <input
+                      type="password"
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      placeholder="Enter administrator password"
+                      required
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="button outline full-width"
+                    style={{ marginTop: 10 }}
+                    disabled={!passwordInput || !!busy}
+                  >
+                    {busy === "login"
+                      ? "Verifying password…"
+                      : "Sign in with password"}
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         ) : (
@@ -686,15 +843,41 @@ export function Admin() {
                     </p>
                     <label className="form-field">
                       Master spreadsheet link
-                      <input
-                        type="url"
-                        value={state.spreadsheetUrl || ""}
-                        placeholder="https://docs.google.com/spreadsheets/d/…"
-                        onChange={(e) =>
-                          update({ spreadsheetUrl: e.target.value })
-                        }
-                      />
+                      <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                        <input
+                          type="url"
+                          style={{ flex: 1 }}
+                          value={state.spreadsheetUrl || ""}
+                          placeholder="https://docs.google.com/spreadsheets/d/…"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            update({ spreadsheetUrl: val });
+                            if (val.includes("docs.google.com/spreadsheets/d/")) {
+                              void detectTabs(val);
+                            }
+                          }}
+                          onPaste={(e) => {
+                            const pasted = e.clipboardData.getData("text");
+                            if (pasted.includes("docs.google.com/spreadsheets/d/")) {
+                              update({ spreadsheetUrl: pasted });
+                              void detectTabs(pasted);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="button outline small"
+                          style={{ whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}
+                          disabled={busy === "detect-tabs" || !state.spreadsheetUrl}
+                          onClick={() => detectTabs()}
+                          title="Scan and detect sheet tabs"
+                        >
+                          <RefreshCw size={14} className={busy === "detect-tabs" ? "busy-spinner" : ""} />
+                          {busy === "detect-tabs" ? "Detecting tabs…" : "Detect tabs"}
+                        </button>
+                      </div>
                     </label>
+
                     <label className="form-field">
                       Sheet tab name
                       <input
@@ -705,13 +888,110 @@ export function Admin() {
                         placeholder="September 5, 2026"
                       />
                     </label>
+
+                    {state.rawTabsList && state.rawTabsList.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: -6,
+                          marginBottom: 16,
+                          padding: "10px 14px",
+                          background: "#161e2c",
+                          borderRadius: "8px",
+                          border: "1px solid #24334a",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.78rem",
+                            color: "#94a3b8",
+                            marginBottom: 8,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span>
+                            <strong>Detected tabs in sheet</strong> (click to select):
+                          </span>
+                          {state.activeTabName && (
+                            <span style={{ color: "#facc15", fontWeight: 600 }}>
+                              Active: {state.activeTabName}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {state.rawTabsList.map((tName) => {
+                            const isSelected =
+                              (state.activeTabName || "").trim() === tName.trim();
+                            const isGuide =
+                              /guide|instruction|rules|template|readme|uniformed/i.test(
+                                tName,
+                              );
+                            return (
+                              <button
+                                key={tName}
+                                type="button"
+                                onClick={() => {
+                                  update({ activeTabName: tName });
+                                  setMessage(`Selected tab: "${tName}"`);
+                                }}
+                                style={{
+                                  padding: "6px 12px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.82rem",
+                                  fontWeight: isSelected ? 700 : 500,
+                                  border: isSelected
+                                    ? "1.5px solid #facc15"
+                                    : "1px solid #334155",
+                                  background: isSelected
+                                    ? "rgba(250, 204, 21, 0.16)"
+                                    : "#0f172a",
+                                  color: isSelected
+                                    ? "#facc15"
+                                    : isGuide
+                                      ? "#94a3b8"
+                                      : "#f8fafc",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                {isSelected ? "✓ " : isGuide ? "ℹ " : "📅 "}
+                                {tName}
+                                {isGuide && (
+                                  <span style={{ opacity: 0.6, fontSize: "0.68rem" }}>
+                                    (Guide)
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <button className="button primary" onClick={importSheet}>
                       <Upload size={15} />
                       Preview sheet import
                     </button>
-                    <button className="button outline" onClick={googleSignIn}>
+                    <button
+                      className="button outline"
+                      onClick={googleSignIn}
+                      title={
+                        googleEmail
+                          ? "Google is connected permanently for background syncing. Click to refresh or re-authorize."
+                          : "Connect your Google account so the server can sync private sheets automatically."
+                      }
+                      style={{
+                        borderColor: googleEmail ? "#10b981" : undefined,
+                        color: googleEmail ? "#34d399" : undefined,
+                      }}
+                    >
+                      <GoogleIcon size={16} />
                       {googleEmail
-                        ? `Connected: ${googleEmail}`
+                        ? `✓ Connected: ${googleEmail} (Sync active)`
                         : "Connect Google for private sheets"}
                     </button>
                     <details>
