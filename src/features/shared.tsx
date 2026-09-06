@@ -37,6 +37,30 @@ export function Footer({ logoUrl }: { logoUrl?: string } = {}) {
     <footer className="footer">
       <Brand logoUrl={logoUrl} />
       <p>Built for the community. Powered by you.</p>
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "12px",
+          margin: "4px 0",
+        }}
+      >
+        <Link
+          href="/privacy"
+          style={{ color: "#facc15", textDecoration: "none" }}
+        >
+          Privacy Policy
+        </Link>
+        <span style={{ opacity: 0.35 }}>•</span>
+        <Link
+          href="/terms"
+          style={{ color: "#facc15", textDecoration: "none" }}
+        >
+          Terms of Service
+        </Link>
+      </div>
       <a
         href="https://www.facebook.com/MLBBPHCommunityHeroes"
         target="_blank"
