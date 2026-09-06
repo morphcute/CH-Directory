@@ -29,6 +29,21 @@ export function Portal({ initialState }: { initialState: AppState }) {
     /\s+\d{1,2},/,
     "",
   );
+  const openCount = players.filter(
+    (p) =>
+      tournamentStatus(p) === "open" || tournamentStatus(p) === "closing",
+  ).length;
+  const fullCount = players.filter(
+    (p) => tournamentStatus(p) === "full",
+  ).length;
+  const syncTime = state.lastHourlySync
+    ? new Intl.DateTimeFormat("en-PH", {
+        timeZone: "Asia/Manila",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }).format(new Date(state.lastHourlySync)) + " PHT"
+    : "Recently";
 
   async function refresh() {
     try {
@@ -92,39 +107,112 @@ export function Portal({ initialState }: { initialState: AppState }) {
   }
 
   return (
-    <>
-      <header className="site-header simple-header">
-        <div className="header-inner">
-          <Brand logoUrl={state.logoUrl} />
-        </div>
-      </header>
       <main id="main-content" className="simple-directory">
-        <section className="ch-banner" aria-labelledby="directory-title">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={state.bannerUrl || "/images/hero-knight.png"}
-            alt="Community Heroes Tournament Banner"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
-          <div className="ch-banner-shade" />
-          <div className="ch-banner-copy">
-            <span className="eyebrow">CH DIRECTORY · MLBB PH COMMUNITY HEROES</span>
-            <h1 id="directory-title">
-              CH Directory
-              <br />
-              <span style={{ fontSize: "0.85em", color: "#facc15" }}>
-                Choose your CH. Join the game.
-              </span>
-            </h1>
-            <p>Select your Community Hero below to register your team.</p>
+        {/* Facebook-style Profile Card with Cover Banner */}
+        <section className="ch-fb-card" aria-label="Community Heroes Official Profile">
+          {/* Cover Photo Banner */}
+          <div className="ch-fb-cover">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={state.bannerUrl || "/images/hero-knight.png"}
+              alt="Community Heroes Tournament Banner"
+              className="ch-fb-cover-img"
+            />
+            <div className="ch-fb-cover-shade" />
+
+            {/* Top-left date pill */}
+            <div className="ch-fb-badge top-left">
+              <CalendarDays size={12} />
+              <span>{month}</span>
+            </div>
+
+            {/* Top-right live directory pill */}
+            <div className="ch-fb-badge top-right">
+              <span className="ch-pulse-dot" />
+              <span>Live Directory</span>
+            </div>
+          </div>
+
+          {/* Centered Profile Content (Facebook Style) */}
+          <div className="ch-fb-profile-content">
+            <div className="ch-fb-avatar-center">
+              <div className="ch-fb-avatar-box">
+                {state.logoUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={state.logoUrl}
+                    alt="MLBB PH - Community Heroes Profile"
+                    className="ch-fb-avatar-img"
+                  />
+                ) : (
+                  <div className="ch-fb-avatar-fallback">
+                    <Brand logoUrl="" />
+                  </div>
+                )}
+              </div>
+              <span className="ch-fb-active-dot" title="Active Now" />
+            </div>
+
+            <div className="ch-fb-meta-center">
+              <div className="ch-fb-name-row">
+                <h1 className="ch-fb-name">
+                  {state.bannerSettings?.title || "MLBB PH - Community Heroes"}
+                </h1>
+                <span className="verified-badge" title="Verified Page">
+                  <svg className="verified-badge-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </span>
+              </div>
+              <p className="ch-fb-bio">
+                {state.bannerSettings?.subtitle || "Official MLBB Tournament Directory"}
+                <span className="ch-fb-dot">•</span>
+                <span className="ch-fb-followers">
+                  {state.bannerSettings?.followersText || "286K followers • 5 following"}
+                </span>
+              </p>
+            </div>
+
+            <div className="ch-fb-actions-center">
+              <a
+                href={
+                  state.bannerSettings?.facebookPageUrl ||
+                  "https://www.facebook.com/MLBBPHCommunityHeroes"
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-follow-fb"
+                title="Follow MLBB PH Community Heroes on Facebook"
+              >
+                <svg className="btn-fb-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                </svg>
+                <span>Follow on FB</span>
+              </a>
+            </div>
+
+            {/* Status Ribbon inside Card */}
+            <div className="ch-fb-ribbon">
+              <div className="ch-ribbon-left">
+                <span className="ch-ribbon-badge open">
+                  <span className="ch-pulse-dot" />
+                  {openCount} Open
+                </span>
+                {fullCount > 0 && (
+                  <span className="ch-ribbon-badge full">{fullCount} Full</span>
+                )}
+              </div>
+              <div className="ch-ribbon-right">
+                <span>Synced {syncTime}</span>
+              </div>
+            </div>
           </div>
         </section>
+
         <section
           className="ch-directory-section"
           aria-labelledby="ch-list-title"
@@ -180,7 +268,23 @@ export function Portal({ initialState }: { initialState: AppState }) {
                         {p.chNickname.slice(0, 2).toUpperCase()}
                       </span>
                       <div>
-                        <h3>{p.chNickname}</h3>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <h3>{p.chNickname}</h3>
+                          {p.facebookProfileUrl && (
+                            <a
+                              href={p.facebookProfileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="ch-row-fb-link"
+                              title={`Open ${p.chNickname}'s Facebook profile`}
+                            >
+                              <svg viewBox="0 0 24 24" width="13" height="13" fill="#1877F2">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
                         <span>
                           <MapPin size={13} />
                           {p.area}
@@ -271,6 +375,5 @@ export function Portal({ initialState }: { initialState: AppState }) {
           <span>Team counts reflect the latest published lineup.</span>
         </footer>
       </main>
-    </>
   );
 }

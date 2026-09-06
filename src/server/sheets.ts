@@ -56,10 +56,47 @@ export async function sheetRows(value: string, tab?: string, token?: string) {
     throw new Error("Enter a valid Google Sheets URL.");
   if (token) {
     const range = tab ? `'${tab.replace(/'/g, "''")}'!A:Z` : "A:Z";
+    const bearer = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+    // 1. First attempt: Fetch full grid data to extract rich cell hyperlinks (for Facebook links)
+    try {
+      const detailRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${id}?ranges=${encodeURIComponent(range)}&fields=sheets.data.rowData.values(formattedValue,hyperlink,userEnteredValue)`,
+        {
+          headers: { Authorization: bearer },
+          signal: AbortSignal.timeout(12000),
+          cache: "no-store",
+        },
+      );
+      if (detailRes.ok) {
+        const detailJson = await detailRes.json();
+        const rowData = detailJson.sheets?.[0]?.data?.[0]?.rowData;
+        if (Array.isArray(rowData) && rowData.length > 0) {
+          return rowData.map((r: any) => {
+            const vals = r.values || [];
+            return vals.map((cell: any) => {
+              if (!cell) return "";
+              if (cell.hyperlink) {
+                const text = cell.formattedValue || "";
+                return `=HYPERLINK("${cell.hyperlink}", "${text.replace(/"/g, '""')}")`;
+              }
+              if (cell.userEnteredValue?.formulaValue) {
+                return cell.userEnteredValue.formulaValue;
+              }
+              return cell.formattedValue !== undefined ? cell.formattedValue : "";
+            });
+          });
+        }
+      }
+    } catch {
+      // Fallback to standard values endpoint
+    }
+
+    // 2. Standard values endpoint fallback
     const res = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(range)}`,
       {
-        headers: { Authorization: token },
+        headers: { Authorization: bearer },
         signal: AbortSignal.timeout(12000),
         cache: "no-store",
       },

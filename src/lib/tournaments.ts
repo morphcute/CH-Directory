@@ -1,12 +1,7 @@
 import type { AppState, CHPlayer } from "../types";
 
 export function listedPlayers(state: AppState) {
-  return state.players.filter(
-    (player) =>
-      player.active &&
-      (!state.selectedNicknames ||
-        state.selectedNicknames.includes(player.chNickname)),
-  );
+  return state.players.filter((player) => Boolean(player.active));
 }
 
 export function canRegister(player: CHPlayer) {

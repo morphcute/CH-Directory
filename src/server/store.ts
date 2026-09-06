@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { INITIAL_SEPTEMBER_PLAYERS, INITIAL_TABS } from "@/data/initialData";
+import { readDbState, writeDbState } from "@/server/db";
 import type { AppState } from "@/types";
 
 export const defaultState: AppState = {
@@ -14,6 +15,7 @@ export const defaultState: AppState = {
     "https://docs.google.com/spreadsheets/d/1HUANmtnLjlGiNjyiYs4Dgp5rmm_71oH2qFuXMeZXkZw/edit",
   rawTabsList: INITIAL_TABS,
 };
+
 function statePath() {
   if (process.env.DATA_DIR) {
     return path.join(process.env.DATA_DIR, "app-state.json");
@@ -23,7 +25,19 @@ function statePath() {
   }
   return path.join(process.cwd(), "data", "app-state.json");
 }
+
 export async function readState(): Promise<AppState> {
+  // 1. Try Neon Database first
+  try {
+    const dbState = await readDbState();
+    if (dbState && Array.isArray(dbState.players)) {
+      return { ...defaultState, ...dbState };
+    }
+  } catch (err) {
+    console.error("Neon DB read error, falling back to local file:", err);
+  }
+
+  // 2. Fallback to file storage
   try {
     const file = statePath();
     let content: string;
@@ -41,19 +55,36 @@ export async function readState(): Promise<AppState> {
     throw error;
   }
 }
+
 let writeQueue: Promise<unknown> = Promise.resolve();
+
 export function saveState(update: Partial<AppState>): Promise<AppState> {
   const task = writeQueue.then(async () => {
-    const state = {
-      ...(await readState()),
+    const currentState = await readState();
+    const state: AppState = {
+      ...currentState,
       ...update,
       lastUpdated: Date.now(),
     };
-    const file = statePath();
-    await mkdir(path.dirname(file), { recursive: true });
-    const temporary = `${file}.${randomUUID()}.tmp`;
-    await writeFile(temporary, JSON.stringify(state, null, 2), "utf8");
-    await rename(temporary, file);
+
+    // 1. Save to Neon Database
+    try {
+      await writeDbState(state);
+    } catch (err) {
+      console.error("Neon DB write error:", err);
+    }
+
+    // 2. Backup to local file
+    try {
+      const file = statePath();
+      await mkdir(path.dirname(file), { recursive: true });
+      const temporary = `${file}.${randomUUID()}.tmp`;
+      await writeFile(temporary, JSON.stringify(state, null, 2), "utf8");
+      await rename(temporary, file);
+    } catch (err) {
+      // Non-critical if running in readonly environment
+    }
+
     return state;
   });
   writeQueue = task.catch(() => undefined);

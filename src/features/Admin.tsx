@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import type { AppState, CHPlayer } from "@/types";
 import { parseCsvOrTsv, transformRowsToPlayers } from "@/utils/sheetDetector";
+import { compressImageFile } from "@/utils/imageUtils";
 import { slotsLeft, statusLabels, tournamentStatus } from "@/lib/tournaments";
 import { Brand, Footer, Modal } from "./shared";
 
@@ -132,24 +133,28 @@ export function Admin() {
     setState((prev) => (prev ? { ...prev, ...patch } : prev));
     setDirty(true);
   }
-  function handleImageUpload(file: File, field: "logoUrl" | "bannerUrl") {
+  async function handleImageUpload(file: File, field: "logoUrl" | "bannerUrl") {
     if (!file) return;
-    if (file.size > 2.5 * 1024 * 1024) {
-      setError("Please select an image file under 2.5MB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      update({ [field]: dataUrl });
-      setMessage(
-        `${field === "logoUrl" ? "Logo" : "Banner"} updated. Click "Publish changes" to save.`,
+    try {
+      setBusy("upload");
+      setError("");
+      const compressed = await compressImageFile(
+        file,
+        field === "logoUrl" ? 400 : 1600,
+        field === "logoUrl" ? 400 : 800,
+        0.88,
       );
-    };
-    reader.onerror = () => {
-      setError("Failed to read the image file.");
-    };
-    reader.readAsDataURL(file);
+      update({ [field]: compressed.dataUrl });
+      setMessage(
+        `${field === "logoUrl" ? "Profile logo" : "Hero banner"} updated! Click "Publish changes" below to save to public directory.`,
+      );
+    } catch (err) {
+      setError(
+        (err as Error).message || "Failed to process and compress the image.",
+      );
+    } finally {
+      setBusy("");
+    }
   }
   async function googleAdminSignIn() {
     await run("google-login", async () => {
@@ -281,7 +286,20 @@ export function Admin() {
         <header className="admin-header">
           <Brand logoUrl={state?.logoUrl} />
           <div>
-            <Link className="button outline small" href="/">
+            <Link
+              className="button outline small"
+              href="/"
+              onClick={(e) => {
+                if (
+                  dirty &&
+                  !window.confirm(
+                    "You have unpublished changes (like unlisting heroes). Leave without publishing?",
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
+            >
               <ArrowLeft size={14} />
               Public directory
             </Link>
@@ -495,14 +513,7 @@ export function Admin() {
                     <div className="ch-bulk-bar">
                       <span>
                         <strong>
-                          {
-                            state.players.filter(
-                              (p) =>
-                                p.active &&
-                                (!state.selectedNicknames ||
-                                  state.selectedNicknames.includes(p.chNickname)),
-                            ).length
-                          }
+                          {state.players.filter((p) => p.active).length}
                         </strong>{" "}
                         of <strong>{state.players.length}</strong> Community Heroes listed on public directory
                       </span>
@@ -556,7 +567,7 @@ export function Admin() {
                                 .includes(query.toLowerCase()),
                             )
                             .map((p) => (
-                              <tr key={p.id}>
+                              <tr key={p.id} className={!p.active ? "admin-row-unlisted" : ""}>
                                 <td>
                                   <div>
                                     <span className="hero-avatar">
@@ -595,47 +606,44 @@ export function Admin() {
                                     )}
                                 </td>
                                 <td>
-                                  <input
-                                    type="checkbox"
-                                    aria-label={`Show ${p.chNickname} in public directory`}
-                                    checked={
-                                      p.active &&
-                                      (!state.selectedNicknames ||
-                                        state.selectedNicknames.includes(
-                                          p.chNickname,
-                                        ))
+                                  <label
+                                    className="list-toggle-label"
+                                    title={
+                                      p.active
+                                        ? `Click to remove ${p.chNickname} from public directory`
+                                        : `Click to list ${p.chNickname} on public directory`
                                     }
-                                    onChange={(e) => {
-                                      const active = e.target.checked;
-                                      update({
-                                        players: state.players.map((item) =>
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`Show ${p.chNickname} in public directory`}
+                                      checked={!!p.active}
+                                      onChange={(e) => {
+                                        const active = e.target.checked;
+                                        const updated = state.players.map((item) =>
                                           item.id === p.id
                                             ? { ...item, active }
                                             : item,
-                                        ),
-                                        selectedNicknames: active
-                                          ? [
-                                              ...new Set([
-                                                ...(state.selectedNicknames ||
-                                                  state.players
-                                                    .filter(
-                                                      (item) => item.active,
-                                                    )
-                                                    .map(
-                                                      (item) => item.chNickname,
-                                                    )),
-                                                p.chNickname,
-                                              ]),
-                                            ]
-                                          : (
-                                              state.selectedNicknames ||
-                                              state.players.map(
-                                                (item) => item.chNickname,
-                                              )
-                                            ).filter((n) => n !== p.chNickname),
-                                      });
-                                    }}
-                                  />
+                                        );
+                                        update({
+                                          players: updated,
+                                          selectedNicknames: updated
+                                            .filter((item) => item.active)
+                                            .map((item) => item.chNickname),
+                                        });
+                                        setMessage(
+                                          active
+                                            ? `${p.chNickname} marked as Listed. Click "Publish changes" to show in public directory.`
+                                            : `${p.chNickname} removed from listing. Click "Publish changes" to remove from public directory.`,
+                                        );
+                                      }}
+                                    />
+                                    <span
+                                      className={`list-status-tag ${p.active ? "listed" : "unlisted"}`}
+                                    >
+                                      {p.active ? "Listed" : "Hidden"}
+                                    </span>
+                                  </label>
                                 </td>
                                 <td>
                                   <button

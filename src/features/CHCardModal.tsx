@@ -67,9 +67,7 @@ export function CHCardModal({
   const slots = slotsLeft(player);
   const initials = player.chNickname.slice(0, 2).toUpperCase();
 
-  const fbUrl =
-    player.facebookProfileUrl ||
-    `https://www.facebook.com/${player.chNickname.toLowerCase().replace(/[^a-z0-9]/g, "")}.mlbb`;
+  const fbUrl = player.facebookProfileUrl || "";
   const regLink = registrationUrl(player);
 
   useEffect(() => {
@@ -148,6 +146,25 @@ export function CHCardModal({
           <div className="ch-modal-identity">
             <div className="ch-modal-title-row">
               <h2>{player.chNickname}</h2>
+              {player.facebookProfileUrl && (
+                <a
+                  href={player.facebookProfileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ch-fb-profile-link"
+                  title={`View ${player.chNickname}'s Facebook profile`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#1877F2",
+                    marginLeft: 6,
+                    verticalAlign: "middle",
+                  }}
+                >
+                  <FacebookIcon size={18} />
+                </a>
+              )}
               {player.isCalabarzon && (
                 <span className="ch-modal-calabarzon">CALABARZON</span>
               )}
@@ -340,17 +357,19 @@ export function CHCardModal({
             </button>
           )}
 
-          <a
-            href={fbUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="button outline full-width"
-            style={{ justifyContent: "center" }}
-          >
-            <FacebookIcon size={16} />
-            Message on Facebook
-            <ExternalLink size={14} style={{ opacity: 0.7 }} />
-          </a>
+          {fbUrl && (
+            <a
+              href={fbUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button outline full-width"
+              style={{ justifyContent: "center" }}
+            >
+              <FacebookIcon size={16} />
+              Message on Facebook
+              <ExternalLink size={14} style={{ opacity: 0.7 }} />
+            </a>
+          )}
         </div>
 
         {/* Quick Tools */}
@@ -385,24 +404,26 @@ export function CHCardModal({
             )}
           </button>
 
-          <button
-            type="button"
-            className="button outline small"
-            onClick={copyFBUrl}
-            style={{ fontSize: "11px", padding: "8px 10px", gap: 6 }}
-          >
-            {copiedFB ? (
-              <>
-                <Check size={14} style={{ color: "#facc15" }} />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Copy size={14} />
-                Copy FB
-              </>
-            )}
-          </button>
+          {fbUrl && (
+            <button
+              type="button"
+              className="button outline small"
+              onClick={copyFBUrl}
+              style={{ fontSize: "11px", padding: "8px 10px", gap: 6 }}
+            >
+              {copiedFB ? (
+                <>
+                  <Check size={14} style={{ color: "#facc15" }} />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy size={14} />
+                  Copy FB
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* QR Code Inline View */}
