@@ -30,10 +30,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [offline, setOffline] = useState(false);
-  const isInitialPassed = isTabDatePassed(initialState.activeTabName);
-  const [statusFilter, setStatusFilter] = useState<"open" | "closed">(
-    isInitialPassed ? "closed" : "open",
-  );
+  const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
   const [searchQuery, setSearchQuery] = useState("");
 
   const players = listedPlayers(state);
