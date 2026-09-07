@@ -326,46 +326,62 @@ export function RafflePage() {
                 return (
                   <div className="raffle-human-card">
                     <div className="raffle-human-card-head">
-                      <div className="raffle-human-card-title">
-                        <Gift size={16} style={{ color: "#facc15" }} />
-                        <strong>
-                          Giveaway Prizes ({normalizedPrizes.length} {normalizedPrizes.length === 1 ? "Tier" : "Tiers"} · {totalWinners} {totalWinners === 1 ? "Winner" : "Winners"})
-                        </strong>
+                      <div className="raffle-prize-shelf-header">
+                        <div className="raffle-prize-shelf-icon-box">
+                          <Gift size={18} />
+                        </div>
+                        <div className="raffle-prize-shelf-title-wrap">
+                          <h3 className="raffle-prize-shelf-title">Giveaway Prizes</h3>
+                          <span className="raffle-prize-shelf-badge">
+                            {normalizedPrizes.length} {normalizedPrizes.length === 1 ? "Tier" : "Tiers"} · {totalWinners} {totalWinners === 1 ? "Winner" : "Winners"}
+                          </span>
+                        </div>
                       </div>
-                      <span className="raffle-human-deadline">
-                        Deadline: {formatDeadline(data.cutoffDate)}
-                      </span>
+
+                      {data.cutoffDate && (
+                        <div className="raffle-human-deadline-pill">
+                          <Clock size={13} style={{ color: "#facc15", flexShrink: 0 }} />
+                          <span>
+                            Deadline: <strong>{formatDeadline(data.cutoffDate)}</strong>
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="raffle-human-prizes-grid">
+                    <div className="raffle-human-prizes-list">
                       {normalizedPrizes.map((prize, idx) => {
                         const isStarlight = /starlight/i.test(prize.name);
                         const isDiamond = /diamond/i.test(prize.name);
+                        const themeClass = isStarlight
+                          ? "theme-starlight"
+                          : isDiamond
+                            ? "theme-diamond"
+                            : "theme-generic";
+
                         return (
-                          <div key={prize.id || idx} className="raffle-human-prize-pill">
-                            {isStarlight ? (
-                              <Crown size={16} style={{ color: "#facc15" }} />
-                            ) : isDiamond ? (
-                              <MlbbDiamondIcon size={16} />
-                            ) : (
-                              <Gift size={16} style={{ color: "#38bdf8" }} />
-                            )}
-                            <span className="raffle-human-prize-name">
-                              {prize.name}
+                          <div key={prize.id || idx} className={`raffle-human-prize-row ${themeClass}`}>
+                            <div className="raffle-human-prize-left">
+                              <div className="raffle-human-prize-icon">
+                                {isStarlight ? (
+                                  <Crown size={16} />
+                                ) : isDiamond ? (
+                                  <MlbbDiamondIcon size={16} />
+                                ) : (
+                                  <Gift size={16} />
+                                )}
+                              </div>
+                              <span className="raffle-human-prize-title">{prize.name}</span>
+                            </div>
+
+                            <div className="raffle-human-prize-right">
                               <span
-                                style={{
-                                  marginLeft: 6,
-                                  fontSize: 11,
-                                  background: prize.winnerCount > 1 ? "rgba(56,189,248,0.18)" : "rgba(255,255,255,0.08)",
-                                  color: prize.winnerCount > 1 ? "#38bdf8" : "#cbd5e1",
-                                  padding: "2px 7px",
-                                  borderRadius: 4,
-                                  fontWeight: 700,
-                                }}
+                                className={`raffle-human-winner-badge ${
+                                  prize.winnerCount > 1 ? "multi" : "single"
+                                }`}
                               >
                                 × {prize.winnerCount} {prize.winnerCount === 1 ? "Winner" : "Winners"}
                               </span>
-                            </span>
+                            </div>
                           </div>
                         );
                       })}
