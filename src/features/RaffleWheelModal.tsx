@@ -48,6 +48,7 @@ export function RaffleWheelModal({
 
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filterUnassigned, setFilterUnassigned] = useState(true);
+  const [excludedEntryIds, setExcludedEntryIds] = useState<Set<string>>(new Set());
   const [isSpinning, setIsSpinning] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [winner, setWinner] = useState<RaffleWheelEntry | null>(null);
@@ -66,11 +67,11 @@ export function RaffleWheelModal({
   const confettiFrameRef = useRef<number | null>(null);
   const isFanfarePlayingRef = useRef<boolean>(false);
 
-  // Filter entrants
+  // Filter entrants: exclude already awarded winners AND excluded/repicked candidates
   const normalizedPrizes = normalizePrizeItems(prizes);
   const eligibleEntrants = filterUnassigned
-    ? entries.filter((e) => !e.prizeWon)
-    : entries;
+    ? entries.filter((e) => !e.prizeWon && !excludedEntryIds.has(e.id))
+    : entries.filter((e) => !excludedEntryIds.has(e.id));
 
   // Initialize selected prize if not set
   useEffect(() => {
@@ -368,8 +369,13 @@ export function RaffleWheelModal({
   };
 
   // Trigger spin animation
-  const spinWheel = () => {
-    if (isSpinning || eligibleEntrants.length === 0) return;
+  const spinWheel = (overrideExcluded?: Set<string>) => {
+    const activeExcluded = overrideExcluded || excludedEntryIds;
+    const currentEligible = filterUnassigned
+      ? entries.filter((e) => !e.prizeWon && !activeExcluded.has(e.id))
+      : entries.filter((e) => !activeExcluded.has(e.id));
+
+    if (isSpinning || currentEligible.length === 0) return;
     getAudioContext();
 
     setIsSpinning(true);
@@ -377,15 +383,15 @@ export function RaffleWheelModal({
     setClaimDeadline(null);
     setAwardedSuccess(false);
 
-    const sliceCount = eligibleEntrants.length;
+    const sliceCount = currentEligible.length;
     const sliceAngle = (2 * Math.PI) / sliceCount;
 
     // Pick random winning index
     const winningIndex = Math.floor(Math.random() * sliceCount);
-    const selectedWinner = eligibleEntrants[winningIndex];
+    const selectedWinner = currentEligible[winningIndex];
     const spinDuration = Math.max(2, Math.min(30, spinDurationSeconds)) * 1000;
 
-    // Broadcast live spin to public /raffle page viewers in real-time!
+    // Broadcast live spin with exact slices to public /raffle viewers in real-time!
     void fetch("/api/raffle/live-spin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -398,6 +404,8 @@ export function RaffleWheelModal({
         startedAt: Date.now(),
         durationMs: spinDuration,
         sliceCount,
+        entrants: currentEligible.map((e) => ({ id: e.id, fullName: e.fullName })),
+        excludedIds: Array.from(activeExcluded),
       }),
     }).catch(() => {});
 
@@ -520,17 +528,34 @@ export function RaffleWheelModal({
 
   // Re-pick another winner immediately (candidate absent or time expired)
   const handleRepick = () => {
+    const repickedWinner = winner;
+    const nextExcluded = new Set(excludedEntryIds);
+    if (repickedWinner) {
+      nextExcluded.add(repickedWinner.id);
+      setExcludedEntryIds(nextExcluded);
+    }
     setWinner(null);
     setClaimDeadline(null);
     setAwardedSuccess(false);
+
+    const remainingEntrants = entries
+      .filter((e) => !e.prizeWon && !nextExcluded.has(e.id))
+      .map((e) => ({ id: e.id, fullName: e.fullName }));
+
     void fetch("/api/raffle/live-spin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "repick" }),
+      body: JSON.stringify({
+        action: "repick",
+        excludedId: repickedWinner?.id,
+        excludedIds: Array.from(nextExcluded),
+        entrants: remainingEntrants,
+      }),
     }).catch(() => {});
+
     setTimeout(() => {
-      spinWheel();
-    }, 150);
+      spinWheel(nextExcluded);
+    }, 200);
   };
 
   // Draw initial state on mount or change
@@ -567,11 +592,23 @@ export function RaffleWheelModal({
     try {
       await onAssignWinner(winner.id, selectedPrize);
       setAwardedSuccess(true);
+      const remainingEntrants = entries
+        .filter((e) => e.id !== winner.id && !e.prizeWon && !excludedEntryIds.has(e.id))
+        .map((e) => ({ id: e.id, fullName: e.fullName }));
+
       void fetch("/api/raffle/live-spin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "awarded" }),
+        body: JSON.stringify({
+          action: "awarded",
+          winnerId: winner.id,
+          winnerName: winner.fullName,
+          prize: selectedPrize,
+          entrants: remainingEntrants,
+          excludedIds: Array.from(excludedEntryIds),
+        }),
       }).catch(() => {});
+
       if (onRefresh) {
         await onRefresh();
       }
@@ -784,7 +821,7 @@ export function RaffleWheelModal({
             <button
               type="button"
               className="raffle-wheel-spin-btn"
-              onClick={spinWheel}
+              onClick={() => spinWheel()}
               disabled={isSpinning || eligibleEntrants.length === 0}
             >
               <Shuffle size={18} className={isSpinning ? "busy-spinner" : ""} />

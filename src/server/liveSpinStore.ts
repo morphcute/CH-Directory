@@ -12,6 +12,8 @@ export interface LiveSpinState {
   claimDeadline?: number | null;
   claimSeconds?: number;
   isAwarded?: boolean;
+  entrants?: { id: string; fullName: string }[];
+  excludedIds?: string[];
 }
 
 let activeLiveSpin: LiveSpinState | null = null;

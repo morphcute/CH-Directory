@@ -38,11 +38,17 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  const awardedWinners = entries.filter((e) => Boolean(e.prizeWon));
-  const eligibleEntrants = entries.filter((e) => !e.prizeWon);
-  const displayEntrants = eligibleEntrants.length > 0 ? eligibleEntrants : entries;
-
   const [liveSpin, setLiveSpin] = useState<LiveSpinState | null>(null);
+
+  const awardedWinners = entries.filter((e) => Boolean(e.prizeWon));
+  const excludedIdsSet = new Set(liveSpin?.excludedIds || []);
+  const eligibleEntrants = entries.filter((e) => !e.prizeWon && !excludedIdsSet.has(e.id));
+  const displayEntrants =
+    liveSpin?.entrants && liveSpin.entrants.length > 0
+      ? liveSpin.entrants
+      : eligibleEntrants.length > 0
+        ? eligibleEntrants
+        : entries;
   const [soundEnabled, setSoundEnabled] = useState(false); // muted by default for browser compliance
   const [celebratedWinner, setCelebratedWinner] = useState<{
     name: string;
@@ -492,7 +498,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
       drawWheel(rotationRef.current);
     }, 60);
     return () => clearTimeout(timer);
-  }, [displayEntrants.length]);
+  }, [displayEntrants.length, liveSpin?.id, liveSpin?.status]);
 
   const isLiveSpinning = Boolean(liveSpin && liveSpin.status === "spinning");
 

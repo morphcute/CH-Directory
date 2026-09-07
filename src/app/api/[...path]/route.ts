@@ -505,6 +505,8 @@ export async function POST(request: Request, context: Context) {
           durationMs: Number(body.durationMs) || 5200,
           sliceCount: Number(body.sliceCount) || 1,
           status: "spinning" as const,
+          entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
+          excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : undefined,
         };
         broadcastLiveSpin(spinState);
         return json({ success: true, liveSpin: spinState });
@@ -520,6 +522,8 @@ export async function POST(request: Request, context: Context) {
             claimSeconds,
             claimDeadline,
             isAwarded: false,
+            entrants: Array.isArray(body.entrants) ? body.entrants : current.entrants,
+            excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current.excludedIds,
           };
           broadcastLiveSpin(landedState);
           return json({ success: true, liveSpin: landedState });
@@ -544,16 +548,48 @@ export async function POST(request: Request, context: Context) {
       if (body.action === "awarded") {
         const current = getLiveSpinState();
         if (current) {
+          const updatedEntrants = Array.isArray(body.entrants)
+            ? body.entrants
+            : current.entrants?.filter((e) => e.id !== current.winnerId);
           const awardedState = {
             ...current,
             isAwarded: true,
+            entrants: updatedEntrants,
+            excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current.excludedIds,
           };
           broadcastLiveSpin(awardedState);
           return json({ success: true, liveSpin: awardedState });
         }
         return json({ success: true, liveSpin: null });
       }
-      if (body.action === "repick" || body.action === "clear" || body.action === "end") {
+      if (body.action === "repick") {
+        const current = getLiveSpinState();
+        const nextExcluded = Array.isArray(body.excludedIds)
+          ? body.excludedIds
+          : body.excludedId && current?.excludedIds
+            ? [...current.excludedIds, body.excludedId]
+            : body.excludedId
+              ? [body.excludedId]
+              : current?.excludedIds || [];
+
+        const repickState = {
+          id: `idle-${Date.now()}`,
+          raffleId: current?.raffleId || "default",
+          prize: current?.prize || "",
+          winnerId: "",
+          winnerName: "",
+          winningIndex: 0,
+          startedAt: Date.now(),
+          durationMs: 0,
+          sliceCount: Array.isArray(body.entrants) ? body.entrants.length : 0,
+          status: "idle" as const,
+          entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
+          excludedIds: nextExcluded,
+        };
+        broadcastLiveSpin(repickState);
+        return json({ success: true, liveSpin: repickState });
+      }
+      if (body.action === "clear" || body.action === "end") {
         broadcastLiveSpin(null);
         return json({ success: true, liveSpin: null });
       }
@@ -697,6 +733,9 @@ export async function POST(request: Request, context: Context) {
           const entry = raffle.entries?.find((e: any) => e.id === body.entryId);
           if (entry) {
             const { broadcastLiveSpin } = await import("@/server/liveSpinStore");
+            const remaining = (raffle.entries || [])
+              .filter((e: any) => !e.prizeWon)
+              .map((e: any) => ({ id: e.id, fullName: e.fullName }));
             broadcastLiveSpin({
               id: `award-${Date.now()}`,
               raffleId: raffle.id,
@@ -706,11 +745,12 @@ export async function POST(request: Request, context: Context) {
               winningIndex: 0,
               startedAt: Date.now(),
               durationMs: 0,
-              sliceCount: 1,
+              sliceCount: remaining.length,
               status: "landed" as const,
               claimDeadline: null,
               claimSeconds: 0,
               isAwarded: true,
+              entrants: remaining,
             });
           }
         }
