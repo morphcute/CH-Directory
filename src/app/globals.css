@@ -5391,3 +5391,532 @@ textarea:focus-visible {
   }
 }
 
+/* ==========================================================================
+   COMMUNITY RAFFLE STYLES (Public & Admin)
+   ========================================================================== */
+
+.ch-ribbon-raffle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 16px;
+  background: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  color: #facc15;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 8px rgba(250, 204, 21, 0.1);
+}
+
+.ch-ribbon-raffle:hover {
+  background: rgba(250, 204, 21, 0.22);
+  border-color: #facc15;
+  transform: translateY(-1px);
+  color: #ffffff;
+}
+
+/* Humanized Community Raffle Page Styles - Matching Homepage Directory */
+.raffle-human-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.raffle-human-card {
+  background: #111724;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.raffle-human-card.winners-box {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.05), rgba(17, 23, 36, 0.95));
+  border-color: rgba(250, 204, 21, 0.35);
+}
+
+.raffle-human-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.raffle-human-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.raffle-human-deadline {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.raffle-human-prizes-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.raffle-human-prize-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.raffle-human-prize-name {
+  color: #ffffff;
+}
+
+.raffle-human-winners-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.raffle-human-winner-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(250, 204, 21, 0.07);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.raffle-human-winner-rank {
+  font-size: 12px;
+  font-weight: 800;
+  color: #facc15;
+}
+
+.raffle-human-winner-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.raffle-human-winner-info strong {
+  display: block;
+  font-size: 13.5px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.raffle-human-winner-prize {
+  font-size: 12px;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.raffle-human-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 8px;
+}
+
+.raffle-human-alert.closed {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.raffle-human-alert.closed strong {
+  display: block;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+.raffle-human-alert.closed p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.raffle-human-registered-view {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.raffle-human-registered-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.raffle-human-check {
+  color: #34d399;
+  margin-top: 2px;
+}
+
+.raffle-human-registered-sub {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #34d399;
+  letter-spacing: 0.5px;
+}
+
+.raffle-human-registered-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 2px 0 4px;
+}
+
+.raffle-human-registered-note {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.raffle-human-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.raffle-human-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.raffle-human-input-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.raffle-human-input {
+  background: #0b1120;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.raffle-human-input:focus {
+  border-color: #38bdf8;
+}
+
+.raffle-human-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.raffle-human-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.raffle-my-row {
+  border-color: rgba(52, 211, 153, 0.4) !important;
+  background: rgba(52, 211, 153, 0.05) !important;
+}
+
+.raffle-you-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  background: #059669;
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.raffle-winner-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.15);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.raffle-row-prize-won {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* Past Winners Archive Styles */
+.raffle-archive-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.raffle-archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.raffle-archive-pill {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.raffle-archive-entrants-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #94a3b8;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.raffle-archive-prizes-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+
+.raffle-archive-prize-chip {
+  font-size: 11.5px;
+  color: #cbd5e1;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.raffle-archive-winners-section {
+  border-top: 1px solid #1e293b;
+  padding-top: 12px;
+}
+
+.raffle-archive-winners-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.raffle-archive-winners-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.raffle-archive-winner-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.raffle-archive-winner-rank {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+/* Admin Raffle Panel Styles */
+.admin-raffle-panel {
+  max-width: 960px;
+}
+
+.admin-raffle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.admin-raffle-card {
+  background: #131d31;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.admin-raffle-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.admin-raffle-card-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.admin-raffle-card-header small {
+  display: block;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.admin-raffle-prize-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.admin-raffle-prize-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.admin-raffle-prize-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+}
+
+.admin-raffle-prize-tag button {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.admin-raffle-prize-tag button:hover {
+  color: #ef4444;
+}
+
+.admin-raffle-random-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  border-radius: 8px;
+  margin-bottom: 18px;
+}
+
+.admin-raffle-random-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-raffle-random-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-raffle-entries-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.admin-raffle-entries-table th {
+  text-align: left;
+  padding: 8px 12px;
+  background: #0b1120;
+  color: #94a3b8;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.admin-raffle-entries-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #1e293b;
+  color: #e2e8f0;
+}
+
+.admin-raffle-entries-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 640px) {
+  .raffle-hero-card {
+    padding: 18px 16px;
+  }
+  .raffle-winners-grid,
+  .raffle-entries-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-raffle-random-box {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+

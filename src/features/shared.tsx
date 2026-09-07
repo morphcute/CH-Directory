@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { ArrowUpRight, Crown, X } from "lucide-react";
+import { ArrowUpRight, Crown, Gift, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 export function Brand({ logoUrl }: { logoUrl?: string } = {}) {
@@ -55,6 +55,20 @@ export function Footer({ logoUrl }: { logoUrl?: string } = {}) {
           margin: "4px 0",
         }}
       >
+        <Link
+          href="/raffle"
+          style={{
+            color: "#facc15",
+            textDecoration: "none",
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <Gift size={13} /> Community Raffle
+        </Link>
+        <span style={{ opacity: 0.35 }}>•</span>
         <Link
           href="/privacy"
           style={{ color: "#facc15", textDecoration: "none" }}

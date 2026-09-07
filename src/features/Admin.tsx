@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  Archive,
   ArrowLeft,
   ArrowUpRight,
+  Calendar,
   CheckCircle2,
+  Clock,
   Crown,
   Download,
   Eye,
   FileSpreadsheet,
+  Gift,
   Image as ImageIcon,
   LayoutDashboard,
   LoaderCircle,
@@ -22,11 +26,13 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  Shuffle,
+  Trash2,
   Trophy,
   Upload,
   Users,
 } from "lucide-react";
-import type { AppState, CHPlayer } from "@/types";
+import type { AppState, CHPlayer, RaffleData, RaffleArchiveSummary } from "@/types";
 import { parseCsvOrTsv, transformRowsToPlayers, cleanAreaString } from "@/utils/sheetDetector";
 import { compressImageFile } from "@/utils/imageUtils";
 import { slotsLeft, statusLabels, tournamentStatus, isTabDatePassed } from "@/lib/tournaments";
@@ -93,6 +99,402 @@ export function Admin() {
   const [showPassword, setShowPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
 
+  // Raffle Management State
+  const [raffleData, setRaffleData] = useState<RaffleData | null>(null);
+  const [raffleLoading, setRaffleLoading] = useState(false);
+  const [raffleSaving, setRaffleSaving] = useState(false);
+  const [raffleForm, setRaffleForm] = useState<{
+    title: string;
+    description: string;
+    cutoffDate: string;
+    prizes: string[];
+    isActive: boolean;
+  }>({
+    title: "Community Heroes Grand Raffle",
+    description:
+      "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.",
+    cutoffDate: "",
+    prizes: ["Starlight Card", "100 Diamonds", "100 Diamonds", "50 Diamonds"],
+    isActive: true,
+  });
+  const [newPrizeInput, setNewPrizeInput] = useState("");
+  const [selectedRandomPrize, setSelectedRandomPrize] = useState("");
+  const [raffleQuery, setRaffleQuery] = useState("");
+  const [assignDropdownValue, setAssignDropdownValue] = useState<{ [entryId: string]: string }>({});
+  const [archivedRaffles, setArchivedRaffles] = useState<RaffleArchiveSummary[]>([]);
+  const [showCreateRaffleModal, setShowCreateRaffleModal] = useState(false);
+  const [createRaffleForm, setCreateRaffleForm] = useState<{
+    title: string;
+    description: string;
+    cutoffDate: string;
+    prizes: string[];
+    isActive: boolean;
+  }>({
+    title: "Community Heroes Grand Raffle",
+    description:
+      "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.",
+    cutoffDate: "",
+    prizes: ["Starlight Card", "100 Diamonds"],
+    isActive: true,
+  });
+  const [createPrizeInput, setCreatePrizeInput] = useState("");
+  const [editingArchive, setEditingArchive] = useState<RaffleArchiveSummary | null>(null);
+  const [editingArchiveForm, setEditingArchiveForm] = useState<{ title: string; description: string }>({
+    title: "",
+    description: "",
+  });
+  const [manualEntryName, setManualEntryName] = useState("");
+
+  function toLocalDatetimeInput(iso?: string) {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch {
+      return "";
+    }
+  }
+
+  async function loadRaffleAdmin() {
+    setRaffleLoading(true);
+    try {
+      const res = await api("/api/raffle");
+      setRaffleData(res);
+      if (Array.isArray(res.archives)) {
+        setArchivedRaffles(res.archives);
+      }
+      setRaffleForm({
+        title: res.title || "Community Heroes Grand Raffle",
+        description: res.description || "",
+        cutoffDate: res.cutoffDate || "",
+        prizes: Array.isArray(res.prizes) ? res.prizes : [],
+        isActive: res.isActive !== undefined ? res.isActive : true,
+      });
+      if (res.prizes && res.prizes.length > 0) {
+        setSelectedRandomPrize(res.prizes[0]);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to load raffle data");
+    } finally {
+      setRaffleLoading(false);
+    }
+  }
+
+  async function handleArchiveCurrentRaffle() {
+    if (!raffleData) return;
+    const winnerCount = raffleData.entries?.filter((e) => Boolean(e.prizeWon)).length || 0;
+    const confirmMsg =
+      winnerCount > 0
+        ? `This raffle currently has ${winnerCount} assigned winner(s). Are you sure you want to archive it? All entries and winners will be preserved in the public Past Winners Archive, and a new raffle will begin.`
+        : "Archive this raffle? It will be moved to the Past Winners Archive and a new raffle will begin.";
+    if (!window.confirm(confirmMsg)) return;
+
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "archive-and-new",
+          raffleId: raffleData.id || "default",
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+        setRaffleForm({
+          title: res.raffle.title || "Community Heroes Grand Raffle",
+          description: res.raffle.description || "",
+          cutoffDate: res.raffle.cutoffDate || "",
+          prizes: Array.isArray(res.raffle.prizes) ? res.raffle.prizes : [],
+          isActive: res.raffle.isActive !== undefined ? res.raffle.isActive : true,
+        });
+        if (Array.isArray(res.archives)) {
+          setArchivedRaffles(res.archives);
+        }
+        setMessage("Raffle has been archived! A fresh raffle is now active for your community.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to archive raffle");
+    }
+  }
+
+  async function handleCreateNewRaffle(e: React.FormEvent) {
+    e.preventDefault();
+    if (!createRaffleForm.title.trim()) {
+      setError("Please enter a title for the new raffle.");
+      return;
+    }
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "create-raffle",
+          title: createRaffleForm.title,
+          description: createRaffleForm.description,
+          cutoffDate: createRaffleForm.cutoffDate,
+          prizes: createRaffleForm.prizes,
+          isActive: createRaffleForm.isActive,
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+        setRaffleForm({
+          title: res.raffle.title,
+          description: res.raffle.description,
+          cutoffDate: res.raffle.cutoffDate,
+          prizes: res.raffle.prizes || [],
+          isActive: res.raffle.isActive !== undefined ? res.raffle.isActive : true,
+        });
+        if (Array.isArray(res.archives)) setArchivedRaffles(res.archives);
+        setShowCreateRaffleModal(false);
+        setMessage("New raffle created successfully and active on /raffle!");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to create new raffle");
+    }
+  }
+
+  async function handleDeleteCurrentRaffle() {
+    if (!raffleData) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete "${raffleData.title}" and its registered entries? This action cannot be undone.`,
+      )
+    )
+      return;
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "delete-raffle",
+          raffleId: raffleData.id,
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+        setRaffleForm({
+          title: res.raffle.title,
+          description: res.raffle.description,
+          cutoffDate: res.raffle.cutoffDate,
+          prizes: res.raffle.prizes || [],
+          isActive: res.raffle.isActive !== undefined ? res.raffle.isActive : true,
+        });
+        if (Array.isArray(res.archives)) setArchivedRaffles(res.archives);
+        setMessage("Raffle deleted. Switched to next raffle edition.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to delete raffle");
+    }
+  }
+
+  async function handleDeleteArchive(archiveId: string, title: string) {
+    if (!window.confirm(`Delete archived raffle "${title}"? It will be removed from the archive history permanently.`)) return;
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "delete-archive",
+          archiveId,
+        }),
+      );
+      if (Array.isArray(res.archives)) setArchivedRaffles(res.archives);
+      setMessage(`Archived raffle "${title}" deleted.`);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete archive");
+    }
+  }
+
+  async function handleRestoreArchive(archiveId: string) {
+    if (!window.confirm("Restore this archived raffle to active? It will replace the current active raffle on /raffle.")) return;
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "restore-archive",
+          archiveId,
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+        setRaffleForm({
+          title: res.raffle.title,
+          description: res.raffle.description,
+          cutoffDate: res.raffle.cutoffDate,
+          prizes: res.raffle.prizes || [],
+          isActive: res.raffle.isActive !== undefined ? res.raffle.isActive : true,
+        });
+        if (Array.isArray(res.archives)) setArchivedRaffles(res.archives);
+        setMessage("Archived raffle restored to active!");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to restore archive");
+    }
+  }
+
+  async function handleSaveEditArchive(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingArchive) return;
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "edit-archive",
+          archiveId: editingArchive.id,
+          title: editingArchiveForm.title,
+          description: editingArchiveForm.description,
+        }),
+      );
+      if (Array.isArray(res.archives)) setArchivedRaffles(res.archives);
+      setEditingArchive(null);
+      setMessage("Archived raffle updated successfully.");
+    } catch (err: any) {
+      setError(err.message || "Failed to update archived raffle");
+    }
+  }
+
+  async function handleAddManualEntry(e: React.FormEvent) {
+    e.preventDefault();
+    const name = manualEntryName.trim();
+    if (!name) return;
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "add-entry",
+          raffleId: raffleData?.id || "default",
+          fullName: name,
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+        setManualEntryName("");
+        setMessage(`Added "${name}" to raffle entries.`);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to add entry");
+    }
+  }
+
+  async function handleSaveRaffleSettings(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    setRaffleSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "update-settings",
+          title: raffleForm.title,
+          description: raffleForm.description,
+          cutoffDate: raffleForm.cutoffDate,
+          prizes: raffleForm.prizes,
+          isActive: raffleForm.isActive,
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+      }
+      setMessage("Raffle settings saved and published to public /raffle page!");
+    } catch (err: any) {
+      setError(err.message || "Failed to update raffle settings");
+    } finally {
+      setRaffleSaving(false);
+    }
+  }
+
+  async function handleAssignPrize(entryId: string, prizeWon: string | null) {
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "assign-winner",
+          entryId,
+          prizeWon,
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+        setMessage(prizeWon ? `Prize "${prizeWon}" assigned to participant!` : "Prize unassigned.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to assign winner");
+    }
+  }
+
+  async function handleDeleteRaffleEntry(entryId: string, fullName: string) {
+    if (!window.confirm(`Are you sure you want to remove "${fullName}" from the raffle entries?`)) return;
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "delete-entry",
+          entryId,
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+        setMessage(`Removed "${fullName}" from raffle.`);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to delete entry");
+    }
+  }
+
+  async function handleClearAllRaffleEntries() {
+    if (!window.confirm("⚠️ Are you sure you want to delete ALL registered raffle entries? This will completely clear the participant list and cannot be undone.")) return;
+    setError("");
+    setMessage("");
+    try {
+      const res = await api(
+        "/api/raffle/admin",
+        post({
+          action: "clear-entries",
+        }),
+      );
+      if (res.raffle) {
+        setRaffleData(res.raffle);
+        setMessage("All raffle entries have been reset successfully.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to clear entries");
+    }
+  }
+
+  function handlePickRandomWinner() {
+    if (!raffleData || !raffleData.entries || raffleData.entries.length === 0) {
+      setError("No participants have registered in the raffle yet.");
+      return;
+    }
+    const prize = selectedRandomPrize.trim();
+    if (!prize) {
+      setError("Please select or enter a prize to award to the random winner.");
+      return;
+    }
+    const eligible = raffleData.entries.filter((e) => !e.prizeWon);
+    if (eligible.length === 0) {
+      setError("All registered participants have already won a prize!");
+      return;
+    }
+    const winner = eligible[Math.floor(Math.random() * eligible.length)];
+    void handleAssignPrize(winner.id, prize);
+    setMessage(`🎉 Random Draw Winner: ${winner.fullName} won "${prize}"!`);
+  }
+
   useEffect(() => {
     api("/api/auth")
       .then(async (data) => {
@@ -134,6 +536,12 @@ export function Admin() {
     }, 3_600_000);
     return () => clearInterval(timer);
   }, [autoSync, authenticated, state, busy]);
+
+  useEffect(() => {
+    if (tab === "raffle" && !raffleData && authenticated) {
+      void loadRaffleAdmin();
+    }
+  }, [tab, authenticated, raffleData]);
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label);
@@ -656,6 +1064,13 @@ export function Admin() {
                 >
                   <Settings2 size={15} />
                   Lineup settings
+                </button>
+                <button
+                  className={tab === "raffle" ? "active" : ""}
+                  onClick={() => setTab("raffle")}
+                >
+                  <Gift size={15} />
+                  Raffle
                 </button>
               </nav>
               {feedback}
@@ -1355,6 +1770,773 @@ export function Admin() {
                     </div>
                   </section>
                 )}
+                {tab === "raffle" && (
+                  <section className="admin-panel admin-raffle-panel">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+                      <div>
+                        <h2>Community Raffle & Giveaways</h2>
+                        <p>
+                          Configure official community giveaways, set cut-off deadlines, MLBB diamonds or Starlight prizes, and assign winners.
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <Link
+                          href="/raffle"
+                          target="_blank"
+                          className="button outline small"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                        >
+                          <Eye size={14} />
+                          <span>View Public /raffle Page</span>
+                        </Link>
+                        <button
+                          type="button"
+                          className="button outline small"
+                          onClick={() => loadRaffleAdmin()}
+                          disabled={raffleLoading}
+                        >
+                          <RefreshCw size={14} className={raffleLoading ? "busy-spinner" : ""} />
+                          <span>Refresh</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {raffleLoading && !raffleData ? (
+                      <div style={{ textAlign: "center", padding: "40px 0" }}>
+                        <LoaderCircle size={24} className="busy-spinner" />
+                        <p style={{ marginTop: 8, color: "#94a3b8" }}>Loading raffle settings…</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Top Raffle CRUD Bar */}
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                            gap: 12,
+                            marginBottom: 18,
+                            padding: "12px 16px",
+                            background: "#111724",
+                            border: "1px solid #1e293b",
+                            borderRadius: 10,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <strong style={{ color: "#ffffff", fontSize: 14 }}>
+                              Current Edition: {raffleData?.title || "Community Heroes Grand Raffle"}
+                            </strong>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: 4,
+                                background: raffleForm.isActive ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                                color: raffleForm.isActive ? "#4ade80" : "#f87171",
+                                border: `1px solid ${raffleForm.isActive ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                              }}
+                            >
+                              {raffleForm.isActive ? "Active on /raffle" : "Inactive / Hidden"}
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <button
+                              type="button"
+                              className="button primary small"
+                              onClick={() => setShowCreateRaffleModal(true)}
+                            >
+                              <Plus size={14} />
+                              <span>Create New Raffle</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="button outline small"
+                              onClick={handleArchiveCurrentRaffle}
+                              title="Archive this raffle and move to Past Winners Archive"
+                            >
+                              <Archive size={14} />
+                              <span>Archive Raffle</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="button outline small"
+                              onClick={handleDeleteCurrentRaffle}
+                              style={{ color: "#f87171", borderColor: "#7f1d1d" }}
+                              title="Permanently delete this raffle"
+                            >
+                              <Trash2 size={14} />
+                              <span>Delete Raffle</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Settings & Configuration Grid */}
+                        <form onSubmit={handleSaveRaffleSettings} className="admin-raffle-card" style={{ marginBottom: 20 }}>
+                          <div className="admin-raffle-card-header">
+                            <Gift size={18} style={{ color: "#facc15" }} />
+                            <div>
+                              <h3>Raffle Title & Giveaway Settings</h3>
+                              <small>Control title, rules, cut-off date & time, and giveaway prizes.</small>
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+                            <label className="form-field">
+                              Raffle Title
+                              <input
+                                required
+                                value={raffleForm.title}
+                                onChange={(e) =>
+                                  setRaffleForm((prev) => ({ ...prev, title: e.target.value }))
+                                }
+                                placeholder="e.g. Community Heroes Grand Raffle"
+                              />
+                            </label>
+
+                            <label className="form-field">
+                              Cut-off Date & Time (Registration Deadline)
+                              <input
+                                type="datetime-local"
+                                value={toLocalDatetimeInput(raffleForm.cutoffDate)}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setRaffleForm((prev) => ({
+                                    ...prev,
+                                    cutoffDate: val ? new Date(val).toISOString() : "",
+                                  }));
+                                }}
+                              />
+                            </label>
+                          </div>
+
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "-6px 0 14px" }}>
+                            <span style={{ fontSize: 11.5, color: "#94a3b8", alignSelf: "center", marginRight: 4 }}>
+                              Quick Deadlines:
+                            </span>
+                            <button
+                              type="button"
+                              className="button outline small"
+                              style={{ padding: "3px 8px", fontSize: 11 }}
+                              onClick={() => {
+                                const d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+                                setRaffleForm((p) => ({ ...p, cutoffDate: d.toISOString() }));
+                              }}
+                            >
+                              +3 Days
+                            </button>
+                            <button
+                              type="button"
+                              className="button outline small"
+                              style={{ padding: "3px 8px", fontSize: 11 }}
+                              onClick={() => {
+                                const d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+                                setRaffleForm((p) => ({ ...p, cutoffDate: d.toISOString() }));
+                              }}
+                            >
+                              +7 Days (1 Week)
+                            </button>
+                            <button
+                              type="button"
+                              className="button outline small"
+                              style={{ padding: "3px 8px", fontSize: 11 }}
+                              onClick={() => {
+                                const d = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+                                setRaffleForm((p) => ({ ...p, cutoffDate: d.toISOString() }));
+                              }}
+                            >
+                              +14 Days (2 Weeks)
+                            </button>
+                            {raffleForm.cutoffDate && (
+                              <button
+                                type="button"
+                                className="button outline small"
+                                style={{ padding: "3px 8px", fontSize: 11, color: "#f87171" }}
+                                onClick={() => setRaffleForm((p) => ({ ...p, cutoffDate: "" }))}
+                              >
+                                Clear deadline
+                              </button>
+                            )}
+                          </div>
+
+                          <label className="form-field" style={{ marginBottom: 14 }}>
+                            Description & Giveaway Details
+                            <textarea
+                              rows={2}
+                              value={raffleForm.description}
+                              onChange={(e) =>
+                                setRaffleForm((prev) => ({ ...prev, description: e.target.value }))
+                              }
+                              placeholder="Enter your Full Name below to join the official Community Heroes giveaway!"
+                            />
+                          </label>
+
+                          {/* Prizes List Config */}
+                          <div style={{ marginBottom: 14 }}>
+                            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#cbd5e1", marginBottom: 6 }}>
+                              Prizes ({raffleForm.prizes.length})
+                            </label>
+                            <div className="admin-raffle-prize-row">
+                              <input
+                                value={newPrizeInput}
+                                onChange={(e) => setNewPrizeInput(e.target.value)}
+                                placeholder="e.g. Starlight Card, 100 Diamonds, Weekly Diamond Pass…"
+                                style={{
+                                  background: "#0b1120",
+                                  border: "1px solid #24334a",
+                                  borderRadius: 6,
+                                  color: "#ffffff",
+                                  padding: "7px 12px",
+                                  fontSize: 13,
+                                  flex: 1,
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const val = newPrizeInput.trim();
+                                    if (val) {
+                                      setRaffleForm((prev) => ({
+                                        ...prev,
+                                        prizes: [...prev.prizes, val],
+                                      }));
+                                      setNewPrizeInput("");
+                                    }
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="button outline small"
+                                onClick={() => {
+                                  const val = newPrizeInput.trim();
+                                  if (val) {
+                                    setRaffleForm((prev) => ({
+                                      ...prev,
+                                      prizes: [...prev.prizes, val],
+                                    }));
+                                    setNewPrizeInput("");
+                                  }
+                                }}
+                              >
+                                <Plus size={14} />
+                                <span>Add Prize</span>
+                              </button>
+                            </div>
+
+                            {/* Preset Buttons */}
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                              <span style={{ fontSize: 11.5, color: "#94a3b8", alignSelf: "center", marginRight: 4 }}>
+                                Popular Presets:
+                              </span>
+                              {["Starlight Card", "100 Diamonds", "250 Diamonds", "50 Diamonds", "Weekly Diamond Pass"].map(
+                                (preset) => (
+                                  <button
+                                    key={preset}
+                                    type="button"
+                                    className="button outline small"
+                                    style={{ padding: "3px 8px", fontSize: 11 }}
+                                    onClick={() =>
+                                      setRaffleForm((prev) => ({
+                                        ...prev,
+                                        prizes: [...prev.prizes, preset],
+                                      }))
+                                    }
+                                  >
+                                    + {preset}
+                                  </button>
+                                ),
+                              )}
+                            </div>
+
+                            {/* Current Prizes Tags */}
+                            <div className="admin-raffle-prize-tags">
+                              {raffleForm.prizes.map((p, idx) => (
+                                <span key={idx} className="admin-raffle-prize-tag">
+                                  <span>{p}</span>
+                                  <button
+                                    type="button"
+                                    title={`Remove ${p}`}
+                                    onClick={() =>
+                                      setRaffleForm((prev) => ({
+                                        ...prev,
+                                        prizes: prev.prizes.filter((_, i) => i !== idx),
+                                      }))
+                                    }
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <label className="checkbox-field" style={{ marginBottom: 16 }}>
+                            <input
+                              type="checkbox"
+                              checked={raffleForm.isActive}
+                              onChange={(e) =>
+                                setRaffleForm((prev) => ({ ...prev, isActive: e.target.checked }))
+                              }
+                            />
+                            <span>Active (Allow public participants to join on /raffle)</span>
+                          </label>
+
+                          <button
+                            type="submit"
+                            className="button primary"
+                            disabled={raffleSaving}
+                          >
+                            {raffleSaving ? (
+                              <>
+                                <LoaderCircle size={15} className="busy-spinner" />
+                                <span>Saving raffle settings…</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save size={15} />
+                                <span>Save Raffle Settings</span>
+                              </>
+                            )}
+                          </button>
+                        </form>
+
+                        {/* Entrants & Winner Assignment Section */}
+                        <div className="admin-raffle-card">
+                          {raffleData?.entries && raffleData.entries.some((e) => Boolean(e.prizeWon)) && (
+                            <div
+                              style={{
+                                background: "rgba(250, 204, 21, 0.08)",
+                                border: "1px solid rgba(250, 204, 21, 0.3)",
+                                borderRadius: 8,
+                                padding: "14px 16px",
+                                marginBottom: 16,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                flexWrap: "wrap",
+                                gap: 12,
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <Trophy size={20} style={{ color: "#facc15", flexShrink: 0 }} />
+                                <div>
+                                  <strong style={{ display: "block", color: "#ffffff", fontSize: 13.5 }}>
+                                    Raffle has assigned winners!
+                                  </strong>
+                                  <span style={{ fontSize: 12, color: "#94a3b8" }}>
+                                    Ready for the next round? Archive this raffle to preserve results in the public Past Winners Archive and launch a fresh edition.
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="button primary small"
+                                onClick={handleArchiveCurrentRaffle}
+                                style={{ whiteSpace: "nowrap" }}
+                              >
+                                <Archive size={14} />
+                                <span>Archive & Start New Raffle</span>
+                              </button>
+                            </div>
+                          )}
+
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+                            <div className="admin-raffle-card-header" style={{ margin: 0 }}>
+                              <Trophy size={18} style={{ color: "#facc15" }} />
+                              <div>
+                                <h3>Registered Participants ({raffleData?.entries?.length || 0})</h3>
+                                <small>
+                                  {raffleData?.entries?.filter((e) => Boolean(e.prizeWon)).length || 0} assigned winners · 1 entry per device
+                                </small>
+                              </div>
+                            </div>
+
+                            {/* Search bar */}
+                            <div className="raffle-search-box" style={{ padding: "4px 10px" }}>
+                              <Search size={13} />
+                              <input
+                                placeholder="Search participant…"
+                                value={raffleQuery}
+                                onChange={(e) => setRaffleQuery(e.target.value)}
+                                style={{ minWidth: 150, fontSize: 12 }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Quick Manual Participant Entry Form */}
+                          <form
+                            onSubmit={handleAddManualEntry}
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                              marginBottom: 14,
+                              padding: "8px 12px",
+                              background: "#0b1120",
+                              border: "1px solid #1e293b",
+                              borderRadius: 8,
+                            }}
+                          >
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "#cbd5e1" }}>
+                              Manual Entry:
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="Full Name (e.g. John Doe)"
+                              value={manualEntryName}
+                              onChange={(e) => setManualEntryName(e.target.value)}
+                              style={{
+                                background: "#111724",
+                                border: "1px solid #334155",
+                                borderRadius: 6,
+                                color: "#ffffff",
+                                padding: "5px 10px",
+                                fontSize: 12,
+                                minWidth: 200,
+                              }}
+                            />
+                            <button
+                              type="submit"
+                              className="button outline small"
+                              disabled={!manualEntryName.trim()}
+                              style={{ padding: "4px 10px", fontSize: 12 }}
+                            >
+                              <Plus size={13} />
+                              <span>Add Participant</span>
+                            </button>
+                          </form>
+
+                          {/* Quick Pick Random Winner helper */}
+                          <div className="admin-raffle-random-box">
+                            <div className="admin-raffle-random-left">
+                              <Shuffle size={18} style={{ color: "#facc15" }} />
+                              <div>
+                                <strong style={{ display: "block", fontSize: 13, color: "#ffffff" }}>
+                                  Pick Random Winner Draw
+                                </strong>
+                                <span style={{ fontSize: 11.5, color: "#94a3b8" }}>
+                                  Picks an eligible participant who has not won yet and assigns the selected prize.
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="admin-raffle-random-actions">
+                              <select
+                                value={selectedRandomPrize}
+                                onChange={(e) => setSelectedRandomPrize(e.target.value)}
+                                style={{
+                                  background: "#0b1120",
+                                  border: "1px solid #334155",
+                                  color: "#ffffff",
+                                  padding: "6px 10px",
+                                  borderRadius: 6,
+                                  fontSize: 12,
+                                }}
+                              >
+                                {raffleForm.prizes.map((pz, idx) => (
+                                  <option key={idx} value={pz}>
+                                    {pz}
+                                  </option>
+                                ))}
+                                <option value="Custom Prize">Custom Prize…</option>
+                              </select>
+
+                              {selectedRandomPrize === "Custom Prize" && (
+                                <input
+                                  type="text"
+                                  placeholder="Type prize name"
+                                  onChange={(e) => setSelectedRandomPrize(e.target.value)}
+                                  style={{
+                                    background: "#0b1120",
+                                    border: "1px solid #334155",
+                                    color: "#ffffff",
+                                    padding: "6px 10px",
+                                    borderRadius: 6,
+                                    fontSize: 12,
+                                    width: 130,
+                                  }}
+                                />
+                              )}
+
+                              <button
+                                type="button"
+                                className="button primary small"
+                                onClick={handlePickRandomWinner}
+                                disabled={!raffleData?.entries || raffleData.entries.length === 0}
+                              >
+                                <Shuffle size={14} />
+                                <span>🎲 Pick Winner</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Entrants Table */}
+                          {(!raffleData?.entries || raffleData.entries.length === 0) ? (
+                            <div style={{ textAlign: "center", padding: "30px 16px", color: "#94a3b8", fontSize: 13 }}>
+                              No users have registered for the raffle yet. Share your /raffle link to collect entries!
+                            </div>
+                          ) : (
+                            <div className="admin-table-wrap">
+                              <table className="admin-raffle-entries-table">
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: 45 }}>#</th>
+                                    <th>FULL NAME</th>
+                                    <th>REGISTERED</th>
+                                    <th>ASSIGNED PRIZE</th>
+                                    <th style={{ textAlign: "right", width: 80 }}>ACTION</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {raffleData.entries
+                                    .filter((e) =>
+                                      !raffleQuery.trim() ||
+                                      e.fullName.toLowerCase().includes(raffleQuery.toLowerCase().trim()),
+                                    )
+                                    .map((entry, idx) => {
+                                      const hasPrize = Boolean(entry.prizeWon);
+                                      const currentVal = assignDropdownValue[entry.id] || "";
+                                      return (
+                                        <tr key={entry.id || idx}>
+                                          <td style={{ color: "#64748b", fontWeight: 700 }}>#{idx + 1}</td>
+                                          <td>
+                                            <strong style={{ color: "#ffffff", fontSize: 13.5 }}>
+                                              {entry.fullName}
+                                            </strong>
+                                            {hasPrize && (
+                                              <span
+                                                style={{
+                                                  marginLeft: 8,
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  gap: 3,
+                                                  fontSize: 10,
+                                                  fontWeight: 700,
+                                                  background: "rgba(250, 204, 21, 0.15)",
+                                                  color: "#facc15",
+                                                  border: "1px solid rgba(250, 204, 21, 0.3)",
+                                                  padding: "1px 6px",
+                                                  borderRadius: 4,
+                                                }}
+                                              >
+                                                WINNER
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td style={{ fontSize: 11.5, color: "#94a3b8" }}>
+                                            {entry.createdAt
+                                              ? new Date(entry.createdAt).toLocaleDateString("en-US", {
+                                                  month: "short",
+                                                  day: "numeric",
+                                                  hour: "numeric",
+                                                  minute: "2-digit",
+                                                })
+                                              : "—"}
+                                          </td>
+                                          <td>
+                                            {hasPrize ? (
+                                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <span
+                                                  style={{
+                                                    color: "#38bdf8",
+                                                    fontWeight: 700,
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: 5,
+                                                  }}
+                                                >
+                                                  <Crown size={14} style={{ color: "#facc15" }} />
+                                                  {entry.prizeWon}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  className="button outline small"
+                                                  style={{ padding: "2px 6px", fontSize: 10, color: "#f87171" }}
+                                                  onClick={() => handleAssignPrize(entry.id, null)}
+                                                  title="Remove prize"
+                                                >
+                                                  Clear
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                <select
+                                                  value={currentVal}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setAssignDropdownValue((p) => ({ ...p, [entry.id]: val }));
+                                                    if (val) {
+                                                      void handleAssignPrize(entry.id, val);
+                                                      setAssignDropdownValue((p) => ({ ...p, [entry.id]: "" }));
+                                                    }
+                                                  }}
+                                                  style={{
+                                                    background: "#0b1120",
+                                                    border: "1px solid #334155",
+                                                    color: "#cbd5e1",
+                                                    padding: "4px 8px",
+                                                    borderRadius: 6,
+                                                    fontSize: 11.5,
+                                                  }}
+                                                >
+                                                  <option value="">Assign Prize…</option>
+                                                  {raffleForm.prizes.map((p, i) => (
+                                                    <option key={i} value={p}>
+                                                      {p}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td style={{ textAlign: "right" }}>
+                                            <button
+                                              type="button"
+                                              className="icon-button"
+                                              style={{ color: "#ef4444", padding: 4 }}
+                                              onClick={() => handleDeleteRaffleEntry(entry.id, entry.fullName)}
+                                              title={`Delete ${entry.fullName}'s entry`}
+                                            >
+                                              <Trash2 size={14} />
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          <div style={{ marginTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                            <button
+                              type="button"
+                              className="button outline small"
+                              onClick={handleArchiveCurrentRaffle}
+                              style={{ borderColor: "#334155" }}
+                            >
+                              <Archive size={13} />
+                              <span>Archive Current Raffle & Start New Edition</span>
+                            </button>
+
+                            {raffleData?.entries && raffleData.entries.length > 0 && (
+                              <button
+                                type="button"
+                                className="button outline small"
+                                style={{ color: "#f87171", borderColor: "#7f1d1d" }}
+                                onClick={handleClearAllRaffleEntries}
+                              >
+                                <Trash2 size={13} />
+                                <span>Reset / Clear All Entries</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Archived Raffles History */}
+                        {archivedRaffles && archivedRaffles.length > 0 && (
+                          <div className="admin-raffle-card" style={{ marginTop: 20 }}>
+                            <div className="admin-raffle-card-header">
+                              <Archive size={18} style={{ color: "#38bdf8" }} />
+                              <div>
+                                <h3>Archived Raffles History ({archivedRaffles.length})</h3>
+                                <small>Past completed raffles preserved in database and visible in public archive</small>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                              {archivedRaffles.map((arch, idx) => (
+                                <div
+                                  key={arch.id || idx}
+                                  style={{
+                                    background: "#0b1120",
+                                    border: "1px solid #1e293b",
+                                    borderRadius: 8,
+                                    padding: "12px 16px",
+                                  }}
+                                >
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                                    <div>
+                                      <strong style={{ color: "#ffffff", fontSize: 14 }}>{arch.title}</strong>
+                                      <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2 }}>
+                                        Cut-off: {arch.cutoffDate ? new Date(arch.cutoffDate).toLocaleDateString() : "—"} · {arch.entriesCount} participants
+                                      </div>
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                      <span style={{ fontSize: 11.5, color: "#facc15", fontWeight: 700, background: "rgba(250, 204, 21, 0.1)", padding: "3px 8px", borderRadius: 4 }}>
+                                        {arch.winners?.length || 0} Winner{arch.winners?.length !== 1 ? "s" : ""}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="button outline small"
+                                        style={{ padding: "3px 8px", fontSize: 11.5 }}
+                                        onClick={() => {
+                                          setEditingArchive(arch);
+                                          setEditingArchiveForm({
+                                            title: arch.title,
+                                            description: arch.description || "",
+                                          });
+                                        }}
+                                        title="Edit archive title & description"
+                                      >
+                                        <Pencil size={11} />
+                                        <span>Edit</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="button outline small"
+                                        style={{ padding: "3px 8px", fontSize: 11.5, color: "#38bdf8", borderColor: "#0369a1" }}
+                                        onClick={() => handleRestoreArchive(arch.id)}
+                                        title="Restore this raffle back to active edition"
+                                      >
+                                        <RotateCcw size={11} />
+                                        <span>Restore</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="icon-button"
+                                        style={{ color: "#ef4444", padding: 4 }}
+                                        onClick={() => handleDeleteArchive(arch.id, arch.title)}
+                                        title={`Delete archive "${arch.title}"`}
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {arch.winners && arch.winners.length > 0 && (
+                                    <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                      {arch.winners.map((w, wIdx) => (
+                                        <span
+                                          key={w.id || wIdx}
+                                          style={{
+                                            fontSize: 11,
+                                            background: "#1e293b",
+                                            color: "#e2e8f0",
+                                            padding: "3px 8px",
+                                            borderRadius: 4,
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 4,
+                                          }}
+                                        >
+                                          <Trophy size={11} style={{ color: "#facc15" }} />
+                                          <strong>{w.fullName}</strong>
+                                          <span style={{ color: "#38bdf8" }}>({w.prizeWon})</span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </section>
+                )}
               </fieldset>
               <div className="admin-save-bar">
                 <span aria-live="polite">
@@ -1531,6 +2713,209 @@ export function Admin() {
               {busy === "publish-import" ? "Saving to database…" : "Publish to directory now"}
             </button>
           </div>
+        </Modal>
+      )}
+
+      {showCreateRaffleModal && (
+        <Modal title="Create New Raffle Edition" onClose={() => setShowCreateRaffleModal(false)}>
+          <h2>Launch a new community giveaway</h2>
+          <p className="modal-lead">
+            Set up the prize pool, deadline, and title for this new raffle edition.
+          </p>
+          <form onSubmit={handleCreateNewRaffle} style={{ marginTop: 20 }}>
+            <div className="form-grid">
+              <label className="form-field span-two">
+                Raffle Title
+                <input
+                  required
+                  value={createRaffleForm.title}
+                  onChange={(e) =>
+                    setCreateRaffleForm((p) => ({ ...p, title: e.target.value }))
+                  }
+                  placeholder="e.g. Community Heroes Weekly Starlight Giveaway"
+                />
+              </label>
+              <label className="form-field span-two">
+                Cut-off Date & Time (Registration Deadline)
+                <input
+                  type="datetime-local"
+                  value={toLocalDatetimeInput(createRaffleForm.cutoffDate)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCreateRaffleForm((p) => ({
+                      ...p,
+                      cutoffDate: val ? new Date(val).toISOString() : "",
+                    }));
+                  }}
+                />
+              </label>
+              <label className="form-field span-two">
+                Description & Details
+                <textarea
+                  rows={2}
+                  value={createRaffleForm.description}
+                  onChange={(e) =>
+                    setCreateRaffleForm((p) => ({ ...p, description: e.target.value }))
+                  }
+                  placeholder="Official giveaway for MLBB players. Enter your Full Name below to participate!"
+                />
+              </label>
+            </div>
+
+            {/* Quick Prizes Config */}
+            <div style={{ margin: "14px 0" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#cbd5e1", marginBottom: 6 }}>
+                Prizes ({createRaffleForm.prizes.length})
+              </label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                {["Starlight Card", "100 Diamonds", "250 Diamonds", "Weekly Diamond Pass"].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className="button outline small"
+                    style={{ padding: "3px 8px", fontSize: 11 }}
+                    onClick={() =>
+                      setCreateRaffleForm((p) => ({
+                        ...p,
+                        prizes: [...p.prizes, preset],
+                      }))
+                    }
+                  >
+                    + {preset}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <input
+                  type="text"
+                  placeholder="Custom prize (e.g. 500 Diamonds)"
+                  value={createPrizeInput}
+                  onChange={(e) => setCreatePrizeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const val = createPrizeInput.trim();
+                      if (val) {
+                        setCreateRaffleForm((p) => ({ ...p, prizes: [...p.prizes, val] }));
+                        setCreatePrizeInput("");
+                      }
+                    }
+                  }}
+                  style={{
+                    background: "#0b1120",
+                    border: "1px solid #334155",
+                    borderRadius: 6,
+                    color: "#ffffff",
+                    padding: "6px 10px",
+                    fontSize: 12,
+                    flex: 1,
+                  }}
+                />
+                <button
+                  type="button"
+                  className="button outline small"
+                  onClick={() => {
+                    const val = createPrizeInput.trim();
+                    if (val) {
+                      setCreateRaffleForm((p) => ({ ...p, prizes: [...p.prizes, val] }));
+                      setCreatePrizeInput("");
+                    }
+                  }}
+                >
+                  <Plus size={13} />
+                  <span>Add</span>
+                </button>
+              </div>
+              <div className="admin-raffle-prize-tags">
+                {createRaffleForm.prizes.map((p, idx) => (
+                  <span key={idx} className="admin-raffle-prize-tag">
+                    <span>{p}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCreateRaffleForm((prev) => ({
+                          ...prev,
+                          prizes: prev.prizes.filter((_, i) => i !== idx),
+                        }))
+                      }
+                      title={`Remove ${p}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <label className="checkbox-field" style={{ marginBottom: 18 }}>
+              <input
+                type="checkbox"
+                checked={createRaffleForm.isActive}
+                onChange={(e) =>
+                  setCreateRaffleForm((p) => ({ ...p, isActive: e.target.checked }))
+                }
+              />
+              <span>Active immediately (Accept entries on /raffle)</span>
+            </label>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="button outline"
+                onClick={() => setShowCreateRaffleModal(false)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="button primary">
+                <Plus size={14} />
+                <span>Create & Publish Raffle</span>
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editingArchive && (
+        <Modal title="Edit Archived Raffle" onClose={() => setEditingArchive(null)}>
+          <h2>Update Archive Details</h2>
+          <p className="modal-lead">
+            Update the title and description visible in the public Past Winners Archive.
+          </p>
+          <form onSubmit={handleSaveEditArchive} style={{ marginTop: 20 }}>
+            <label className="form-field" style={{ marginBottom: 14 }}>
+              Archived Raffle Title
+              <input
+                required
+                value={editingArchiveForm.title}
+                onChange={(e) =>
+                  setEditingArchiveForm((p) => ({ ...p, title: e.target.value }))
+                }
+              />
+            </label>
+            <label className="form-field" style={{ marginBottom: 18 }}>
+              Description / Notes
+              <textarea
+                rows={3}
+                value={editingArchiveForm.description}
+                onChange={(e) =>
+                  setEditingArchiveForm((p) => ({ ...p, description: e.target.value }))
+                }
+              />
+            </label>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="button outline"
+                onClick={() => setEditingArchive(null)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="button primary">
+                <Save size={14} />
+                <span>Save Changes</span>
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </>

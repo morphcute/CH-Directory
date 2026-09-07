@@ -52,6 +52,49 @@ export async function GET(request: Request, context: Context) {
       void checkAndTriggerHourlySync();
       return json(await readState());
     }
+    if (route === "raffle") {
+      const { getRaffleState, getArchivedRaffles } = await import("@/server/raffleStore");
+      const url = new URL(request.url);
+      const requestedId = url.searchParams.get("id") || "default";
+      const raffle = await getRaffleState(requestedId);
+      const cookieHeader = request.headers.get("cookie") || "";
+      const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
+      const urlParamDev = url.searchParams.get("deviceId");
+      const deviceId = match ? decodeURIComponent(match[1]) : urlParamDev || undefined;
+      const myEntry = deviceId
+        ? raffle.entries.find((e) => e.deviceId === deviceId)
+        : null;
+
+      const now = Date.now();
+      const cutoffMs = raffle.cutoffDate ? new Date(raffle.cutoffDate).getTime() : Infinity;
+      const isEnded = now > cutoffMs;
+      const archives = await getArchivedRaffles();
+
+      return json({
+        id: raffle.id,
+        title: raffle.title,
+        description: raffle.description,
+        cutoffDate: raffle.cutoffDate,
+        prizes: raffle.prizes,
+        isActive: raffle.isActive,
+        isArchived: Boolean(raffle.isArchived),
+        isEnded,
+        entriesCount: raffle.entries.length,
+        winners: raffle.entries
+          .filter((e) => Boolean(e.prizeWon))
+          .map((e) => ({ id: e.id, fullName: e.fullName, prizeWon: e.prizeWon })),
+        entries: raffle.entries.map((e) => ({
+          id: e.id,
+          fullName: e.fullName,
+          prizeWon: e.prizeWon || null,
+          createdAt: e.createdAt,
+        })),
+        myEntry: myEntry
+          ? { id: myEntry.id, fullName: myEntry.fullName, prizeWon: myEntry.prizeWon || null }
+          : null,
+        archives,
+      });
+    }
     if (route === "cron/sync" || route === "sync") {
       const authHeader = request.headers.get("authorization");
       const cronSecret = process.env.CRON_SECRET;
@@ -337,6 +380,46 @@ export async function POST(request: Request, context: Context) {
       }
       return json(await syncSpreadsheetBackground());
     }
+    if (route === "raffle/join") {
+      const body = (await request.json()) as { fullName?: string; deviceId?: string };
+      const fullName = (body.fullName || "").trim();
+      if (!fullName) {
+        return json({ error: "Please enter your full name." }, 400);
+      }
+
+      const cookieHeader = request.headers.get("cookie") || "";
+      const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
+      const deviceId = match
+        ? decodeURIComponent(match[1])
+        : body.deviceId || `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+      const { submitRaffleEntry } = await import("@/server/raffleStore");
+      const res = await submitRaffleEntry("default", fullName, deviceId);
+
+      if (!res.success) {
+        return json({ error: res.error || "Could not join raffle." }, 400);
+      }
+
+      const response = json({
+        success: true,
+        updated: res.updated,
+        deviceId,
+        entry: {
+          id: res.entry?.id,
+          fullName: res.entry?.fullName,
+          prizeWon: res.entry?.prizeWon || null,
+        },
+      });
+
+      response.cookies.set("ch_raffle_device", deviceId, {
+        path: "/",
+        maxAge: 365 * 24 * 60 * 60,
+        sameSite: "lax",
+      });
+
+      return response;
+    }
+
     if (!(await isOrganizer()))
       return json(
         { error: "Your session has ended. Sign in to save changes." },
@@ -394,6 +477,125 @@ export async function POST(request: Request, context: Context) {
     }
     if (route === "sync-now") {
       return json(await syncSpreadsheetBackground());
+    }
+    if (route === "raffle/admin") {
+      const body = (await request.json()) as any;
+      const {
+        getRaffleState,
+        updateRaffleSettings,
+        setRaffleWinner,
+        removeRaffleEntry,
+        clearAllRaffleEntries,
+      } = await import("@/server/raffleStore");
+
+      if (body.action === "update-settings") {
+        const updated = await updateRaffleSettings({
+          title: String(body.title || "Community Heroes Grand Raffle"),
+          description: String(body.description || ""),
+          cutoffDate: String(body.cutoffDate || ""),
+          prizes: Array.isArray(body.prizes) ? body.prizes.map(String) : [],
+          isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+        });
+        return json({ success: true, raffle: updated });
+      }
+
+      if (body.action === "assign-winner") {
+        if (!body.entryId) return json({ error: "Missing entryId." }, 400);
+        await setRaffleWinner(body.entryId, body.prizeWon || null);
+        const raffle = await getRaffleState();
+        return json({ success: true, raffle });
+      }
+
+      if (body.action === "delete-entry") {
+        if (!body.entryId) return json({ error: "Missing entryId." }, 400);
+        await removeRaffleEntry(body.entryId);
+        const raffle = await getRaffleState();
+        return json({ success: true, raffle });
+      }
+
+      if (body.action === "clear-entries") {
+        await clearAllRaffleEntries();
+        const raffle = await getRaffleState();
+        return json({ success: true, raffle });
+      }
+
+      if (body.action === "create-raffle") {
+        const { createNewRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
+        const created = await createNewRaffle({
+          title: String(body.title || "Community Heroes Grand Raffle"),
+          description: String(body.description || ""),
+          cutoffDate: String(body.cutoffDate || new Date(Date.now() + 14 * 86400000).toISOString()),
+          prizes: Array.isArray(body.prizes) ? body.prizes.map(String) : ["Starlight Card", "100 Diamonds"],
+          isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+        });
+        const archives = await getArchivedRaffles();
+        return json({ success: true, raffle: created, archives });
+      }
+
+      if (body.action === "delete-raffle") {
+        const { deleteRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
+        const res = await deleteRaffle(body.raffleId || "default");
+        const archives = await getArchivedRaffles();
+        return json({ success: true, raffle: res.nextRaffle, archives });
+      }
+
+      if (body.action === "delete-archive") {
+        if (!body.archiveId) return json({ error: "Missing archiveId." }, 400);
+        const { deleteArchivedRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
+        await deleteArchivedRaffle(body.archiveId);
+        const archives = await getArchivedRaffles();
+        return json({ success: true, archives });
+      }
+
+      if (body.action === "edit-archive") {
+        if (!body.archiveId) return json({ error: "Missing archiveId." }, 400);
+        const { editArchivedRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
+        await editArchivedRaffle(
+          body.archiveId,
+          String(body.title || "Archived Raffle"),
+          String(body.description || ""),
+        );
+        const archives = await getArchivedRaffles();
+        return json({ success: true, archives });
+      }
+
+      if (body.action === "restore-archive") {
+        if (!body.archiveId) return json({ error: "Missing archiveId." }, 400);
+        const { restoreArchivedRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
+        const res = await restoreArchivedRaffle(body.archiveId);
+        const archives = await getArchivedRaffles();
+        return json({ success: true, raffle: res.restoredRaffle, archives });
+      }
+
+      if (body.action === "add-entry") {
+        const fullName = String(body.fullName || "").trim();
+        if (!fullName) return json({ error: "Please provide a full name." }, 400);
+        const { submitRaffleEntry, getRaffleState } = await import("@/server/raffleStore");
+        const res = await submitRaffleEntry(body.raffleId || "default", fullName);
+        if (!res.success) return json({ error: res.error || "Could not add entry." }, 400);
+        const raffle = await getRaffleState(body.raffleId || "default");
+        return json({ success: true, raffle });
+      }
+
+      if (body.action === "archive-and-new") {
+        const { archiveCurrentRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
+        const res = await archiveCurrentRaffle(body.raffleId, {
+          title: body.title,
+          description: body.description,
+          cutoffDate: body.cutoffDate,
+          prizes: body.prizes,
+        });
+        const archives = await getArchivedRaffles();
+        return json({ success: true, raffle: res.newRaffle, archives });
+      }
+
+      if (body.action === "get-archives") {
+        const { getArchivedRaffles } = await import("@/server/raffleStore");
+        const archives = await getArchivedRaffles();
+        return json({ success: true, archives });
+      }
+
+      return json({ error: "Unknown raffle admin action." }, 400);
     }
     return json({ error: "Endpoint not found." }, 404);
   } catch (error) {

@@ -96,3 +96,36 @@ export interface AdminConfig {
   defaultMaxTeams: number;
   headerBackground: HeaderBackgroundConfig;
 }
+
+export interface RaffleEntry {
+  id: string;
+  fullName: string;
+  prizeWon?: string | null;
+  deviceId?: string;
+  createdAt: string;
+}
+
+export interface RaffleData {
+  id: string;
+  title: string;
+  description: string;
+  cutoffDate: string; // ISO date or date string
+  prizes: string[]; // e.g. ["Starlight", "100 Diamonds", "50 Diamonds"]
+  isActive: boolean;
+  isArchived?: boolean;
+  entries: RaffleEntry[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RaffleArchiveSummary {
+  id: string;
+  title: string;
+  description: string;
+  cutoffDate: string;
+  prizes: string[];
+  createdAt: string;
+  entriesCount: number;
+  winners: { id: string; fullName: string; prizeWon: string }[];
+}
+

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   ArrowUpRight,
   CalendarDays,
   Eye,
+  Gift,
   LoaderCircle,
   LockKeyhole,
   MapPin,
@@ -246,8 +248,16 @@ export function Portal({ initialState }: { initialState: AppState }) {
               </a>
             </div>
 
-            {/* Page Views Pill inside Card */}
+            {/* Page Views & Community Raffle Pill inside Card */}
             <div className="ch-fb-ribbon">
+              <Link
+                href="/raffle"
+                className="ch-ribbon-raffle"
+                title="Join Official Community Raffle"
+              >
+                <Gift size={13} style={{ color: "#facc15" }} />
+                <span>Community Raffle</span>
+              </Link>
               <span className="ch-ribbon-views" title="Total directory page views">
                 <Eye size={13} />
                 <span>{pageViews.toLocaleString()} views</span>
