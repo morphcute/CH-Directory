@@ -623,9 +623,9 @@ export function Admin() {
     const fresh = await api("/api/raffle");
     setRaffleData(fresh);
     if (drawCount === 1) {
-      setMessage(`🎉 Winner Drawn: ${winners[0].fullName} won "${prize}"!`);
+      setMessage(`Winner Drawn: ${winners[0].fullName} won "${prize}"!`);
     } else {
-      setMessage(`🎉 Successfully drew ${drawCount} winners for "${prize}": ${winners.map((w) => w.fullName).join(", ")}!`);
+      setMessage(`Successfully drew ${drawCount} winners for "${prize}": ${winners.map((w) => w.fullName).join(", ")}!`);
     }
   }
 
@@ -2571,7 +2571,7 @@ export function Admin() {
                                     }}
                                   >
                                     <Trophy size={14} style={{ color: "#090d16" }} />
-                                    <span>🎡 Spin the Wheel</span>
+                                    <span>Spin the Wheel</span>
                                   </button>
 
                                   <button
@@ -2582,7 +2582,7 @@ export function Admin() {
                                     title="Draw 1 random winner directly"
                                   >
                                     <Shuffle size={14} />
-                                    <span>🎲 Quick Pick (1)</span>
+                                    <span>Quick Pick (1)</span>
                                   </button>
 
                                   {remainingForPrize > 1 && (

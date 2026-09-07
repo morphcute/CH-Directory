@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { X, Trophy, Shuffle, Sparkles, Volume2, VolumeX, CheckCircle, Gift, RefreshCw, Timer } from "lucide-react";
+import { X, Trophy, Shuffle, Volume2, VolumeX, CheckCircle, Gift, RefreshCw, Timer, Clock, UserCheck, RotateCcw } from "lucide-react";
 import { type RafflePrizeItem, normalizePrizeItems } from "@/types";
 
 interface RaffleWheelEntry {
@@ -55,6 +55,9 @@ export function RaffleWheelModal({
   const [awarding, setAwarding] = useState(false);
   const [awardedSuccess, setAwardedSuccess] = useState(false);
   const [spinDurationSeconds, setSpinDurationSeconds] = useState<number>(6);
+  const [claimDurationSeconds, setClaimDurationSeconds] = useState<number>(60);
+  const [claimDeadline, setClaimDeadline] = useState<number | null>(null);
+  const [claimRemaining, setClaimRemaining] = useState<number>(60);
 
   // Wheel physics state
   const rotationRef = useRef<number>(0);
@@ -355,6 +358,7 @@ export function RaffleWheelModal({
 
     setIsSpinning(true);
     setWinner(null);
+    setClaimDeadline(null);
     setAwardedSuccess(false);
 
     const sliceCount = eligibleEntrants.length;
@@ -426,14 +430,21 @@ export function RaffleWheelModal({
         drawWheel(finalRotation);
         setIsSpinning(false);
         setWinner(selectedWinner);
+        const deadline = Date.now() + claimDurationSeconds * 1000;
+        setClaimDeadline(deadline);
+        setClaimRemaining(claimDurationSeconds);
         playWinFanfare();
         startConfetti();
 
-        // Broadcast landed state to public viewers
+        // Broadcast landed state to public viewers with synchronized claim timer
         void fetch("/api/raffle/live-spin", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "landed" }),
+          body: JSON.stringify({
+            action: "landed",
+            claimSeconds: claimDurationSeconds,
+            claimDeadline: deadline,
+          }),
         }).catch(() => {});
       }
     };
@@ -441,10 +452,76 @@ export function RaffleWheelModal({
     animationFrameRef.current = requestAnimationFrame(animate);
   };
 
+  // Synchronized countdown interval for claim window
+  useEffect(() => {
+    if (!claimDeadline || awardedSuccess) return;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((claimDeadline - Date.now()) / 1000));
+      setClaimRemaining(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 250);
+    return () => clearInterval(interval);
+  }, [claimDeadline, awardedSuccess]);
+
+  // Adjust claim window seconds live and broadcast
+  const updateClaimTimer = (newSecs: number) => {
+    setClaimDurationSeconds(newSecs);
+    if (winner && !awardedSuccess) {
+      const newDeadline = Date.now() + newSecs * 1000;
+      setClaimDeadline(newDeadline);
+      setClaimRemaining(newSecs);
+      void fetch("/api/raffle/live-spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "claim_timer",
+          claimSeconds: newSecs,
+          claimDeadline: newDeadline,
+        }),
+      }).catch(() => {});
+    }
+  };
+
+  // Add time to active claim timer (+30s)
+  const addClaimTime = (addSecs: number) => {
+    if (!winner || awardedSuccess) return;
+    const currentBase = claimDeadline ? Math.max(Date.now(), claimDeadline) : Date.now();
+    const newDeadline = currentBase + addSecs * 1000;
+    const totalRemaining = Math.max(0, Math.ceil((newDeadline - Date.now()) / 1000));
+    setClaimDeadline(newDeadline);
+    setClaimRemaining(totalRemaining);
+    void fetch("/api/raffle/live-spin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "claim_timer",
+        claimSeconds: totalRemaining,
+        claimDeadline: newDeadline,
+      }),
+    }).catch(() => {});
+  };
+
+  // Re-pick another winner immediately (candidate absent or time expired)
+  const handleRepick = () => {
+    setWinner(null);
+    setClaimDeadline(null);
+    setAwardedSuccess(false);
+    void fetch("/api/raffle/live-spin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "repick" }),
+    }).catch(() => {});
+    setTimeout(() => {
+      spinWheel();
+    }, 150);
+  };
+
   // Draw initial state on mount or change
   useEffect(() => {
     if (isOpen) {
       setWinner(null);
+      setClaimDeadline(null);
       setAwardedSuccess(false);
       setTimeout(() => {
         drawWheel(rotationRef.current);
@@ -474,6 +551,11 @@ export function RaffleWheelModal({
     try {
       await onAssignWinner(winner.id, selectedPrize);
       setAwardedSuccess(true);
+      void fetch("/api/raffle/live-spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "awarded" }),
+      }).catch(() => {});
       if (onRefresh) {
         await onRefresh();
       }
@@ -637,8 +719,35 @@ export function RaffleWheelModal({
                   style={{ flex: 1, accentColor: "#38bdf8", cursor: "pointer" }}
                 />
                 <span style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>
-                  {spinDurationSeconds < 5 ? "⚡ Fast" : spinDurationSeconds <= 9 ? "🎯 Balanced" : "🔥 Dramatic"}
+                  {spinDurationSeconds < 5 ? "Fast" : spinDurationSeconds <= 9 ? "Balanced" : "Dramatic"}
                 </span>
+              </div>
+            </div>
+
+            {/* Customize Claim Timer Window */}
+            <div className="raffle-wheel-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <label className="raffle-wheel-label" style={{ margin: 0 }}>
+                  <Clock size={14} style={{ color: "#facc15" }} />
+                  <span>Claim Countdown Window</span>
+                </label>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#facc15" }}>
+                  {claimDurationSeconds}s
+                </span>
+              </div>
+
+              <div className="raffle-wheel-timer-presets">
+                {[30, 60, 90, 120].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    className={`raffle-wheel-timer-chip ${claimDurationSeconds === sec ? "active" : ""}`}
+                    onClick={() => updateClaimTimer(sec)}
+                    disabled={isSpinning}
+                  >
+                    {sec}s
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -663,60 +772,126 @@ export function RaffleWheelModal({
               disabled={isSpinning || eligibleEntrants.length === 0}
             >
               <Shuffle size={18} className={isSpinning ? "busy-spinner" : ""} />
-              <span>{isSpinning ? "Spinning Wheel…" : "🎡 SPIN THE WHEEL"}</span>
+              <span>{isSpinning ? "Spinning Wheel…" : "SPIN THE WHEEL"}</span>
             </button>
 
-            {/* Winner Announcement Card */}
+            {/* Candidate Drawn / Attendance Verification Card */}
             {winner && (
               <div className="raffle-wheel-winner-card">
                 <div className="raffle-wheel-winner-badge">
-                  <Sparkles size={14} />
-                  <span>WINNER DRAWN!</span>
+                  <UserCheck size={14} />
+                  <span>NAME DRAWN · ATTENDANCE CHECK</span>
                 </div>
 
                 <h4 className="raffle-wheel-winner-name">{winner.fullName}</h4>
                 <p className="raffle-wheel-winner-prize">
-                  Won: <strong>{selectedPrize}</strong>
+                  Prize: <strong>{selectedPrize}</strong>
                 </p>
 
                 {awardedSuccess ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div className="raffle-wheel-awarded-alert">
                       <CheckCircle size={16} />
-                      <span>Prize assigned to official winners list!</span>
+                      <span>Prize confirmed and officially recorded!</span>
                     </div>
                     <button
                       type="button"
                       className="button primary small"
                       onClick={() => {
                         setWinner(null);
+                        setClaimDeadline(null);
                         setAwardedSuccess(false);
                         drawWheel(rotationRef.current);
                       }}
                       style={{ width: "100%", justifyContent: "center" }}
                     >
-                      <span>🎯 Spin For Next Winner</span>
+                      <span>Draw Next Prize</span>
                     </button>
                   </div>
                 ) : (
-                  <div className="raffle-wheel-actions-row">
-                    <button
-                      type="button"
-                      className="button primary small"
-                      onClick={handleConfirmAward}
-                      disabled={awarding}
-                      style={{ flex: 1 }}
-                    >
-                      {awarding ? "Awarding…" : `🏆 Award "${selectedPrize}"`}
-                    </button>
-                    <button
-                      type="button"
-                      className="button outline small"
-                      onClick={spinWheel}
-                      disabled={isSpinning}
-                    >
-                      Re-spin
-                    </button>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* Live Synchronized Claim Countdown */}
+                    <div className={`raffle-wheel-claim-box ${claimRemaining <= 10 ? "urgent" : ""}`}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Clock size={14} style={{ color: claimRemaining <= 10 ? "#f87171" : "#facc15" }} />
+                          <span style={{ fontSize: 11.5, fontWeight: 700, color: claimRemaining <= 10 ? "#f87171" : "#facc15" }}>
+                            {claimRemaining === 0 ? "CLAIM TIME EXPIRED" : "LIVE CLAIM COUNTDOWN"}
+                          </span>
+                        </div>
+                        <span className="raffle-wheel-claim-val">
+                          {Math.floor(claimRemaining / 60).toString().padStart(2, "0")}:
+                          {(claimRemaining % 60).toString().padStart(2, "0")}
+                        </span>
+                      </div>
+
+                      {/* Quick Adjust Buttons */}
+                      <div className="raffle-wheel-claim-adjust-row">
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>Set timer:</span>
+                        {[30, 60, 90, 120].map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`raffle-wheel-adjust-chip ${claimDurationSeconds === s ? "active" : ""}`}
+                            onClick={() => updateClaimTimer(s)}
+                          >
+                            {s}s
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="raffle-wheel-adjust-chip"
+                          onClick={() => addClaimTime(30)}
+                          title="Add 30 seconds"
+                        >
+                          +30s
+                        </button>
+                      </div>
+
+                      <p style={{ margin: "6px 0 0", fontSize: 11, color: "#94a3b8", lineHeight: 1.4 }}>
+                        {claimRemaining === 0
+                          ? "Participant did not respond in stream. Click 'Re-pick Another Winner' below."
+                          : "Entrant must comment in livestream chat to claim. If not present, re-pick another winner."}
+                      </p>
+                    </div>
+
+                    {/* Action buttons: Confirm Present vs Re-pick */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        className="button primary small"
+                        onClick={handleConfirmAward}
+                        disabled={awarding}
+                        style={{
+                          width: "100%",
+                          justifyContent: "center",
+                          background: "#22c55e",
+                          borderColor: "#16a34a",
+                          color: "#ffffff",
+                          fontWeight: 700,
+                        }}
+                      >
+                        <CheckCircle size={15} />
+                        <span>{awarding ? "Awarding…" : `Confirm Present & Award Prize`}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="button outline small"
+                        onClick={handleRepick}
+                        disabled={isSpinning}
+                        style={{
+                          width: "100%",
+                          justifyContent: "center",
+                          color: "#f87171",
+                          borderColor: "rgba(239, 68, 68, 0.45)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                        <span>Re-pick Another Winner</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

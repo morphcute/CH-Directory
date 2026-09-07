@@ -3,11 +3,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Trophy,
-  Sparkles,
   Volume2,
   VolumeX,
   Radio,
   Gift,
+  Clock,
+  UserCheck,
+  CheckCircle,
 } from "lucide-react";
 import { type RafflePrizeItem } from "@/types";
 import type { LiveSpinState } from "@/server/liveSpinStore";
@@ -41,11 +43,41 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
     name: string;
     prize: string;
   } | null>(null);
+  const [claimRemaining, setClaimRemaining] = useState<number | null>(null);
 
   const rotationRef = useRef<number>(0);
   const lastTickSliceRef = useRef<number>(-1);
   const animationFrameRef = useRef<number | null>(null);
   const confettiFrameRef = useRef<number | null>(null);
+
+  // Synchronized claim countdown calculation
+  useEffect(() => {
+    if (!liveSpin?.claimDeadline || liveSpin.isAwarded) {
+      setClaimRemaining(null);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((liveSpin.claimDeadline! - Date.now()) / 1000));
+      setClaimRemaining(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 250);
+    return () => clearInterval(interval);
+  }, [liveSpin?.claimDeadline, liveSpin?.isAwarded]);
+
+  // Sync celebrated winner with liveSpin state
+  useEffect(() => {
+    if (!liveSpin || liveSpin.status === "idle") {
+      setCelebratedWinner(null);
+    } else if (liveSpin.status === "landed") {
+      setCelebratedWinner({
+        name: liveSpin.winnerName,
+        prize: liveSpin.prize,
+      });
+    } else if (liveSpin.status === "spinning") {
+      setCelebratedWinner(null);
+    }
+  }, [liveSpin?.id, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize]);
 
   // Audio context initialization
   function getAudioContext() {
@@ -415,7 +447,7 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
               <h3 style={{ fontSize: 16 }}>Live Draw Roulette Wheel</h3>
               <span className={`raffle-wheel-live-badge ${isLiveSpinning ? "active-spin" : ""}`}>
                 <span className="raffle-wheel-live-dot" />
-                {isLiveSpinning ? "🔴 LIVE DRAWING" : "🟢 READY FOR DRAW"}
+                {isLiveSpinning ? "LIVE DRAWING" : "READY FOR DRAW"}
               </span>
             </div>
             <small>
@@ -464,7 +496,7 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
             <p style={{ margin: "4px 0 0", fontSize: 13, color: "#cbd5e1", lineHeight: 1.5 }}>
               {isLiveSpinning ? (
                 <span style={{ color: "#facc15", fontWeight: 700 }}>
-                  🎡 Organizer is spinning the wheel live for {liveSpin?.prize}!
+                  Organizer is spinning the wheel live for {liveSpin?.prize}!
                 </span>
               ) : (
                 <span>Wheel is live and will automatically spin when the organizer draws a winner.</span>
@@ -472,36 +504,62 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
             </p>
           </div>
 
-          {/* Sound Prompt Notice */}
-          {!soundEnabled && (
-            <button
-              type="button"
-              className="raffle-wheel-sound-prompt"
-              onClick={() => {
-                getAudioContext();
-                setSoundEnabled(true);
-              }}
-            >
-              <Volume2 size={14} />
-              <span>Click to enable live sound effects</span>
-            </button>
-          )}
-
-          {/* Celebrated Winner announcement */}
+          {/* Celebrated Candidate / Winner announcement */}
           {celebratedWinner ? (
             <div className="raffle-wheel-winner-card">
-              <div className="raffle-wheel-winner-badge">
-                <Sparkles size={14} />
-                <span>🎉 OFFICIAL WINNER DRAWN!</span>
-              </div>
+              {liveSpin?.isAwarded ? (
+                <>
+                  <div className="raffle-wheel-winner-badge awarded" style={{ background: "rgba(34, 197, 94, 0.2)", borderColor: "rgba(34, 197, 94, 0.5)", color: "#4ade80" }}>
+                    <CheckCircle size={14} />
+                    <span>PRIZE OFFICIALLY AWARDED</span>
+                  </div>
 
-              <h4 className="raffle-wheel-winner-name">{celebratedWinner.name}</h4>
-              <p className="raffle-wheel-winner-prize">
-                Won: <strong>{celebratedWinner.prize}</strong>
-              </p>
-              <span style={{ fontSize: 11.5, color: "#4ade80", fontWeight: 600 }}>
-                ✓ Recorded to official winners list
-              </span>
+                  <h4 className="raffle-wheel-winner-name">{celebratedWinner.name}</h4>
+                  <p className="raffle-wheel-winner-prize">
+                    Won: <strong>{celebratedWinner.prize}</strong>
+                  </p>
+                  <span style={{ fontSize: 11.5, color: "#4ade80", fontWeight: 600 }}>
+                    Verified present in livestream and recorded to winners list!
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="raffle-wheel-winner-badge">
+                    <UserCheck size={14} />
+                    <span>NAME DRAWN · ATTENDANCE CHECK</span>
+                  </div>
+
+                  <h4 className="raffle-wheel-winner-name">{celebratedWinner.name}</h4>
+                  <p className="raffle-wheel-winner-prize">
+                    Prize: <strong>{celebratedWinner.prize}</strong>
+                  </p>
+
+                  {/* Synchronized Claim Countdown Window */}
+                  <div className={`raffle-wheel-claim-box ${claimRemaining !== null && claimRemaining <= 10 ? "urgent" : ""}`}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Clock size={14} style={{ color: claimRemaining !== null && claimRemaining <= 10 ? "#f87171" : "#facc15" }} />
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: claimRemaining !== null && claimRemaining <= 10 ? "#f87171" : "#facc15" }}>
+                          {claimRemaining === 0 ? "CLAIM TIME EXPIRED" : "LIVE CLAIM COUNTDOWN"}
+                        </span>
+                      </div>
+                      <span className="raffle-wheel-claim-val">
+                        {claimRemaining !== null ? (
+                          `${Math.floor(claimRemaining / 60).toString().padStart(2, "0")}:${(claimRemaining % 60).toString().padStart(2, "0")}`
+                        ) : (
+                          "--:--"
+                        )}
+                      </span>
+                    </div>
+
+                    <p style={{ margin: "6px 0 0", fontSize: 11.5, color: "#94a3b8", lineHeight: 1.4 }}>
+                      {claimRemaining === 0
+                        ? "Time expired! Awaiting organizer attendance verification or re-pick."
+                        : "Must comment in the livestream chat to confirm presence and claim this prize before time expires!"}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="raffle-wheel-card" style={{ textAlign: "center", padding: "20px 14px" }}>

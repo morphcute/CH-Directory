@@ -512,13 +512,48 @@ export async function POST(request: Request, context: Context) {
       if (body.action === "landed") {
         const current = getLiveSpinState();
         if (current) {
-          const landedState = { ...current, status: "landed" as const };
+          const claimSeconds = Number(body.claimSeconds) || 60;
+          const claimDeadline = Number(body.claimDeadline) || (Date.now() + claimSeconds * 1000);
+          const landedState = {
+            ...current,
+            status: "landed" as const,
+            claimSeconds,
+            claimDeadline,
+            isAwarded: false,
+          };
           broadcastLiveSpin(landedState);
           return json({ success: true, liveSpin: landedState });
         }
         return json({ success: true, liveSpin: null });
       }
-      if (body.action === "clear" || body.action === "end") {
+      if (body.action === "claim_timer") {
+        const current = getLiveSpinState();
+        if (current) {
+          const claimSeconds = Number(body.claimSeconds) || 60;
+          const claimDeadline = Number(body.claimDeadline) || (Date.now() + claimSeconds * 1000);
+          const timerState = {
+            ...current,
+            claimSeconds,
+            claimDeadline,
+          };
+          broadcastLiveSpin(timerState);
+          return json({ success: true, liveSpin: timerState });
+        }
+        return json({ success: true, liveSpin: null });
+      }
+      if (body.action === "awarded") {
+        const current = getLiveSpinState();
+        if (current) {
+          const awardedState = {
+            ...current,
+            isAwarded: true,
+          };
+          broadcastLiveSpin(awardedState);
+          return json({ success: true, liveSpin: awardedState });
+        }
+        return json({ success: true, liveSpin: null });
+      }
+      if (body.action === "repick" || body.action === "clear" || body.action === "end") {
         broadcastLiveSpin(null);
         return json({ success: true, liveSpin: null });
       }
