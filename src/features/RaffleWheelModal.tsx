@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { X, Trophy, Shuffle, Sparkles, Volume2, VolumeX, CheckCircle, Gift, RefreshCw } from "lucide-react";
+import { X, Trophy, Shuffle, Sparkles, Volume2, VolumeX, CheckCircle, Gift, RefreshCw, Timer } from "lucide-react";
 import { type RafflePrizeItem, normalizePrizeItems } from "@/types";
 
 interface RaffleWheelEntry {
@@ -54,6 +54,7 @@ export function RaffleWheelModal({
   const [selectedPrize, setSelectedPrize] = useState<string>(defaultPrize || "");
   const [awarding, setAwarding] = useState(false);
   const [awardedSuccess, setAwardedSuccess] = useState(false);
+  const [spinDurationSeconds, setSpinDurationSeconds] = useState<number>(6);
 
   // Wheel physics state
   const rotationRef = useRef<number>(0);
@@ -361,13 +362,31 @@ export function RaffleWheelModal({
 
     // Pick random winning index
     const winningIndex = Math.floor(Math.random() * sliceCount);
+    const selectedWinner = eligibleEntrants[winningIndex];
+    const spinDuration = Math.max(2, Math.min(30, spinDurationSeconds)) * 1000;
+
+    // Broadcast live spin to public /raffle page viewers in real-time!
+    void fetch("/api/raffle/live-spin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "start",
+        prize: selectedPrize,
+        winnerId: selectedWinner.id,
+        winnerName: selectedWinner.fullName,
+        winningIndex,
+        startedAt: Date.now(),
+        durationMs: spinDuration,
+        sliceCount,
+      }),
+    }).catch(() => {});
 
     // Calculate rotation to make winning slice stop exactly at the top (angle: -PI/2)
     const targetSliceCenterOffset = winningIndex * sliceAngle + sliceAngle / 2;
     const pointerAngle = 1.5 * Math.PI; // Top (270 degrees)
 
-    // Ensure 5 to 8 full spins + alignment
-    const fullSpins = 6;
+    // Calculate full spins based on duration for natural physics momentum
+    const fullSpins = Math.max(3, Math.round(spinDuration / 900));
     const currentAngle = rotationRef.current % (2 * Math.PI);
     const neededOffset = (pointerAngle - targetSliceCenterOffset - currentAngle) % (2 * Math.PI);
     const normalizedOffset = neededOffset >= 0 ? neededOffset : neededOffset + 2 * Math.PI;
@@ -376,7 +395,6 @@ export function RaffleWheelModal({
     const startRotation = rotationRef.current;
     const finalRotation = startRotation + totalSpinRotation;
 
-    const spinDuration = 5200; // 5.2 seconds
     const startTime = performance.now();
 
     // Easing function: fast start, long smooth cinematic deceleration
@@ -407,10 +425,16 @@ export function RaffleWheelModal({
         rotationRef.current = finalRotation;
         drawWheel(finalRotation);
         setIsSpinning(false);
-        const selectedWinner = eligibleEntrants[winningIndex];
         setWinner(selectedWinner);
         playWinFanfare();
         startConfetti();
+
+        // Broadcast landed state to public viewers
+        void fetch("/api/raffle/live-spin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "landed" }),
+        }).catch(() => {});
       }
     };
 
@@ -573,6 +597,49 @@ export function RaffleWheelModal({
                   style={{ marginTop: 8 }}
                 />
               )}
+            </div>
+
+            {/* Customize Spin Timer / Duration */}
+            <div className="raffle-wheel-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <label className="raffle-wheel-label" style={{ margin: 0 }}>
+                  <Timer size={14} style={{ color: "#38bdf8" }} />
+                  <span>Spin Duration</span>
+                </label>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#38bdf8" }}>
+                  {spinDurationSeconds}s
+                </span>
+              </div>
+
+              <div className="raffle-wheel-timer-presets">
+                {[3, 5, 8, 10, 15].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    className={`raffle-wheel-timer-chip ${spinDurationSeconds === sec ? "active" : ""}`}
+                    onClick={() => setSpinDurationSeconds(sec)}
+                    disabled={isSpinning}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+                <input
+                  type="range"
+                  min={3}
+                  max={25}
+                  step={1}
+                  value={spinDurationSeconds}
+                  onChange={(e) => setSpinDurationSeconds(Number(e.target.value))}
+                  disabled={isSpinning}
+                  style={{ flex: 1, accentColor: "#38bdf8", cursor: "pointer" }}
+                />
+                <span style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>
+                  {spinDurationSeconds < 5 ? "⚡ Fast" : spinDurationSeconds <= 9 ? "🎯 Balanced" : "🔥 Dramatic"}
+                </span>
+              </div>
             </div>
 
             {/* Filter Toggle */}

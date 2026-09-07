@@ -7,8 +7,10 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Crown,
   Edit2,
@@ -24,6 +26,7 @@ import {
 } from "lucide-react";
 import { Footer } from "./shared";
 import { MlbbDiamondIcon } from "./MlbbDiamondIcon";
+import { PublicLiveWheel } from "./PublicLiveWheel";
 import {
   normalizePrizeItems,
   type AppState,
@@ -79,6 +82,7 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
   const [participantsPage, setParticipantsPage] = useState(1);
   const PARTICIPANTS_PER_PAGE = 10;
   const [activeTab, setActiveTab] = useState<"latest" | "archive">("latest");
+  const [participantsDropdownOpen, setParticipantsDropdownOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(
     null,
   );
@@ -387,10 +391,9 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
             </div>
           ) : (
             <div className="raffle-human-container">
-              {/* Prize Pool Shelf - 1-Line Space Saver */}
+              {/* Prize Pool Shelf - 1-Line Space Saver with Realtime Live Draw Wheel */}
               {(() => {
                 const normalizedPrizes = normalizePrizeItems(data.prizes);
-                if (normalizedPrizes.length === 0) return null;
                 return (
                   <div className="raffle-prizes-bar">
                     <div className="raffle-prizes-bar-left">
@@ -401,33 +404,39 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                         <span>Giveaway Prizes</span>
                       </div>
 
-                      <div className="raffle-prizes-chips-row">
-                        {normalizedPrizes.map((prize, idx) => {
-                          const isStarlight = /starlight/i.test(prize.name);
-                          const isDiamond = /diamond/i.test(prize.name);
-                          const themeClass = isStarlight
-                            ? "theme-starlight"
-                            : isDiamond
-                              ? "theme-diamond"
-                              : "theme-generic";
+                      {normalizedPrizes.length > 0 ? (
+                        <div className="raffle-prizes-chips-row">
+                          {normalizedPrizes.map((prize, idx) => {
+                            const isStarlight = /starlight/i.test(prize.name);
+                            const isDiamond = /diamond/i.test(prize.name);
+                            const themeClass = isStarlight
+                              ? "theme-starlight"
+                              : isDiamond
+                                ? "theme-diamond"
+                                : "theme-generic";
 
-                          return (
-                            <div key={prize.id || idx} className={`raffle-prize-chip ${themeClass}`}>
-                              <div className="raffle-prize-chip-icon">
-                                {isStarlight ? (
-                                  <Crown size={14} />
-                                ) : isDiamond ? (
-                                  <MlbbDiamondIcon size={14} />
-                                ) : (
-                                  <Gift size={14} />
-                                )}
+                            return (
+                              <div key={prize.id || idx} className={`raffle-prize-chip ${themeClass}`}>
+                                <div className="raffle-prize-chip-icon">
+                                  {isStarlight ? (
+                                    <Crown size={14} />
+                                  ) : isDiamond ? (
+                                    <MlbbDiamondIcon size={14} />
+                                  ) : (
+                                    <Gift size={14} />
+                                  )}
+                                </div>
+                                <span className="raffle-prize-chip-name">{prize.name}</span>
+                                <span className="raffle-prize-chip-qty">x{prize.winnerCount}</span>
                               </div>
-                              <span className="raffle-prize-chip-name">{prize.name}</span>
-                              <span className="raffle-prize-chip-qty">x{prize.winnerCount}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12.5, color: "#94a3b8" }}>
+                          Prizes to be announced soon
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -463,173 +472,232 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                 </div>
               )}
 
-              {/* Entry Pass Form / Status */}
-              <div className="raffle-human-card">
-                <div className="raffle-human-card-head">
-                  <div className="raffle-human-card-title">
-                    <User size={16} style={{ color: "#38bdf8" }} />
-                    <strong>
-                      {data.isEnded
-                        ? "Registration Closed"
-                        : data.myEntry
-                          ? "Your Registered Entry"
-                          : "Join the Raffle"}
-                    </strong>
-                  </div>
-                  <span style={{ fontSize: 11.5, color: "#94a3b8" }}>
-                    1 entry per device & IP
+              {/* If event has ended/started, show registered status pill if user entered */}
+              {data.isEnded && data.myEntry && (
+                <div className="raffle-human-registered-badge">
+                  <CheckCircle2 size={16} style={{ color: "#4ade80", flexShrink: 0 }} />
+                  <span>
+                    Your Registered Entry: <strong>{data.myEntry.fullName}</strong>
                   </span>
                 </div>
+              )}
 
-                {data.isEnded ? (
-                  <div className="raffle-human-alert closed">
-                    <LockKeyhole size={18} />
-                    <div>
-                      <strong>The registration cut-off has passed.</strong>
-                      <p>Entries and edits are closed for this round. Winner announcement will follow.</p>
+              {/* AUTOMATIC REAL-TIME LIVE DRAW WHEEL (Shown automatically when event is started) */}
+              {data.isEnded && (
+                <PublicLiveWheel
+                  entries={data.entries || []}
+                  prizes={data.prizes || []}
+                />
+              )}
+
+              {/* Entry Pass Form (Only shown when registration is open) */}
+              {!data.isEnded && (
+                <div className="raffle-human-card">
+                  <div className="raffle-human-card-head">
+                    <div className="raffle-human-card-title">
+                      <User size={16} style={{ color: "#38bdf8" }} />
+                      <strong>
+                        {data.myEntry ? "Your Registered Entry" : "Join the Raffle"}
+                      </strong>
                     </div>
+                    <span style={{ fontSize: 11.5, color: "#94a3b8" }}>
+                      1 entry per device & IP
+                    </span>
                   </div>
-                ) : data.myEntry && !editing ? (
-                  <div className="raffle-human-registered-view">
-                    <div className="raffle-human-registered-left">
-                      <div className="raffle-human-check">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="raffle-human-registered-details">
-                        <div className="raffle-human-registered-header-row">
-                          <span className="raffle-human-registered-name">{data.myEntry.fullName}</span>
-                          <span className="raffle-human-registered-tag">Active Entry</span>
+
+                  {data.myEntry && !editing ? (
+                    <div className="raffle-human-registered-view">
+                      <div className="raffle-human-registered-left">
+                        <div className="raffle-human-check">
+                          <CheckCircle2 size={16} />
                         </div>
-                        <p className="raffle-human-registered-note">
-                          {data.myEntry.createdAt
-                            ? `Entered ${new Date(data.myEntry.createdAt).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })} · `
-                            : "Entered with this device · "}
-                          You can edit your name before the deadline
-                        </p>
+                        <div className="raffle-human-registered-details">
+                          <div className="raffle-human-registered-header-row">
+                            <span className="raffle-human-registered-name">{data.myEntry.fullName}</span>
+                            <span className="raffle-human-registered-tag">Active Entry</span>
+                          </div>
+                          <p className="raffle-human-registered-note">
+                            {data.myEntry.createdAt
+                              ? `Entered ${new Date(data.myEntry.createdAt).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })} · `
+                              : "Entered with this device · "}
+                            You can edit your name before the deadline
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    <button
-                      type="button"
-                      className="raffle-human-edit-btn"
-                      onClick={() => setEditing(true)}
-                    >
-                      <Edit2 size={12} />
-                      <span>Edit Name</span>
-                    </button>
-                  </div>
-                ) : (
-                  <form
-                    onSubmit={(e) => handleJoinOrUpdate(e, Boolean(data.myEntry && editing))}
-                    className="raffle-human-form"
-                  >
-                    <div className="raffle-human-input-group">
-                      <label htmlFor="full-name-input">
-                        Full Name / Player Name <span style={{ color: "#ef4444" }}>*</span>
-                      </label>
-                      <input
-                        id="full-name-input"
-                        type="text"
-                        placeholder="e.g. Juan Dela Cruz"
-                        value={editing ? editName : fullName}
-                        onChange={(e) =>
-                          editing ? setEditName(e.target.value) : setFullName(e.target.value)
-                        }
-                        maxLength={100}
-                        required
-                        autoFocus={editing}
-                        className="raffle-human-input"
-                      />
-                    </div>
-
-                    <div className="raffle-human-btn-row">
                       <button
-                        type="submit"
-                        className="button primary"
-                        disabled={submitting || (editing ? !editName.trim() : !fullName.trim())}
+                        type="button"
+                        className="raffle-human-edit-btn"
+                        onClick={() => setEditing(true)}
                       >
-                        {submitting ? (
-                          <>
-                            <LoaderCircle size={15} className="busy-spinner" />
-                            <span>Saving…</span>
-                          </>
-                        ) : editing ? (
-                          <>
-                            <Check size={15} />
-                            <span>Save Updated Name</span>
-                          </>
-                        ) : (
-                          <span>Join Raffle</span>
-                        )}
+                        <Edit2 size={12} />
+                        <span>Edit Name</span>
                       </button>
+                    </div>
+                  ) : (
+                    <form
+                      onSubmit={(e) => handleJoinOrUpdate(e, Boolean(data.myEntry && editing))}
+                      className="raffle-human-form"
+                    >
+                      <div className="raffle-human-input-group">
+                        <label htmlFor="full-name-input">
+                          Full Name / Player Name <span style={{ color: "#ef4444" }}>*</span>
+                        </label>
+                        <input
+                          id="full-name-input"
+                          type="text"
+                          placeholder="e.g. Juan Dela Cruz"
+                          value={editing ? editName : fullName}
+                          onChange={(e) =>
+                            editing ? setEditName(e.target.value) : setFullName(e.target.value)
+                          }
+                          maxLength={100}
+                          required
+                          autoFocus={editing}
+                          className="raffle-human-input"
+                        />
+                      </div>
 
-                      {editing && (
+                      <div className="raffle-human-btn-row">
                         <button
-                          type="button"
-                          className="button outline"
-                          onClick={() => {
-                            setEditing(false);
-                            if (data?.myEntry) setEditName(data.myEntry.fullName);
-                          }}
+                          type="submit"
+                          className="button primary"
+                          disabled={submitting || (editing ? !editName.trim() : !fullName.trim())}
                         >
-                          <X size={15} />
-                          <span>Cancel</span>
+                          {submitting ? (
+                            <>
+                              <LoaderCircle size={15} className="busy-spinner" />
+                              <span>Saving…</span>
+                            </>
+                          ) : editing ? (
+                            <>
+                              <Check size={15} />
+                              <span>Save Updated Name</span>
+                            </>
+                          ) : (
+                            <span>Join Raffle</span>
+                          )}
                         </button>
-                      )}
-                    </div>
 
-                    <div className="raffle-human-hint">
-                      <ShieldCheck size={14} style={{ color: "#34d399", flexShrink: 0 }} />
-                      <span>
-                        No account needed. Protected by device & IP anti-duplicate verification.
-                      </span>
-                    </div>
-                  </form>
-                )}
-              </div>
+                        {editing && (
+                          <button
+                            type="button"
+                            className="button outline"
+                            onClick={() => {
+                              setEditing(false);
+                              if (data?.myEntry) setEditName(data.myEntry.fullName);
+                            }}
+                          >
+                            <X size={15} />
+                            <span>Cancel</span>
+                          </button>
+                        )}
+                      </div>
 
-              {/* Registered Participants Roster */}
-              <div className="raffle-human-card">
-                <div className="raffle-human-card-head" style={{ flexWrap: "wrap", gap: 10 }}>
-                  <div className="raffle-human-card-title">
-                    <Users size={16} style={{ color: "#94a3b8" }} />
-                    <strong>Registered Participants ({data.entriesCount})</strong>
-                  </div>
-
-                  {data.entriesCount > 3 && (
-                    <div className="ch-search-wrap" style={{ maxWidth: 220, padding: "4px 10px" }}>
-                      <Search size={13} className="ch-search-icon" />
-                      <input
-                        type="text"
-                        placeholder="Search name..."
-                        value={searchQuery}
-                        onChange={(e) => {
-                          setSearchQuery(e.target.value);
-                          setParticipantsPage(1);
-                        }}
-                        className="ch-search-input"
-                        style={{ fontSize: 12 }}
-                      />
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          className="ch-search-clear"
-                          onClick={() => {
-                            setSearchQuery("");
-                            setParticipantsPage(1);
-                          }}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
+                      <div className="raffle-human-hint">
+                        <ShieldCheck size={14} style={{ color: "#34d399", flexShrink: 0 }} />
+                        <span>
+                          No account needed. Protected by device & IP anti-duplicate verification.
+                        </span>
+                      </div>
+                    </form>
                   )}
                 </div>
+              )}
+
+              {/* Registered Participants Roster (Dropdown accordion when event has started) */}
+              <div className={`raffle-human-card ${data.isEnded ? "participants-dropdown-card" : ""}`}>
+                {data.isEnded ? (
+                  <button
+                    type="button"
+                    className="raffle-participants-accordion-toggle"
+                    onClick={() => setParticipantsDropdownOpen((prev) => !prev)}
+                    aria-expanded={participantsDropdownOpen}
+                  >
+                    <div className="raffle-human-card-title">
+                      <Users size={16} style={{ color: "#94a3b8" }} />
+                      <strong>Registered Participants ({data.entriesCount})</strong>
+                    </div>
+                    <div className="raffle-accordion-chevron">
+                      <span>{participantsDropdownOpen ? "Hide Roster" : "View Roster"}</span>
+                      {participantsDropdownOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                  </button>
+                ) : (
+                  <div className="raffle-human-card-head" style={{ flexWrap: "wrap", gap: 10 }}>
+                    <div className="raffle-human-card-title">
+                      <Users size={16} style={{ color: "#94a3b8" }} />
+                      <strong>Registered Participants ({data.entriesCount})</strong>
+                    </div>
+
+                    {data.entriesCount > 3 && (
+                      <div className="ch-search-wrap" style={{ maxWidth: 220, padding: "4px 10px" }}>
+                        <Search size={13} className="ch-search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search name..."
+                          value={searchQuery}
+                          onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setParticipantsPage(1);
+                          }}
+                          className="ch-search-input"
+                          style={{ fontSize: 12 }}
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            className="ch-search-clear"
+                            onClick={() => {
+                              setSearchQuery("");
+                              setParticipantsPage(1);
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(!data.isEnded || participantsDropdownOpen) && (
+                  <div className="raffle-participants-dropdown-content">
+                    {data.isEnded && data.entriesCount > 3 && (
+                      <div style={{ padding: "10px 0 12px" }}>
+                        <div className="ch-search-wrap" style={{ maxWidth: 240, padding: "4px 10px" }}>
+                          <Search size={13} className="ch-search-icon" />
+                          <input
+                            type="text"
+                            placeholder="Search name..."
+                            value={searchQuery}
+                            onChange={(e) => {
+                              setSearchQuery(e.target.value);
+                              setParticipantsPage(1);
+                            }}
+                            className="ch-search-input"
+                            style={{ fontSize: 12 }}
+                          />
+                          {searchQuery && (
+                            <button
+                              type="button"
+                              className="ch-search-clear"
+                              onClick={() => {
+                                setSearchQuery("");
+                                setParticipantsPage(1);
+                              }}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                 {filteredEntries.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "26px 16px", color: "#94a3b8", fontSize: 13 }}>
@@ -753,8 +821,10 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                   </>
                 )}
               </div>
-            </div>
-          )
+            )}
+          </div>
+        </div>
+      )
         ) : (
           /* TAB 2: PAST WINNERS ARCHIVE */
           <div className="raffle-archive-container">

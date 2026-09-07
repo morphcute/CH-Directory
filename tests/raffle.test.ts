@@ -12,6 +12,11 @@ import {
   deleteRaffle,
   deleteArchivedRaffle,
 } from "../src/server/raffleStore";
+import {
+  broadcastLiveSpin,
+  getLiveSpinState,
+  subscribeLiveSpin,
+} from "../src/server/liveSpinStore";
 import { normalizePrizeItems } from "../src/types";
 
 test("raffle anti-spam: same device edits name without duplicate entries", async () => {
@@ -262,4 +267,53 @@ test("raffle anti-spam: same IP restriction prevents multiple entries across dif
 
   await deleteRaffle(raffleId);
 });
+
+test("raffle real-time live spin: in-memory pub/sub broadcasts spin events with zero DB queries", async () => {
+  let receivedEvent: any = null;
+  const unsubscribe = subscribeLiveSpin((state) => {
+    receivedEvent = state;
+  });
+
+  const testSpinState = {
+    id: "spin-test-1",
+    raffleId: "default",
+    prize: "300 Diamonds",
+    winnerId: "winner-uuid-999",
+    winnerName: "Kim Morph",
+    winningIndex: 4,
+    startedAt: Date.now(),
+    durationMs: 5200,
+    sliceCount: 10,
+    status: "spinning" as const,
+  };
+
+  const activeState = broadcastLiveSpin(testSpinState);
+  assert.equal(activeState?.status, "spinning");
+  assert.equal(activeState?.prize, "300 Diamonds");
+  assert.equal(activeState?.winnerName, "Kim Morph");
+  assert.equal(activeState?.winningIndex, 4);
+  assert.equal(activeState?.durationMs, 5200);
+
+  // Verify subscriber received the broadcast
+  assert.notEqual(receivedEvent, null);
+  assert.equal(receivedEvent?.winnerName, "Kim Morph");
+  assert.equal(receivedEvent?.status, "spinning");
+
+  // Verify getLiveSpinState returns the active spin
+  const currentState = getLiveSpinState();
+  assert.equal(currentState?.id, activeState?.id);
+  assert.equal(currentState?.prize, "300 Diamonds");
+
+  // Broadcast landed event
+  const landedState = broadcastLiveSpin({ ...testSpinState, status: "landed" as const });
+  assert.equal(landedState?.status, "landed");
+  assert.equal(landedState?.winnerName, "Kim Morph");
+
+  // Clear live spin
+  broadcastLiveSpin(null);
+  assert.equal(getLiveSpinState(), null);
+
+  unsubscribe();
+});
+
 

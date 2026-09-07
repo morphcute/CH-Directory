@@ -74,6 +74,53 @@ export async function GET(request: Request, context: Context) {
     if (route === "app-state") {
       return json(await readState());
     }
+    if (route === "raffle/live-spin") {
+      const { getLiveSpinState } = await import("@/server/liveSpinStore");
+      return json({ liveSpin: getLiveSpinState() });
+    }
+    if (route === "raffle/live-stream") {
+      const { getLiveSpinState, subscribeLiveSpin } = await import("@/server/liveSpinStore");
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const initialData = `data: ${JSON.stringify(getLiveSpinState())}\n\n`;
+          controller.enqueue(encoder.encode(initialData));
+
+          const unsubscribe = subscribeLiveSpin((state) => {
+            try {
+              const data = `data: ${JSON.stringify(state)}\n\n`;
+              controller.enqueue(encoder.encode(data));
+            } catch {
+              // stream closed
+            }
+          });
+
+          const pingInterval = setInterval(() => {
+            try {
+              controller.enqueue(encoder.encode(": keepalive\n\n"));
+            } catch {
+              clearInterval(pingInterval);
+            }
+          }, 15000);
+
+          request.signal.addEventListener("abort", () => {
+            clearInterval(pingInterval);
+            unsubscribe();
+            try {
+              controller.close();
+            } catch {}
+          });
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        },
+      });
+    }
     if (route === "raffle") {
       const { getRaffleState, getArchivedRaffles } = await import("@/server/raffleStore");
       const url = new URL(request.url);
@@ -92,7 +139,7 @@ export async function GET(request: Request, context: Context) {
 
       const now = Date.now();
       const cutoffMs = raffle.cutoffDate ? new Date(raffle.cutoffDate).getTime() : Infinity;
-      const isEnded = now > cutoffMs;
+      const isEnded = !raffle.isActive || now > cutoffMs;
       const archives = await getArchivedRaffles();
       const appState = await readState();
 
@@ -439,6 +486,43 @@ export async function POST(request: Request, context: Context) {
         return json({ error: "Unauthorized cron execution." }, 401);
       }
       return json(await syncSpreadsheetBackground());
+    }
+    if (route === "raffle/live-spin") {
+      if (!(await isOrganizer())) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+      const { broadcastLiveSpin, getLiveSpinState } = await import("@/server/liveSpinStore");
+      const body = (await request.json()) as any;
+      if (body.action === "start") {
+        const spinState = {
+          id: `spin-${Date.now()}`,
+          raffleId: body.raffleId || "default",
+          prize: String(body.prize || "Grand Prize"),
+          winnerId: String(body.winnerId),
+          winnerName: String(body.winnerName),
+          winningIndex: Number(body.winningIndex) || 0,
+          startedAt: Number(body.startedAt) || Date.now(),
+          durationMs: Number(body.durationMs) || 5200,
+          sliceCount: Number(body.sliceCount) || 1,
+          status: "spinning" as const,
+        };
+        broadcastLiveSpin(spinState);
+        return json({ success: true, liveSpin: spinState });
+      }
+      if (body.action === "landed") {
+        const current = getLiveSpinState();
+        if (current) {
+          const landedState = { ...current, status: "landed" as const };
+          broadcastLiveSpin(landedState);
+          return json({ success: true, liveSpin: landedState });
+        }
+        return json({ success: true, liveSpin: null });
+      }
+      if (body.action === "clear" || body.action === "end") {
+        broadcastLiveSpin(null);
+        return json({ success: true, liveSpin: null });
+      }
+      return json({ liveSpin: getLiveSpinState() });
     }
     if (route === "raffle/join") {
       const body = (await request.json()) as { fullName?: string; deviceId?: string; raffleId?: string };
