@@ -93,11 +93,9 @@ export function Portal({ initialState }: { initialState: AppState }) {
         if (!controller.signal.aborted) setOffline(true);
       }
     };
-    const timer = setInterval(sync, 60_000);
     window.addEventListener("focus", sync);
     return () => {
       controller.abort();
-      clearInterval(timer);
       window.removeEventListener("focus", sync);
     };
   }, []);
@@ -114,14 +112,6 @@ export function Portal({ initialState }: { initialState: AppState }) {
           lastRecorded && now - Number(lastRecorded) < COOLDOWN_MS;
 
         if (isCooledDown) {
-          // If refreshed within 30 min, do NOT increment! Just get the latest count
-          const res = await fetch("/api/page-view", { cache: "no-store" });
-          if (res.ok) {
-            const data = await res.json();
-            if (isMounted && typeof data.pageViews === "number") {
-              setPageViews(data.pageViews);
-            }
-          }
           return;
         }
 

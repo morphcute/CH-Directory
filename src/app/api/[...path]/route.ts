@@ -22,8 +22,8 @@ import { canRegister, listedPlayers, registrationUrl } from "@/lib/tournaments";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Start server background sync timer (runs hourly even if admin logged out)
-ensureSyncSchedulerRunning();
+// Background sync is available via Organizer 'Sync Now' button or Vercel Cron (/api/cron/sync)
+// Do not start continuous 24/7 intervals to protect Neon DB free tier compute hours
 
 type Context = { params: Promise<{ path: string[] }> };
 const attempts = new Map<string, { count: number; reset: number }>();
@@ -49,7 +49,6 @@ export async function GET(request: Request, context: Context) {
         adminEmail: ADMIN_EMAIL,
       });
     if (route === "app-state") {
-      void checkAndTriggerHourlySync();
       return json(await readState());
     }
     if (route === "raffle") {

@@ -13,6 +13,35 @@ function getDatabaseUrl(): string {
   );
 }
 
+// In-memory caching layer to prevent Neon compute hour exhaustion on Free Tier
+interface CacheItem<T> {
+  data: T;
+  timestamp: number;
+}
+
+let cachedState: CacheItem<AppState> | null = null;
+const STATE_CACHE_TTL_MS = 60_000; // 60 seconds TTL
+
+const cachedRaffles = new Map<string, CacheItem<RaffleData>>();
+const RAFFLE_CACHE_TTL_MS = 30_000; // 30 seconds TTL
+
+let cachedArchives: CacheItem<RaffleArchiveSummary[]> | null = null;
+const ARCHIVES_CACHE_TTL_MS = 60_000; // 60 seconds TTL
+
+export function clearDbCache(type?: "state" | "raffle" | "archives" | "all") {
+  if (!type || type === "all") {
+    cachedState = null;
+    cachedRaffles.clear();
+    cachedArchives = null;
+  } else if (type === "state") {
+    cachedState = null;
+  } else if (type === "raffle") {
+    cachedRaffles.clear();
+  } else if (type === "archives") {
+    cachedArchives = null;
+  }
+}
+
 let initialized = false;
 
 function getSql() {
@@ -32,12 +61,16 @@ async function ensureTable(sql: any) {
       );
     `;
     initialized = true;
-  } catch (err) {
-    console.error("Failed to ensure app_state table:", err);
+  } catch {
+    // Non-critical if table already exists or read-only
   }
 }
 
 export async function readDbState(): Promise<AppState | null> {
+  if (cachedState && Date.now() - cachedState.timestamp < STATE_CACHE_TTL_MS) {
+    return cachedState.data;
+  }
+
   const sql = getSql();
   if (!sql) return null;
   try {
@@ -46,16 +79,19 @@ export async function readDbState(): Promise<AppState | null> {
       SELECT data FROM app_state WHERE id = 'default' LIMIT 1;
     `;
     if (rows && rows.length > 0 && rows[0].data) {
-      return rows[0].data as AppState;
+      const data = rows[0].data as AppState;
+      cachedState = { data, timestamp: Date.now() };
+      return data;
     }
     return null;
-  } catch (err) {
-    console.error("Error reading state from Neon database:", err);
+  } catch {
     return null;
   }
 }
 
 export async function writeDbState(state: AppState): Promise<boolean> {
+  cachedState = { data: state, timestamp: Date.now() };
+
   const sql = getSql();
   if (!sql) return false;
   try {
@@ -67,36 +103,15 @@ export async function writeDbState(state: AppState): Promise<boolean> {
       SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP;
     `;
     return true;
-  } catch (err) {
-    console.error("Error writing state to Neon database:", err);
+  } catch {
     return false;
   }
 }
 
 export async function incrementPageViewsDb(): Promise<number | null> {
-  const sql = getSql();
-  if (!sql) return null;
-  try {
-    await ensureTable(sql);
-    const rows = await sql`
-      UPDATE app_state
-      SET data = jsonb_set(
-        data,
-        '{pageViews}',
-        to_jsonb(COALESCE((data->>'pageViews')::int, 0) + 1)
-      ),
-      updated_at = CURRENT_TIMESTAMP
-      WHERE id = 'default'
-      RETURNING (data->>'pageViews')::int AS page_views;
-    `;
-    if (rows && rows.length > 0 && typeof rows[0].page_views === "number") {
-      return rows[0].page_views;
-    }
-    return null;
-  } catch (err) {
-    console.error("Error incrementing pageViews in Neon:", err);
-    return null;
-  }
+  // Compute Optimization: Do not update Neon database on visitor page views.
+  // This allows Neon free tier to auto-suspend when inactive and not burn compute hours.
+  return null;
 }
 
 let raffleTablesInitialized = false;
@@ -133,22 +148,19 @@ async function ensureRaffleTables(sql: any) {
     await sql`
       CREATE INDEX IF NOT EXISTS idx_raffle_entries_device_id ON raffle_entries(device_id);
     `;
-    await sql`
-      ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS device_id VARCHAR(100);
-    `;
-    await sql`ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`;
-    await sql`ALTER TABLE raffles ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;`;
-    await sql`ALTER TABLE raffles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`;
-    await sql`ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS raffle_title VARCHAR(255);`;
-    await sql`ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS category VARCHAR(100);`;
-    await sql`ALTER TABLE raffles ADD COLUMN IF NOT EXISTS category VARCHAR(100);`;
     raffleTablesInitialized = true;
-  } catch (err) {
-    console.error("Failed to ensure raffle tables:", err);
+  } catch {
+    // Non-critical if tables already exist
   }
 }
 
 export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | null> {
+  const cacheKey = raffleId || "default";
+  const hit = cachedRaffles.get(cacheKey);
+  if (hit && Date.now() - hit.timestamp < RAFFLE_CACHE_TTL_MS) {
+    return hit.data;
+  }
+
   const sql = getSql();
   if (!sql) return null;
   try {
@@ -156,7 +168,6 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
 
     let raffleRows;
     if (raffleId === "default" || raffleId === "latest") {
-      // Find the most recent unarchived raffle
       raffleRows = await sql`
         SELECT id, title, category, description, cutoff_date, prizes, is_active, is_archived, created_at, updated_at
         FROM raffles
@@ -174,7 +185,6 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
     }
 
     if (!raffleRows || raffleRows.length === 0) {
-      // Initialize default raffle
       const newId = raffleId === "default" || raffleId === "latest" ? "default" : raffleId;
       const defaultCutoff = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
       const defaultPrizes = [
@@ -195,7 +205,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
         )
         ON CONFLICT (id) DO NOTHING;
       `;
-      return {
+      const freshDefault: RaffleData = {
         id: newId,
         title: "Community Heroes Grand Raffle",
         category: "Diamonds Giveaway",
@@ -209,6 +219,8 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      cachedRaffles.set(cacheKey, { data: freshDefault, timestamp: Date.now() });
+      return freshDefault;
     }
 
     const r = raffleRows[0];
@@ -219,7 +231,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
       ORDER BY created_at ASC;
     `;
 
-    return {
+    const raffleResult: RaffleData = {
       id: r.id,
       title: r.title,
       category: r.category || "Diamonds Giveaway",
@@ -241,13 +253,20 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
       createdAt: r.created_at ? new Date(r.created_at).toISOString() : undefined,
       updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : undefined,
     };
-  } catch (err) {
-    console.error("Error reading raffle from Neon database:", err);
+
+    cachedRaffles.set(cacheKey, { data: raffleResult, timestamp: Date.now() });
+    cachedRaffles.set(r.id, { data: raffleResult, timestamp: Date.now() });
+    return raffleResult;
+  } catch {
     return null;
   }
 }
 
-export async function readDbArchivedRaffles() {
+export async function readDbArchivedRaffles(): Promise<RaffleArchiveSummary[]> {
+  if (cachedArchives && Date.now() - cachedArchives.timestamp < ARCHIVES_CACHE_TTL_MS) {
+    return cachedArchives.data;
+  }
+
   const sql = getSql();
   if (!sql) return [];
   try {
@@ -258,9 +277,12 @@ export async function readDbArchivedRaffles() {
       WHERE is_archived = true
       ORDER BY created_at DESC;
     `;
-    if (!rows || rows.length === 0) return [];
+    if (!rows || rows.length === 0) {
+      cachedArchives = { data: [], timestamp: Date.now() };
+      return [];
+    }
 
-    const result = [];
+    const result: RaffleArchiveSummary[] = [];
     for (const r of rows) {
       const winnerRows = await sql`
         SELECT id, full_name, prize_won
@@ -288,14 +310,18 @@ export async function readDbArchivedRaffles() {
         })),
       });
     }
+
+    cachedArchives = { data: result, timestamp: Date.now() };
     return result;
-  } catch (err) {
-    console.error("Error reading archived raffles from Neon:", err);
+  } catch {
     return [];
   }
 }
 
-export async function archiveDbRaffle(raffleId: string) {
+export async function archiveDbRaffle(raffleId: string): Promise<boolean> {
+  clearDbCache("raffle");
+  clearDbCache("archives");
+
   const sql = getSql();
   if (!sql) return false;
   try {
@@ -306,13 +332,15 @@ export async function archiveDbRaffle(raffleId: string) {
       WHERE id = ${raffleId};
     `;
     return true;
-  } catch (err) {
-    console.error("Error archiving raffle in Neon:", err);
+  } catch {
     return false;
   }
 }
 
-export async function unarchiveDbRaffle(raffleId: string) {
+export async function unarchiveDbRaffle(raffleId: string): Promise<boolean> {
+  clearDbCache("raffle");
+  clearDbCache("archives");
+
   const sql = getSql();
   if (!sql) return false;
   try {
@@ -323,13 +351,14 @@ export async function unarchiveDbRaffle(raffleId: string) {
       WHERE id = ${raffleId};
     `;
     return true;
-  } catch (err) {
-    console.error("Error unarchiving raffle in Neon:", err);
+  } catch {
     return false;
   }
 }
 
-export async function updateDbArchivedRaffle(raffleId: string, title: string, description: string) {
+export async function updateDbArchivedRaffle(raffleId: string, title: string, description: string): Promise<boolean> {
+  clearDbCache("archives");
+
   const sql = getSql();
   if (!sql) return false;
   try {
@@ -340,13 +369,15 @@ export async function updateDbArchivedRaffle(raffleId: string, title: string, de
       WHERE id = ${raffleId};
     `;
     return true;
-  } catch (err) {
-    console.error("Error updating archived raffle in Neon:", err);
+  } catch {
     return false;
   }
 }
 
-export async function deleteDbRaffle(raffleId: string) {
+export async function deleteDbRaffle(raffleId: string): Promise<boolean> {
+  clearDbCache("raffle");
+  clearDbCache("archives");
+
   const sql = getSql();
   if (!sql) return false;
   try {
@@ -354,8 +385,7 @@ export async function deleteDbRaffle(raffleId: string) {
     await sql`DELETE FROM raffle_entries WHERE raffle_id = ${raffleId};`;
     await sql`DELETE FROM raffles WHERE id = ${raffleId};`;
     return true;
-  } catch (err) {
-    console.error("Error deleting raffle in Neon:", err);
+  } catch {
     return false;
   }
 }
@@ -367,7 +397,10 @@ export async function createDbNewRaffle(data: {
   cutoffDate: string;
   prizes: (string | RafflePrizeItem)[];
   isActive?: boolean;
-}) {
+}): Promise<RaffleData | null> {
+  clearDbCache("raffle");
+  clearDbCache("archives");
+
   const sql = getSql();
   if (!sql) return null;
   const newId = `raffle-${Date.now()}`;
@@ -389,8 +422,7 @@ export async function createDbNewRaffle(data: {
       );
     `;
     return readDbRaffle(newId);
-  } catch (err) {
-    console.error("Error creating new raffle in Neon:", err);
+  } catch {
     return null;
   }
 }
@@ -403,7 +435,9 @@ export async function writeDbRaffleSettings(data: {
   cutoffDate: string;
   prizes: (string | RafflePrizeItem)[];
   isActive?: boolean;
-}) {
+}): Promise<RaffleData | null> {
+  clearDbCache("raffle");
+
   const sql = getSql();
   if (!sql) return null;
   let raffleId = data.id;
@@ -449,8 +483,7 @@ export async function writeDbRaffleSettings(data: {
         updated_at = CURRENT_TIMESTAMP;
     `;
     return readDbRaffle(raffleId);
-  } catch (err) {
-    console.error("Error writing raffle settings to Neon:", err);
+  } catch {
     return null;
   }
 }
@@ -460,6 +493,8 @@ export async function submitOrUpdateDbRaffleEntry(
   fullName: string,
   deviceId?: string,
 ): Promise<{ success: boolean; entry?: any; updated?: boolean; error?: string }> {
+  clearDbCache("raffle");
+
   const sql = getSql();
   if (!sql) return { success: false, error: "Database not connected" };
 
@@ -469,7 +504,6 @@ export async function submitOrUpdateDbRaffleEntry(
   try {
     await ensureRaffleTables(sql);
 
-    // 1. Check raffle status & cut-off date, and resolve actual raffleId/title/category
     let raffleRows;
     if (raffleId === "default" || raffleId === "latest") {
       raffleRows = await sql`
@@ -497,7 +531,6 @@ export async function submitOrUpdateDbRaffleEntry(
       };
     }
 
-    // 2. If deviceId is provided, check if this device already has an entry
     if (deviceId) {
       const deviceEntry = await sql`
         SELECT id, raffle_id, raffle_title, category, full_name, prize_won, created_at
@@ -507,7 +540,6 @@ export async function submitOrUpdateDbRaffleEntry(
       `;
 
       if (deviceEntry && deviceEntry.length > 0) {
-        // Device already has an entry -> EDIT/UPDATE IT!
         const existingEntryId = deviceEntry[0].id;
         const updateRes = await sql`
           UPDATE raffle_entries
@@ -532,7 +564,6 @@ export async function submitOrUpdateDbRaffleEntry(
       }
     }
 
-    // 3. Prevent duplicate full names (case-insensitive)
     const existingName = await sql`
       SELECT id FROM raffle_entries
       WHERE raffle_id = ${actualRaffleId} AND LOWER(TRIM(full_name)) = LOWER(${trimmed})
@@ -545,7 +576,6 @@ export async function submitOrUpdateDbRaffleEntry(
       };
     }
 
-    // 4. Insert new entry with raffle_title and category
     const entryId = `entry-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const result = await sql`
       INSERT INTO raffle_entries (id, raffle_id, raffle_title, category, full_name, device_id)
@@ -571,13 +601,14 @@ export async function submitOrUpdateDbRaffleEntry(
     }
     return { success: false, error: "Could not save entry." };
   } catch (err: any) {
-    console.error("Error submitting raffle entry in Neon:", err);
     return { success: false, error: err.message || "Failed to submit raffle entry." };
   }
 }
 
+export async function assignDbRaffleWinner(entryId: string, prizeWon: string | null): Promise<boolean> {
+  clearDbCache("raffle");
+  clearDbCache("archives");
 
-export async function assignDbRaffleWinner(entryId: string, prizeWon: string | null) {
   const sql = getSql();
   if (!sql) return false;
   try {
@@ -588,13 +619,14 @@ export async function assignDbRaffleWinner(entryId: string, prizeWon: string | n
       WHERE id = ${entryId};
     `;
     return true;
-  } catch (err) {
-    console.error("Error assigning raffle winner in Neon:", err);
+  } catch {
     return false;
   }
 }
 
-export async function deleteDbRaffleEntry(entryId: string) {
+export async function deleteDbRaffleEntry(entryId: string): Promise<boolean> {
+  clearDbCache("raffle");
+
   const sql = getSql();
   if (!sql) return false;
   try {
@@ -603,13 +635,14 @@ export async function deleteDbRaffleEntry(entryId: string) {
       DELETE FROM raffle_entries WHERE id = ${entryId};
     `;
     return true;
-  } catch (err) {
-    console.error("Error deleting raffle entry in Neon:", err);
+  } catch {
     return false;
   }
 }
 
-export async function resetDbRaffleEntries(raffleId = "default") {
+export async function resetDbRaffleEntries(raffleId = "default"): Promise<boolean> {
+  clearDbCache("raffle");
+
   const sql = getSql();
   if (!sql) return false;
   try {
@@ -618,9 +651,7 @@ export async function resetDbRaffleEntries(raffleId = "default") {
       DELETE FROM raffle_entries WHERE raffle_id = ${raffleId};
     `;
     return true;
-  } catch (err) {
-    console.error("Error resetting raffle entries in Neon:", err);
+  } catch {
     return false;
   }
 }
-

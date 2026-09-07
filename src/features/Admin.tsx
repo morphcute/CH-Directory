@@ -1652,7 +1652,7 @@ export function Admin() {
                             />
                           </div>
                           <div className="branding-preview-meta">
-                            <strong>{state.logoUrl ? "Custom logo active" : "MLBB Community Hero avatar"}</strong>
+                            <strong>{state.logoUrl ? "Custom logo active" : "CH Directory shield logo"}</strong>
                             <p>Recommended: Square PNG, WebP, or JPG (400×400px). Auto-compressed on upload.</p>
                           </div>
                         </div>
@@ -1685,10 +1685,10 @@ export function Admin() {
                               className="button outline small"
                               onClick={() => {
                                 update({ logoUrl: "/images/mlbb-ch-avatar.png" });
-                                setMessage("Profile logo set to Community Hero avatar. Click 'Publish changes' to save.");
+                                setMessage("Profile logo set to CH Directory shield logo. Click 'Publish changes' to save.");
                               }}
                             >
-                              CH Preset
+                              CH Shield
                             </button>
                             {state.logoUrl && (
                               <button
@@ -1696,7 +1696,7 @@ export function Admin() {
                                 className="button outline small"
                                 onClick={() => {
                                   update({ logoUrl: "" });
-                                  setMessage("Logo restored to default. Click 'Publish changes' to save.");
+                                  setMessage("Logo restored to default CH Directory shield. Click 'Publish changes' to save.");
                                 }}
                               >
                                 <RotateCcw size={14} />

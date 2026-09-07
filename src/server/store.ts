@@ -40,14 +40,18 @@ export async function readState(): Promise<AppState> {
   try {
     const dbState = await readDbState();
     if (dbState && Array.isArray(dbState.players)) {
-      return {
+      const stateObj = {
         ...defaultState,
         ...dbState,
         players: normalizePlayerCounts(dbState.players),
       };
+      if (inMemoryPageViews !== null) {
+        stateObj.pageViews = Math.max(stateObj.pageViews || 0, inMemoryPageViews);
+      }
+      return stateObj;
     }
-  } catch (err) {
-    console.error("Neon DB read error, falling back to local file:", err);
+  } catch {
+    // Silent fallback to file storage
   }
 
   // 2. Fallback to file storage
@@ -62,11 +66,15 @@ export async function readState(): Promise<AppState> {
     }
     const data = JSON.parse(content);
     if (!Array.isArray(data.players)) throw new Error("Invalid directory data");
-    return {
+    const stateObj = {
       ...defaultState,
       ...data,
       players: normalizePlayerCounts(data.players),
     };
+    if (inMemoryPageViews !== null) {
+      stateObj.pageViews = Math.max(stateObj.pageViews || 0, inMemoryPageViews);
+    }
+    return stateObj;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return defaultState;
     throw error;
@@ -85,11 +93,15 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
       lastUpdated: Date.now(),
     };
 
+    if (typeof update.pageViews === "number") {
+      inMemoryPageViews = update.pageViews;
+    }
+
     // 1. Save to Neon Database
     try {
       await writeDbState(state);
-    } catch (err) {
-      console.error("Neon DB write error:", err);
+    } catch {
+      // Non-critical if Neon is temporarily unreachable
     }
 
     // 2. Backup to local file (sanitize tokens so secrets never leak to disk or git)
@@ -100,7 +112,7 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
       const { googleAccessToken: _a, googleRefreshToken: _r, googleTokenExpiresAt: _e, ...safeState } = state;
       await writeFile(temporary, JSON.stringify(safeState, null, 2), "utf8");
       await rename(temporary, file);
-    } catch (err) {
+    } catch {
       // Non-critical if running in readonly environment
     }
 
@@ -110,27 +122,34 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
   return task;
 }
 
+let inMemoryPageViews: number | null = null;
+
 export async function incrementPageViews(): Promise<number> {
+  if (inMemoryPageViews === null) {
+    const current = await readState();
+    inMemoryPageViews = current.pageViews || 0;
+  }
+  inMemoryPageViews += 1;
+  const nextViews = inMemoryPageViews;
+
+  // Compute Optimization: Do not execute SQL writes to Neon on page views!
+  // Update local file storage without waking Neon database.
   try {
-    const dbViews = await incrementPageViewsDb();
-    if (typeof dbViews === "number") {
-      try {
-        const file = statePath();
-        const content = await readFile(file, "utf8");
-        const data = JSON.parse(content);
-        data.pageViews = dbViews;
-        await writeFile(file, JSON.stringify(data, null, 2), "utf8");
-      } catch {
-        // Non-critical local file update
-      }
-      return dbViews;
+    const file = statePath();
+    let data: any = {};
+    try {
+      const content = await readFile(file, "utf8");
+      data = JSON.parse(content);
+    } catch {
+      const bundled = path.join(process.cwd(), "data", "app-state.json");
+      const content = await readFile(bundled, "utf8");
+      data = JSON.parse(content);
     }
-  } catch (err) {
-    console.error("Failed to increment views in DB, using store fallback:", err);
+    data.pageViews = nextViews;
+    await writeFile(file, JSON.stringify(data, null, 2), "utf8");
+  } catch {
+    // Non-critical local update
   }
 
-  const current = await readState();
-  const nextViews = (current.pageViews || 0) + 1;
-  await saveState({ pageViews: nextViews });
   return nextViews;
 }
