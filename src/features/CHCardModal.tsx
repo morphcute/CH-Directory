@@ -17,6 +17,7 @@ import QRCode from "qrcode";
 import type { CHPlayer } from "@/types";
 import {
   canRegister,
+  isTabDatePassed,
   registrationUrl,
   slotsLeft,
   tournamentStatus,
@@ -78,6 +79,7 @@ export function CHCardModal({
         ? player.registeredTeams.length
         : player.teamsRegistered || 0;
   const maxTeams = player.maxTeams || 16;
+  const datePassed = isTabDatePassed(activeTabName);
   const status = tournamentStatus(
     { ...player, teamsRegistered: registered },
     activeTabName,

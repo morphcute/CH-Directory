@@ -16,7 +16,9 @@ import {
 import { playerSchema } from "../src/server/validation";
 import { allowedRemote } from "../src/server/sheets";
 import { createSession, verifySession, sameOrigin } from "../src/server/auth";
-const player = {
+import type { CHPlayer } from "../src/types";
+
+const player: CHPlayer = {
   id: "row-1-Meg",
   active: true,
   area: "CALABARZON",
@@ -26,6 +28,7 @@ const player = {
   facebookProfileUrl: "https://www.facebook.com/meg",
   registrationFormLink: "https://forms.gle/test",
   tournamentPostingLink: "https://facebook.com/post",
+  tournamentResponseSheet: "https://docs.google.com/spreadsheets/d/test",
   teamsRegistered: 0,
   maxTeams: 16,
   rowIndex: 2,
