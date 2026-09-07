@@ -413,3 +413,65 @@ export async function fetchTeamsFromResponseSheet(
   }
   return teams;
 }
+
+/**
+ * Scans the master spreadsheet (preferring guide/uniformed/diy tabs)
+ * to dynamically extract the Player Roster Lineup (PRL) cut-off notice.
+ */
+export async function extractPRLCutoffFromSheet(
+  spreadsheetUrl: string,
+  rawTabs?: string[],
+  token?: string,
+): Promise<string | undefined> {
+  if (!spreadsheetUrl) return undefined;
+  try {
+    let tabs = rawTabs;
+    if (!tabs || tabs.length === 0) {
+      try {
+        const meta = await getSpreadsheetTabs(spreadsheetUrl, token);
+        tabs = meta.tabs;
+      } catch {}
+    }
+
+    const candidateTabs: string[] = [];
+    if (Array.isArray(tabs)) {
+      // Prioritize guide, uniformed, diy, or rules tabs
+      const guideTabs = tabs.filter((t) =>
+        /guide|uniformed|diy|rules|instruction|prl/i.test(t),
+      );
+      candidateTabs.push(...guideTabs);
+      // Then add any other tabs
+      for (const t of tabs) {
+        if (!candidateTabs.includes(t)) candidateTabs.push(t);
+      }
+    }
+    if (candidateTabs.length === 0) {
+      candidateTabs.push("UNIFORMED DIY GUIDE");
+    }
+
+    // Inspect candidate tabs for PRL cut-off text
+    for (const tab of candidateTabs.slice(0, 4)) {
+      try {
+        const rows = (await sheetRows(spreadsheetUrl, tab, token)) as unknown[][];
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            if (Array.isArray(row)) {
+              for (const cell of row) {
+                const text = String(cell || "").trim();
+                if (/prl\s*cut[\s-]*off/i.test(text)) {
+                  return text;
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // Continue to next tab candidate
+      }
+    }
+  } catch (err) {
+    console.warn("Error extracting PRL cutoff from sheet:", err);
+  }
+  return undefined;
+}
+

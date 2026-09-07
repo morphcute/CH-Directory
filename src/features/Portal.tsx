@@ -490,6 +490,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
               players.find((p) => p.id === selectedPlayer.id) || selectedPlayer
             }
             activeTabName={state.activeTabName}
+            prlCutoff={state.prlCutoff}
             onClose={() => setSelectedPlayer(null)}
             onRegister={register}
             busy={busy}

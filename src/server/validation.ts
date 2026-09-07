@@ -50,8 +50,10 @@ export const playerSchema = z.object({
   resolvedResponseSheetUrl: link.optional(),
   resolvedFormUrl: link.optional(),
   registeredTeams: z.array(z.string().max(200)).max(128).optional(),
+  prlCutoff: z.string().max(500).optional(),
 });
 export const updateSchema = z.object({
+  prlCutoff: z.string().max(500).optional(),
   players: z
     .array(playerSchema)
     .max(500)

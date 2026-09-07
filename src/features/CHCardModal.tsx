@@ -3,14 +3,18 @@
 import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
+  Award,
   Check,
   ChevronDown,
+  Clock,
   Copy,
   ExternalLink,
   LoaderCircle,
   LockKeyhole,
   MapPin,
+  Medal,
   QrCode,
+  Trophy,
   Users,
 } from "lucide-react";
 import QRCode from "qrcode";
@@ -24,6 +28,7 @@ import {
 } from "@/lib/tournaments";
 import { cleanAreaString } from "@/utils/sheetDetector";
 import { Modal } from "./shared";
+import { MlbbDiamondIcon } from "./MlbbDiamondIcon";
 
 const FacebookIcon = ({
   size = 16,
@@ -50,6 +55,7 @@ const FacebookIcon = ({
 interface CHCardModalProps {
   player: CHPlayer;
   activeTabName?: string;
+  prlCutoff?: string;
   onClose: () => void;
   onRegister: (id: string) => void;
   busy: string | null;
@@ -58,10 +64,12 @@ interface CHCardModalProps {
 export function CHCardModal({
   player,
   activeTabName,
+  prlCutoff: propPrlCutoff,
   onClose,
   onRegister,
   busy,
 }: CHCardModalProps) {
+  const prlCutoff = player.prlCutoff || propPrlCutoff;
   const [showQR, setShowQR] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
@@ -267,6 +275,93 @@ export function CHCardModal({
             })}
           </div>
         </div>
+
+        {/* 4,000 Diamond Prize Pool Section */}
+        <div className="ch-modal-prizepool-box">
+          <div className="ch-modal-prizepool-head">
+            <div className="ch-modal-prizepool-title">
+              <MlbbDiamondIcon size={17} />
+              <span>4,000 Diamond Prize Pool</span>
+            </div>
+            <span className="ch-modal-prizepool-badge">Per Bracket</span>
+          </div>
+
+          <div className="ch-modal-prizepool-grid">
+            <div className="ch-prize-card first">
+              <div className="ch-prize-rank">
+                <Trophy size={13} className="ch-prize-icon-gold" />
+                <span>1st Place</span>
+              </div>
+              <div className="ch-prize-amount">
+                <MlbbDiamondIcon size={14} />
+                <span>2,000</span>
+              </div>
+              <div className="ch-prize-each">400 each player</div>
+            </div>
+
+            <div className="ch-prize-card second">
+              <div className="ch-prize-rank">
+                <Medal size={13} className="ch-prize-icon-silver" />
+                <span>2nd Place</span>
+              </div>
+              <div className="ch-prize-amount">
+                <MlbbDiamondIcon size={14} />
+                <span>1,000</span>
+              </div>
+              <div className="ch-prize-each">200 each player</div>
+            </div>
+
+            <div className="ch-prize-card third">
+              <div className="ch-prize-rank">
+                <Medal size={13} className="ch-prize-icon-bronze" />
+                <span>3rd Place</span>
+              </div>
+              <div className="ch-prize-amount">
+                <MlbbDiamondIcon size={14} />
+                <span>500</span>
+              </div>
+              <div className="ch-prize-each">100 each player</div>
+            </div>
+
+            <div className="ch-prize-card fourth">
+              <div className="ch-prize-rank">
+                <Award size={13} className="ch-prize-icon-blue" />
+                <span>4th Place</span>
+              </div>
+              <div className="ch-prize-amount">
+                <MlbbDiamondIcon size={14} />
+                <span>500</span>
+              </div>
+              <div className="ch-prize-each">100 each player</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic PRL Cut-off Notice from Master Spreadsheet (Hidden if tournament ended) */}
+        {prlCutoff && !datePassed && (() => {
+          const cleanPrl = prlCutoff.replace(/^[-\s*•]+/, "").replace(/\s+/g, " ").trim();
+          const dateOnly = cleanPrl
+            .replace(/^(?:CHs?\s*)?PRL\s*cut[\s-]*off\s*(?:is\s*(?:on)?)?\s*[:\-–]?\s*/i, "")
+            .replace(/[.]+$/, "")
+            .trim();
+          return (
+            <div className="ch-modal-prl-box">
+              <div className="ch-modal-prl-head">
+                <div className="ch-modal-prl-title">
+                  <Clock size={14} className="ch-modal-prl-icon" />
+                  <span>PRL Cut-off</span>
+                </div>
+                <span className="ch-modal-prl-tag">Roster Deadline</span>
+              </div>
+              <div className="ch-modal-prl-text">
+                {dateOnly || cleanPrl}
+              </div>
+              <div className="ch-modal-prl-sub">
+                Changing players is allowed until this date only.
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Teams Under this CH Section (Compact) */}
         <div className="ch-modal-teams-compact">

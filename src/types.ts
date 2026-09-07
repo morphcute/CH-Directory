@@ -20,6 +20,7 @@ export interface CHPlayer {
   resolvedResponseSheetUrl?: string;
   resolvedFormUrl?: string;
   registeredTeams?: string[];
+  prlCutoff?: string;
 }
 
 export interface AppState {
@@ -38,6 +39,7 @@ export interface AppState {
   logoUrl?: string;
   bannerUrl?: string;
   pageViews?: number;
+  prlCutoff?: string;
 }
 
 export interface SheetTab {

@@ -3,6 +3,7 @@ import {
   inspectPlayer,
   fetchTeamsFromResponseSheet,
   sheetRows,
+  extractPRLCutoffFromSheet,
 } from "@/server/sheets";
 import type { CHPlayer } from "@/types";
 
@@ -162,20 +163,41 @@ export async function syncSpreadsheetBackground(): Promise<{
       updatedPlayers.push(...results);
     }
 
+    // 3. Dynamically extract Player Roster Lineup (PRL) cut-off from master spreadsheet
+    let dynamicPrlCutoff: string | undefined = undefined;
+    if (state.spreadsheetUrl) {
+      try {
+        dynamicPrlCutoff = await extractPRLCutoffFromSheet(
+          state.spreadsheetUrl,
+          state.rawTabsList,
+          token,
+        );
+      } catch (prlErr) {
+        console.warn("Could not extract dynamic PRL cut-off:", prlErr);
+      }
+    }
+    const finalPrlCutoff = dynamicPrlCutoff || state.prlCutoff;
+
+    const finalPlayers = updatedPlayers.map((p) => ({
+      ...p,
+      prlCutoff: finalPrlCutoff || p.prlCutoff,
+    }));
+
     const now = Date.now();
     await saveState({
-      players: updatedPlayers,
-      selectedNicknames: updatedPlayers
+      players: finalPlayers,
+      selectedNicknames: finalPlayers
         .filter((p) => p.active)
         .map((p) => p.chNickname),
       lastHourlySync: now,
+      prlCutoff: finalPrlCutoff,
     });
 
     return {
       synced: true,
-      count: updatedPlayers.length,
+      count: finalPlayers.length,
       lastHourlySync: now,
-      message: `Successfully synced ${updatedPlayers.length} Community Heroes`,
+      message: `Successfully synced ${finalPlayers.length} Community Heroes`,
     };
   } catch (error) {
     console.error("Background spreadsheet sync error:", error);
