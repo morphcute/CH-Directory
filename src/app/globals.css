@@ -5472,14 +5472,14 @@ textarea:focus-visible {
 .raffle-human-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .raffle-human-card {
   background: #111724;
   border: 1px solid #1e293b;
-  border-radius: 14px;
-  padding: 20px;
+  border-radius: 12px;
+  padding: 14px 18px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
@@ -5493,17 +5493,196 @@ textarea:focus-visible {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .raffle-human-card-title {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 15px;
+  font-size: 14.5px;
   color: #ffffff;
   min-width: 0;
+}
+
+/* Compact 1-Line Space-Saver Giveaway Prizes Bar */
+.raffle-prizes-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  background: #111724;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  min-height: 46px;
+}
+
+.raffle-prizes-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.raffle-prizes-bar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.raffle-prizes-bar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  color: #facc15;
+  flex-shrink: 0;
+}
+
+.raffle-prizes-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.raffle-prize-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.raffle-prize-chip:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(11, 17, 32, 0.9);
+}
+
+.raffle-prize-chip.theme-diamond {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+.raffle-prize-chip.theme-diamond .raffle-prize-chip-icon {
+  color: #38bdf8;
+}
+
+.raffle-prize-chip.theme-starlight {
+  background: rgba(250, 204, 21, 0.08);
+  border-color: rgba(250, 204, 21, 0.28);
+}
+
+.raffle-prize-chip.theme-starlight .raffle-prize-chip-icon {
+  color: #facc15;
+}
+
+.raffle-prize-chip.theme-generic {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.raffle-prize-chip.theme-generic .raffle-prize-chip-icon {
+  color: #94a3b8;
+}
+
+.raffle-prize-chip-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.raffle-prize-chip-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.raffle-prize-chip-qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 1.5px 6px;
+  border-radius: 5px;
+  letter-spacing: -0.2px;
+}
+
+.raffle-prize-chip.theme-diamond .raffle-prize-chip-qty {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.raffle-prize-chip.theme-starlight .raffle-prize-chip-qty {
+  background: rgba(250, 204, 21, 0.18);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+}
+
+.raffle-prize-chip.theme-generic .raffle-prize-chip-qty {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.raffle-prizes-bar-deadline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #94a3b8;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  padding: 4px 9px;
+  border-radius: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.raffle-prizes-bar-deadline strong {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .raffle-prizes-bar {
+    padding: 10px 12px;
+    gap: 8px 10px;
+  }
+  .raffle-prizes-bar-left {
+    gap: 8px;
+  }
+  .raffle-prizes-bar-deadline {
+    width: 100%;
+    margin-left: 0;
+    justify-content: center;
+  }
 }
 
 .raffle-prize-shelf-header {

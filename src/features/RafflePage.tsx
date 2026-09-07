@@ -287,11 +287,6 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
 
           {/* Informational ribbon */}
           <div className="ch-fb-ribbon">
-            <span className="ch-ribbon-views">
-              <Users size={13} />
-              <span>{data?.entriesCount || 0} participants</span>
-            </span>
-
             {data?.isEnded ? (
               <span className="ch-ribbon-views" style={{ color: "#f87171" }}>
                 <LockKeyhole size={13} />
@@ -314,12 +309,12 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
 
       {/* Directory Section & Navigation Tabs */}
       <section className="ch-directory-section" aria-labelledby="raffle-section-heading">
-        <div className="ch-list-heading">
+        <div className="ch-list-heading" style={{ marginBottom: 12 }}>
           <div>
-            <h2 id="raffle-section-heading">
+            <h2 id="raffle-section-heading" style={{ fontSize: 24, marginBottom: 4 }}>
               {activeTab === "latest" ? "Community Raffle" : "Past Winners Archive"}
             </h2>
-            <p>
+            <p style={{ marginTop: 2, fontSize: 12 }}>
               {activeTab === "latest"
                 ? data?.description || "Enter your full name to join the official Community Heroes raffle."
                 : "Archive of past completed raffles and lucky community winners."}
@@ -328,7 +323,7 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
         </div>
 
         {/* Filter Tabs matching Homepage style */}
-        <div className="ch-filter-bar">
+        <div className="ch-filter-bar" style={{ marginBottom: 12 }}>
           <div className="ch-filter-tabs" role="tablist" aria-label="Raffle sections">
             <button
               type="button"
@@ -376,74 +371,57 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
             </div>
           ) : (
             <div className="raffle-human-container">
-              {/* Prize Pool Shelf */}
+              {/* Prize Pool Shelf - 1-Line Space Saver */}
               {(() => {
                 const normalizedPrizes = normalizePrizeItems(data.prizes);
                 if (normalizedPrizes.length === 0) return null;
-                const totalWinners = normalizedPrizes.reduce((acc, p) => acc + p.winnerCount, 0);
                 return (
-                  <div className="raffle-human-card">
-                    <div className="raffle-human-card-head">
-                      <div className="raffle-prize-shelf-header">
-                        <div className="raffle-prize-shelf-icon-box">
-                          <Gift size={18} />
+                  <div className="raffle-prizes-bar">
+                    <div className="raffle-prizes-bar-left">
+                      <div className="raffle-prizes-bar-title">
+                        <div className="raffle-prizes-bar-icon">
+                          <Gift size={15} />
                         </div>
-                        <div className="raffle-prize-shelf-title-wrap">
-                          <h3 className="raffle-prize-shelf-title">Giveaway Prizes</h3>
-                          <span className="raffle-prize-shelf-badge">
-                            {normalizedPrizes.length} {normalizedPrizes.length === 1 ? "Tier" : "Tiers"} · {totalWinners} {totalWinners === 1 ? "Winner" : "Winners"}
-                          </span>
-                        </div>
+                        <span>Giveaway Prizes</span>
                       </div>
 
-                      {data.cutoffDate && (
-                        <div className="raffle-human-deadline-pill">
-                          <Clock size={13} style={{ color: "#facc15", flexShrink: 0 }} />
-                          <span>
-                            Deadline: <strong>{formatDeadline(data.cutoffDate)}</strong>
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                      <div className="raffle-prizes-chips-row">
+                        {normalizedPrizes.map((prize, idx) => {
+                          const isStarlight = /starlight/i.test(prize.name);
+                          const isDiamond = /diamond/i.test(prize.name);
+                          const themeClass = isStarlight
+                            ? "theme-starlight"
+                            : isDiamond
+                              ? "theme-diamond"
+                              : "theme-generic";
 
-                    <div className="raffle-human-prizes-list">
-                      {normalizedPrizes.map((prize, idx) => {
-                        const isStarlight = /starlight/i.test(prize.name);
-                        const isDiamond = /diamond/i.test(prize.name);
-                        const themeClass = isStarlight
-                          ? "theme-starlight"
-                          : isDiamond
-                            ? "theme-diamond"
-                            : "theme-generic";
-
-                        return (
-                          <div key={prize.id || idx} className={`raffle-human-prize-row ${themeClass}`}>
-                            <div className="raffle-human-prize-left">
-                              <div className="raffle-human-prize-icon">
+                          return (
+                            <div key={prize.id || idx} className={`raffle-prize-chip ${themeClass}`}>
+                              <div className="raffle-prize-chip-icon">
                                 {isStarlight ? (
-                                  <Crown size={16} />
+                                  <Crown size={14} />
                                 ) : isDiamond ? (
-                                  <MlbbDiamondIcon size={16} />
+                                  <MlbbDiamondIcon size={14} />
                                 ) : (
-                                  <Gift size={16} />
+                                  <Gift size={14} />
                                 )}
                               </div>
-                              <span className="raffle-human-prize-title">{prize.name}</span>
+                              <span className="raffle-prize-chip-name">{prize.name}</span>
+                              <span className="raffle-prize-chip-qty">x{prize.winnerCount}</span>
                             </div>
-
-                            <div className="raffle-human-prize-right">
-                              <span
-                                className={`raffle-human-winner-badge ${
-                                  prize.winnerCount > 1 ? "multi" : "single"
-                                }`}
-                              >
-                                × {prize.winnerCount} {prize.winnerCount === 1 ? "Winner" : "Winners"}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
+
+                    {data.cutoffDate && (
+                      <div className="raffle-prizes-bar-deadline">
+                        <Clock size={12} style={{ color: "#facc15", flexShrink: 0 }} />
+                        <span>
+                          Deadline: <strong>{formatDeadline(data.cutoffDate)}</strong>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
