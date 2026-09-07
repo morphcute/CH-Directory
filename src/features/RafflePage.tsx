@@ -24,13 +24,25 @@ import {
 } from "lucide-react";
 import { Footer } from "./shared";
 import { MlbbDiamondIcon } from "./MlbbDiamondIcon";
-import { normalizePrizeItems, type RaffleArchiveSummary, type RafflePrizeItem } from "@/types";
+import {
+  normalizePrizeItems,
+  type AppState,
+  type RaffleArchiveSummary,
+  type RafflePrizeItem,
+} from "@/types";
 
 interface RaffleEntryPublic {
   id: string;
   fullName: string;
   prizeWon?: string | null;
   createdAt: string;
+}
+
+export interface RaffleBranding {
+  bannerUrl?: string;
+  logoUrl?: string;
+  title?: string;
+  facebookPageUrl?: string;
 }
 
 interface RaffleResponse {
@@ -47,9 +59,10 @@ interface RaffleResponse {
   entries: RaffleEntryPublic[];
   myEntry: { id: string; fullName: string; prizeWon?: string | null } | null;
   archives?: RaffleArchiveSummary[];
+  branding?: RaffleBranding;
 }
 
-export function RafflePage() {
+export function RafflePage({ initialAppState }: { initialAppState?: AppState } = {}) {
   const [data, setData] = useState<RaffleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -181,6 +194,28 @@ export function RafflePage() {
 
   const archives = data?.archives || [];
 
+  const bannerUrl =
+    data?.branding?.bannerUrl ||
+    initialAppState?.bannerUrl ||
+    initialAppState?.bannerSettings?.customUrl ||
+    "/images/mlbb-ch-banner.png";
+
+  const logoUrl =
+    data?.branding?.logoUrl ||
+    initialAppState?.logoUrl ||
+    initialAppState?.bannerSettings?.avatarCustomUrl ||
+    "/images/mlbb-ch-avatar.png";
+
+  const pageTitle =
+    data?.branding?.title ||
+    initialAppState?.bannerSettings?.title ||
+    "MLBB PH - Community Heroes";
+
+  const facebookUrl =
+    data?.branding?.facebookPageUrl ||
+    initialAppState?.bannerSettings?.facebookPageUrl ||
+    "https://www.facebook.com/MLBBPHCommunityHeroes";
+
   return (
     <main id="main-content" className="simple-directory">
       {/* Facebook-style Profile Header Card - 100% matched with Homepage */}
@@ -188,8 +223,8 @@ export function RafflePage() {
         <div className="ch-fb-cover">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/mlbb-ch-banner.png"
-            alt="Community Heroes Tournament Banner"
+            src={bannerUrl}
+            alt={`${pageTitle} Tournament Banner`}
             className="ch-fb-cover-img"
           />
           <div className="ch-fb-cover-shade" />
@@ -214,8 +249,8 @@ export function RafflePage() {
             <div className="ch-fb-avatar-box">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/images/mlbb-ch-avatar.png"
-                alt="MLBB PH - Community Heroes Profile"
+                src={logoUrl}
+                alt={`${pageTitle} Profile`}
                 className="ch-fb-avatar-img"
               />
             </div>
@@ -224,7 +259,7 @@ export function RafflePage() {
 
           <div className="ch-fb-name-row">
             <h1 className="ch-fb-name">
-              MLBB PH - Community Heroes
+              {pageTitle}
               <span className="verified-badge" title="Verified Page">
                 <svg className="verified-badge-icon" viewBox="0 0 20 20" fill="currentColor">
                   <path
@@ -237,11 +272,11 @@ export function RafflePage() {
             </h1>
 
             <a
-              href="https://www.facebook.com/MLBBPHCommunityHeroes"
+              href={facebookUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-follow-fb"
-              title="Follow MLBB PH Community Heroes on Facebook"
+              title={`Follow ${pageTitle} on Facebook`}
             >
               <svg className="btn-fb-icon" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />

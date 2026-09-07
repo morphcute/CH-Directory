@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { RafflePage } from "@/features/RafflePage";
+import { readState } from "@/server/store";
 
 export const metadata: Metadata = {
   title: "Community Raffle | MLBB Community Heroes",
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function Page() {
-  return <RafflePage />;
+export default async function Page() {
+  const appState = await readState();
+  return <RafflePage initialAppState={appState} />;
 }

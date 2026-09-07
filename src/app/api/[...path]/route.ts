@@ -69,6 +69,7 @@ export async function GET(request: Request, context: Context) {
       const cutoffMs = raffle.cutoffDate ? new Date(raffle.cutoffDate).getTime() : Infinity;
       const isEnded = now > cutoffMs;
       const archives = await getArchivedRaffles();
+      const appState = await readState();
 
       return json({
         id: raffle.id,
@@ -97,6 +98,20 @@ export async function GET(request: Request, context: Context) {
           ? { id: myEntry.id, fullName: myEntry.fullName, prizeWon: myEntry.prizeWon || null }
           : null,
         archives,
+        branding: {
+          bannerUrl:
+            appState.bannerUrl ||
+            appState.bannerSettings?.customUrl ||
+            "/images/mlbb-ch-banner.png",
+          logoUrl:
+            appState.logoUrl ||
+            appState.bannerSettings?.avatarCustomUrl ||
+            "/images/mlbb-ch-avatar.png",
+          title: appState.bannerSettings?.title || "MLBB PH - Community Heroes",
+          facebookPageUrl:
+            appState.bannerSettings?.facebookPageUrl ||
+            "https://www.facebook.com/MLBBPHCommunityHeroes",
+        },
       });
     }
     if (route === "cron/sync" || route === "sync") {
