@@ -136,20 +136,26 @@ export async function submitRaffleEntry(
   raffleId = "default",
   fullName: string,
   deviceId?: string,
+  clientIp?: string,
 ): Promise<{ success: boolean; entry?: RaffleEntry; updated?: boolean; error?: string }> {
   // 1. Try Neon DB
   try {
-    const res = await submitOrUpdateDbRaffleEntry(raffleId, fullName, deviceId);
+    const res = await submitOrUpdateDbRaffleEntry(raffleId, fullName, deviceId, clientIp);
     if (res.success && res.entry) {
       // Sync local fallback
       const local = await readLocalRaffle();
       const existingIdx = local.entries.findIndex(
-        (e) => (deviceId && e.deviceId === deviceId) || e.id === res.entry.id,
+        (e) =>
+          (deviceId && e.deviceId === deviceId) ||
+          (clientIp && e.ipAddress === clientIp) ||
+          e.id === res.entry.id,
       );
       if (existingIdx !== -1) {
         local.entries[existingIdx] = {
           ...local.entries[existingIdx],
           fullName: res.entry.fullName,
+          deviceId: res.entry.deviceId || local.entries[existingIdx].deviceId,
+          ipAddress: res.entry.ipAddress || local.entries[existingIdx].ipAddress,
         };
       } else {
         local.entries.push(res.entry);
@@ -174,14 +180,31 @@ export async function submitRaffleEntry(
     return { success: false, error: "The cut-off date for this raffle has passed. Entries are closed." };
   }
 
-  // Check device existing
-  if (deviceId) {
-    const existingEntry = local.entries.find((e) => e.deviceId === deviceId);
-    if (existingEntry) {
-      existingEntry.fullName = trimmed;
-      await writeLocalRaffle(local);
-      return { success: true, updated: true, entry: existingEntry };
+  // Check device or IP existing
+  let existingEntry = deviceId ? local.entries.find((e) => e.deviceId === deviceId) : undefined;
+  let matchedByDevice = Boolean(existingEntry);
+
+  if (!existingEntry && clientIp) {
+    const ipEntry = local.entries.find((e) => e.ipAddress === clientIp);
+    if (ipEntry) {
+      existingEntry = ipEntry;
+      matchedByDevice = false;
     }
+  }
+
+  if (existingEntry) {
+    // If matched by IP only (different browser/session on same network)
+    if (!matchedByDevice && existingEntry.fullName.toLowerCase() !== trimmed.toLowerCase()) {
+      return {
+        success: false,
+        error: `Only 1 entry is allowed per network / IP. An entry has already been registered under "${existingEntry.fullName}".`,
+      };
+    }
+    existingEntry.fullName = trimmed;
+    if (deviceId && !existingEntry.deviceId) existingEntry.deviceId = deviceId;
+    if (clientIp && !existingEntry.ipAddress) existingEntry.ipAddress = clientIp;
+    await writeLocalRaffle(local);
+    return { success: true, updated: true, entry: existingEntry };
   }
 
   // Check duplicate full name
@@ -196,6 +219,7 @@ export async function submitRaffleEntry(
     category: local.category || "Diamonds Giveaway",
     fullName: trimmed,
     deviceId,
+    ipAddress: clientIp,
     createdAt: new Date().toISOString(),
   };
   local.entries.push(newEntry);

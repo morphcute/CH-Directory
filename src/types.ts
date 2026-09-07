@@ -136,6 +136,7 @@ export interface RaffleEntry {
   fullName: string;
   prizeWon?: string | null;
   deviceId?: string;
+  ipAddress?: string;
   raffleId?: string;
   raffleTitle?: string;
   category?: string;

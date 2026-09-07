@@ -222,3 +222,44 @@ test("raffle winner quotas: supports setting 100 Diamonds with multiple winner c
   await deleteRaffle(raffleId);
 });
 
+test("raffle anti-spam: same IP restriction prevents multiple entries across different browsers", async () => {
+  const raffleId = "test-raffle-ip-restriction";
+  await clearAllRaffleEntries(raffleId);
+
+  await updateRaffleSettings({
+    id: raffleId,
+    title: "IP Restriction Test",
+    description: "Testing anti-spam IP restriction across different browsers",
+    cutoffDate: new Date(Date.now() + 86400000).toISOString(),
+    prizes: ["100 Diamonds"],
+    isActive: true,
+  });
+
+  const ipAddress = "192.168.1.50";
+  const devChrome = "dev-chrome-123";
+  const devEdge = "dev-edge-456";
+
+  // 1. First browser (Chrome) registers
+  const resChrome = await submitRaffleEntry(raffleId, "Juan Dela Cruz", devChrome, ipAddress);
+  assert.equal(resChrome.success, true);
+  assert.equal(resChrome.updated, false);
+
+  // 2. Second browser (Edge) on the same IP tries to register a different name
+  const resEdge = await submitRaffleEntry(raffleId, "Pedro Penduko", devEdge, ipAddress);
+  assert.equal(resEdge.success, false);
+  assert.match(resEdge.error || "", /only 1 entry is allowed per network/i);
+
+  // 3. First browser (Chrome) updates its existing name
+  const resUpdate = await submitRaffleEntry(raffleId, "Juan M. Dela Cruz", devChrome, ipAddress);
+  assert.equal(resUpdate.success, true);
+  assert.equal(resUpdate.updated, true);
+  assert.equal(resUpdate.entry?.fullName, "Juan M. Dela Cruz");
+
+  // Verify only 1 entry exists total for that IP
+  const state = await getRaffleState(raffleId);
+  assert.equal(state.entries.length, 1);
+  assert.equal(state.entries[0].fullName, "Juan M. Dela Cruz");
+
+  await deleteRaffle(raffleId);
+});
+

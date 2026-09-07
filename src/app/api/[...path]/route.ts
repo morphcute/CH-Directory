@@ -31,6 +31,29 @@ const recentViewIps = new Map<string, number>();
 const PV_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes cooldown window
 const PV_COOKIE = "ch_pv_session";
 
+function normalizeIp(ip: string): string {
+  if (!ip) return "";
+  let clean = ip.trim();
+  if (clean.startsWith("::ffff:")) clean = clean.slice(7);
+  if (clean === "::1" || clean === "localhost") return "127.0.0.1";
+  return clean;
+}
+
+function getClientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return normalizeIp(first);
+  }
+  const cfConnectingIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfConnectingIp) return normalizeIp(cfConnectingIp);
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return normalizeIp(realIp);
+  const nextIp = (request as any).ip;
+  if (nextIp) return normalizeIp(String(nextIp));
+  return "127.0.0.1";
+}
+
 const json = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -60,9 +83,12 @@ export async function GET(request: Request, context: Context) {
       const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
       const urlParamDev = url.searchParams.get("deviceId");
       const deviceId = match ? decodeURIComponent(match[1]) : urlParamDev || undefined;
-      const myEntry = deviceId
-        ? raffle.entries.find((e) => e.deviceId === deviceId)
-        : null;
+      const clientIp = getClientIp(request);
+      const myEntry = raffle.entries.find(
+        (e) =>
+          (deviceId && e.deviceId === deviceId) ||
+          (clientIp && e.ipAddress && e.ipAddress === clientIp),
+      );
 
       const now = Date.now();
       const cutoffMs = raffle.cutoffDate ? new Date(raffle.cutoffDate).getTime() : Infinity;
@@ -70,7 +96,7 @@ export async function GET(request: Request, context: Context) {
       const archives = await getArchivedRaffles();
       const appState = await readState();
 
-      return json({
+      const response = json({
         id: raffle.id,
         title: raffle.title,
         category: raffle.category || "Diamonds Giveaway",
@@ -99,6 +125,7 @@ export async function GET(request: Request, context: Context) {
               fullName: myEntry.fullName,
               prizeWon: myEntry.prizeWon || null,
               createdAt: myEntry.createdAt,
+              deviceId: myEntry.deviceId,
             }
           : null,
         archives,
@@ -117,6 +144,16 @@ export async function GET(request: Request, context: Context) {
             "https://www.facebook.com/MLBBPHCommunityHeroes",
         },
       });
+
+      if (myEntry?.deviceId && !match) {
+        response.cookies.set("ch_raffle_device", myEntry.deviceId, {
+          path: "/",
+          maxAge: 365 * 24 * 60 * 60,
+          sameSite: "lax",
+        });
+      }
+
+      return response;
     }
     if (route === "cron/sync" || route === "sync") {
       const authHeader = request.headers.get("authorization");
@@ -415,18 +452,21 @@ export async function POST(request: Request, context: Context) {
       const deviceId = match
         ? decodeURIComponent(match[1])
         : body.deviceId || `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const clientIp = getClientIp(request);
 
       const { submitRaffleEntry } = await import("@/server/raffleStore");
-      const res = await submitRaffleEntry(body.raffleId || "default", fullName, deviceId);
+      const res = await submitRaffleEntry(body.raffleId || "default", fullName, deviceId, clientIp);
 
       if (!res.success) {
         return json({ error: res.error || "Could not join raffle." }, 400);
       }
 
+      const activeDeviceId = res.entry?.deviceId || deviceId;
+
       const response = json({
         success: true,
         updated: res.updated,
-        deviceId,
+        deviceId: activeDeviceId,
         entry: res.entry
           ? {
               id: res.entry.id,
@@ -439,7 +479,7 @@ export async function POST(request: Request, context: Context) {
           : null,
       });
 
-      response.cookies.set("ch_raffle_device", deviceId, {
+      response.cookies.set("ch_raffle_device", activeDeviceId, {
         path: "/",
         maxAge: 365 * 24 * 60 * 60,
         sameSite: "lax",

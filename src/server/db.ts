@@ -137,6 +137,7 @@ async function ensureRaffleTables(sql: any) {
         raffle_id VARCHAR(50) NOT NULL REFERENCES raffles(id) ON DELETE CASCADE,
         full_name VARCHAR(150) NOT NULL,
         device_id VARCHAR(100),
+        ip_address VARCHAR(100),
         prize_won VARCHAR(150),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -148,6 +149,12 @@ async function ensureRaffleTables(sql: any) {
     await sql`
       CREATE INDEX IF NOT EXISTS idx_raffle_entries_device_id ON raffle_entries(device_id);
     `;
+    try {
+      await sql`ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS ip_address VARCHAR(100);`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_raffle_entries_ip_address ON raffle_entries(raffle_id, ip_address);`;
+    } catch {
+      // Column may already exist
+    }
     raffleTablesInitialized = true;
   } catch {
     // Non-critical if tables already exist
@@ -247,6 +254,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
         category: entry.category || r.category || "Diamonds Giveaway",
         fullName: entry.full_name,
         deviceId: entry.device_id || undefined,
+        ipAddress: entry.ip_address || undefined,
         prizeWon: entry.prize_won || null,
         createdAt: entry.created_at ? new Date(entry.created_at).toISOString() : new Date().toISOString(),
       })),
@@ -492,6 +500,7 @@ export async function submitOrUpdateDbRaffleEntry(
   raffleId = "default",
   fullName: string,
   deviceId?: string,
+  clientIp?: string,
 ): Promise<{ success: boolean; entry?: any; updated?: boolean; error?: string }> {
   clearDbCache("raffle");
 
@@ -531,37 +540,72 @@ export async function submitOrUpdateDbRaffleEntry(
       };
     }
 
+    let existingEntry: any = null;
+    let matchedByDevice = false;
+
     if (deviceId) {
       const deviceEntry = await sql`
-        SELECT id, raffle_id, raffle_title, category, full_name, prize_won, created_at
+        SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, prize_won, created_at
         FROM raffle_entries
         WHERE raffle_id = ${actualRaffleId} AND device_id = ${deviceId}
         LIMIT 1;
       `;
-
       if (deviceEntry && deviceEntry.length > 0) {
-        const existingEntryId = deviceEntry[0].id;
-        const updateRes = await sql`
-          UPDATE raffle_entries
-          SET full_name = ${trimmed}, raffle_title = ${actualTitle}, category = ${actualCategory}, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ${existingEntryId}
-          RETURNING id, raffle_id, raffle_title, category, full_name, prize_won, created_at;
-        `;
-        const u = updateRes[0];
+        existingEntry = deviceEntry[0];
+        matchedByDevice = true;
+      }
+    }
+
+    if (!existingEntry && clientIp) {
+      const ipEntry = await sql`
+        SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, prize_won, created_at
+        FROM raffle_entries
+        WHERE raffle_id = ${actualRaffleId} AND ip_address = ${clientIp}
+        LIMIT 1;
+      `;
+      if (ipEntry && ipEntry.length > 0) {
+        existingEntry = ipEntry[0];
+        matchedByDevice = false;
+      }
+    }
+
+    if (existingEntry) {
+      // If found by IP only (different browser/session on same network)
+      if (!matchedByDevice && existingEntry.full_name.toLowerCase() !== trimmed.toLowerCase()) {
         return {
-          success: true,
-          updated: true,
-          entry: {
-            id: u.id,
-            raffleId: u.raffle_id || actualRaffleId,
-            raffleTitle: u.raffle_title || actualTitle,
-            category: u.category || actualCategory,
-            fullName: u.full_name,
-            prizeWon: u.prize_won || null,
-            createdAt: u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
-          },
+          success: false,
+          error: `Only 1 entry is allowed per network / IP. An entry has already been registered under "${existingEntry.full_name}".`,
         };
       }
+
+      const existingEntryId = existingEntry.id;
+      const updateRes = await sql`
+        UPDATE raffle_entries
+        SET full_name = ${trimmed},
+            raffle_title = ${actualTitle},
+            category = ${actualCategory},
+            device_id = COALESCE(${deviceId || null}, device_id),
+            ip_address = COALESCE(${clientIp || null}, ip_address),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${existingEntryId}
+        RETURNING id, raffle_id, raffle_title, category, full_name, device_id, ip_address, prize_won, created_at;
+      `;
+      const u = updateRes[0];
+      return {
+        success: true,
+        updated: true,
+        entry: {
+          id: u.id,
+          raffleId: u.raffle_id || actualRaffleId,
+          raffleTitle: u.raffle_title || actualTitle,
+          category: u.category || actualCategory,
+          fullName: u.full_name,
+          deviceId: u.device_id || deviceId || undefined,
+          ipAddress: u.ip_address || clientIp || undefined,
+          prizeWon: u.prize_won || null,
+          createdAt: u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
+        },
+      };
     }
 
     const existingName = await sql`
@@ -578,9 +622,9 @@ export async function submitOrUpdateDbRaffleEntry(
 
     const entryId = `entry-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const result = await sql`
-      INSERT INTO raffle_entries (id, raffle_id, raffle_title, category, full_name, device_id)
-      VALUES (${entryId}, ${actualRaffleId}, ${actualTitle}, ${actualCategory}, ${trimmed}, ${deviceId || null})
-      RETURNING id, raffle_id, raffle_title, category, full_name, prize_won, created_at;
+      INSERT INTO raffle_entries (id, raffle_id, raffle_title, category, full_name, device_id, ip_address)
+      VALUES (${entryId}, ${actualRaffleId}, ${actualTitle}, ${actualCategory}, ${trimmed}, ${deviceId || null}, ${clientIp || null})
+      RETURNING id, raffle_id, raffle_title, category, full_name, device_id, ip_address, prize_won, created_at;
     `;
 
     if (result && result.length > 0) {
@@ -594,6 +638,8 @@ export async function submitOrUpdateDbRaffleEntry(
           raffleTitle: e.raffle_title || actualTitle,
           category: e.category || actualCategory,
           fullName: e.full_name,
+          deviceId: e.device_id || deviceId || undefined,
+          ipAddress: e.ip_address || clientIp || undefined,
           prizeWon: e.prize_won || null,
           createdAt: e.created_at ? new Date(e.created_at).toISOString() : new Date().toISOString(),
         },

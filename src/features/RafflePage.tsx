@@ -57,7 +57,13 @@ interface RaffleResponse {
   entriesCount: number;
   winners: { id: string; fullName: string; prizeWon: string }[];
   entries: RaffleEntryPublic[];
-  myEntry: { id: string; fullName: string; prizeWon?: string | null; createdAt?: string } | null;
+  myEntry: {
+    id: string;
+    fullName: string;
+    prizeWon?: string | null;
+    createdAt?: string;
+    deviceId?: string;
+  } | null;
   archives?: RaffleArchiveSummary[];
   branding?: RaffleBranding;
 }
@@ -89,6 +95,9 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
       setData(json);
       if (json.myEntry) {
         setEditName(json.myEntry.fullName);
+        if (json.myEntry.deviceId) {
+          localStorage.setItem("ch_raffle_device_id", json.myEntry.deviceId);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -301,7 +310,7 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
 
             <span className="ch-ribbon-views">
               <ShieldCheck size={13} />
-              <span>1 entry per device</span>
+              <span>1 entry per device & IP</span>
             </span>
           </div>
         </div>
@@ -413,15 +422,6 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                         })}
                       </div>
                     </div>
-
-                    {data.cutoffDate && (
-                      <div className="raffle-prizes-bar-deadline">
-                        <Clock size={12} style={{ color: "#facc15", flexShrink: 0 }} />
-                        <span>
-                          Deadline: <strong>{formatDeadline(data.cutoffDate)}</strong>
-                        </span>
-                      </div>
-                    )}
                   </div>
                 );
               })()}
@@ -470,7 +470,7 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                     </strong>
                   </div>
                   <span style={{ fontSize: 11.5, color: "#94a3b8" }}>
-                    1 entry per device
+                    1 entry per device & IP
                   </span>
                 </div>
 
@@ -579,7 +579,7 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                     <div className="raffle-human-hint">
                       <ShieldCheck size={14} style={{ color: "#34d399", flexShrink: 0 }} />
                       <span>
-                        No account needed. We save your device so you can update your name anytime before the deadline.
+                        No account needed. Protected by device & IP anti-duplicate verification.
                       </span>
                     </div>
                   </form>

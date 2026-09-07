@@ -2336,7 +2336,7 @@ export function Admin() {
                               <div>
                                 <h3>Registered Participants ({raffleData?.entries?.length || 0})</h3>
                                 <small>
-                                  {raffleData?.entries?.filter((e) => Boolean(e.prizeWon)).length || 0} assigned winners · 1 entry per device
+                                  {raffleData?.entries?.filter((e) => Boolean(e.prizeWon)).length || 0} assigned winners · 1 entry per device & IP
                                 </small>
                               </div>
                             </div>
