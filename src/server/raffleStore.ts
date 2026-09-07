@@ -14,15 +14,19 @@ import {
   unarchiveDbRaffle,
   updateDbArchivedRaffle,
 } from "@/server/db";
-import type { RaffleData, RaffleEntry, RaffleArchiveSummary } from "@/types";
+import type { RaffleData, RaffleEntry, RaffleArchiveSummary, RafflePrizeItem } from "@/types";
 
 const DEFAULT_RAFFLE: RaffleData = {
   id: "default",
   title: "Community Heroes Grand Raffle",
+  category: "Diamonds Giveaway",
   description:
     "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.",
   cutoffDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-  prizes: ["Starlight Card", "100 Diamonds", "100 Diamonds", "50 Diamonds"],
+  prizes: [
+    { name: "100 Diamonds", winnerCount: 5 },
+    { name: "Starlight Card", winnerCount: 1 },
+  ],
   isActive: true,
   entries: [],
 };
@@ -78,16 +82,31 @@ export async function getRaffleState(raffleId = "default"): Promise<RaffleData> 
 export async function updateRaffleSettings(data: {
   id?: string;
   title: string;
+  category?: string;
   description: string;
   cutoffDate: string;
-  prizes: string[];
+  prizes: (string | RafflePrizeItem)[];
   isActive?: boolean;
 }): Promise<RaffleData> {
-  const raffleId = data.id || "default";
+  // If id is not specified or "default", try to resolve it to the active raffle id
+  let targetId = data.id;
+  if (!targetId || targetId === "default" || targetId === "latest") {
+    try {
+      const active = await getRaffleState("latest");
+      if (active?.id) {
+        targetId = active.id;
+      }
+    } catch {}
+  }
+
+  const payload = {
+    ...data,
+    id: targetId || "default",
+  };
 
   // 1. Try Neon DB
   try {
-    const updated = await writeDbRaffleSettings(data);
+    const updated = await writeDbRaffleSettings(payload);
     if (updated) {
       void writeLocalRaffle(updated);
       return updated;
@@ -100,7 +119,9 @@ export async function updateRaffleSettings(data: {
   const local = await readLocalRaffle();
   const merged: RaffleData = {
     ...local,
+    id: targetId || local.id,
     title: data.title,
+    category: data.category || local.category || "Diamonds Giveaway",
     description: data.description,
     cutoffDate: data.cutoffDate,
     prizes: data.prizes,
@@ -170,6 +191,9 @@ export async function submitRaffleEntry(
 
   const newEntry: RaffleEntry = {
     id: `entry-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    raffleId: local.id,
+    raffleTitle: local.title,
+    category: local.category || "Diamonds Giveaway",
     fullName: trimmed,
     deviceId,
     createdAt: new Date().toISOString(),
@@ -273,7 +297,13 @@ export async function getArchivedRaffles(): Promise<RaffleArchiveSummary[]> {
 
 export async function archiveCurrentRaffle(
   raffleId = "default",
-  newSettings?: { title?: string; description?: string; cutoffDate?: string; prizes?: string[] },
+  newSettings?: {
+    title?: string;
+    category?: string;
+    description?: string;
+    cutoffDate?: string;
+    prizes?: (string | RafflePrizeItem)[];
+  },
 ): Promise<{ success: boolean; newRaffle?: RaffleData }> {
   try {
     const current = await getRaffleState(raffleId);
@@ -290,6 +320,7 @@ export async function archiveCurrentRaffle(
     const archiveItem: RaffleArchiveSummary = {
       id: current.id,
       title: current.title,
+      category: current.category || "Diamonds Giveaway",
       description: current.description,
       cutoffDate: current.cutoffDate,
       prizes: current.prizes,
@@ -304,6 +335,7 @@ export async function archiveCurrentRaffle(
 
     // 3. Create next active raffle edition
     const nextTitle = newSettings?.title || "Community Heroes Grand Raffle";
+    const nextCategory = newSettings?.category || current.category || "Diamonds Giveaway";
     const nextDesc =
       newSettings?.description ||
       "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.";
@@ -314,10 +346,11 @@ export async function archiveCurrentRaffle(
         ? newSettings.prizes
         : current.prizes && current.prizes.length > 0
           ? current.prizes
-          : ["Starlight Card", "100 Diamonds", "100 Diamonds", "50 Diamonds"];
+          : [{ name: "100 Diamonds", winnerCount: 5 }, { name: "Starlight Card", winnerCount: 1 }];
 
     let newRaffle: RaffleData | null = await createDbNewRaffle({
       title: nextTitle,
+      category: nextCategory,
       description: nextDesc,
       cutoffDate: nextCutoff,
       prizes: nextPrizes,
@@ -328,6 +361,7 @@ export async function archiveCurrentRaffle(
       newRaffle = {
         id: `raffle-${Date.now()}`,
         title: nextTitle,
+        category: nextCategory,
         description: nextDesc,
         cutoffDate: nextCutoff,
         prizes: nextPrizes,
@@ -349,9 +383,10 @@ export async function archiveCurrentRaffle(
 
 export async function createNewRaffle(data: {
   title: string;
+  category?: string;
   description: string;
   cutoffDate: string;
-  prizes: string[];
+  prizes: (string | RafflePrizeItem)[];
   isActive?: boolean;
 }): Promise<RaffleData | null> {
   try {
@@ -368,6 +403,7 @@ export async function createNewRaffle(data: {
   const fallback: RaffleData = {
     id: `raffle-${Date.now()}`,
     title: data.title,
+    category: data.category || "Diamonds Giveaway",
     description: data.description,
     cutoffDate: data.cutoffDate,
     prizes: data.prizes,
@@ -382,14 +418,20 @@ export async function createNewRaffle(data: {
 }
 
 export async function deleteRaffle(
-  raffleId: string,
+  raffleId?: string,
 ): Promise<{ success: boolean; nextRaffle?: RaffleData }> {
   try {
-    await deleteDbRaffle(raffleId);
+    let targetId = raffleId;
+    if (!targetId || targetId === "latest") {
+      const current = await getRaffleState("latest");
+      targetId = current?.id || "default";
+    }
+
+    await deleteDbRaffle(targetId);
 
     // Also remove from local archives if present
     const localArchives = await readLocalArchives();
-    await writeLocalArchives(localArchives.filter((a) => a.id !== raffleId));
+    await writeLocalArchives(localArchives.filter((a) => a.id !== targetId));
 
     // Get remaining active raffle or create default
     const next = await getRaffleState("latest");

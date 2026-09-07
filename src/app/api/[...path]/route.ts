@@ -73,6 +73,7 @@ export async function GET(request: Request, context: Context) {
       return json({
         id: raffle.id,
         title: raffle.title,
+        category: raffle.category || "Diamonds Giveaway",
         description: raffle.description,
         cutoffDate: raffle.cutoffDate,
         prizes: raffle.prizes,
@@ -85,6 +86,9 @@ export async function GET(request: Request, context: Context) {
           .map((e) => ({ id: e.id, fullName: e.fullName, prizeWon: e.prizeWon })),
         entries: raffle.entries.map((e) => ({
           id: e.id,
+          raffleId: e.raffleId || raffle.id,
+          raffleTitle: e.raffleTitle || raffle.title,
+          category: e.category || raffle.category || "Diamonds Giveaway",
           fullName: e.fullName,
           prizeWon: e.prizeWon || null,
           createdAt: e.createdAt,
@@ -381,7 +385,7 @@ export async function POST(request: Request, context: Context) {
       return json(await syncSpreadsheetBackground());
     }
     if (route === "raffle/join") {
-      const body = (await request.json()) as { fullName?: string; deviceId?: string };
+      const body = (await request.json()) as { fullName?: string; deviceId?: string; raffleId?: string };
       const fullName = (body.fullName || "").trim();
       if (!fullName) {
         return json({ error: "Please enter your full name." }, 400);
@@ -394,7 +398,7 @@ export async function POST(request: Request, context: Context) {
         : body.deviceId || `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       const { submitRaffleEntry } = await import("@/server/raffleStore");
-      const res = await submitRaffleEntry("default", fullName, deviceId);
+      const res = await submitRaffleEntry(body.raffleId || "default", fullName, deviceId);
 
       if (!res.success) {
         return json({ error: res.error || "Could not join raffle." }, 400);
@@ -404,11 +408,16 @@ export async function POST(request: Request, context: Context) {
         success: true,
         updated: res.updated,
         deviceId,
-        entry: {
-          id: res.entry?.id,
-          fullName: res.entry?.fullName,
-          prizeWon: res.entry?.prizeWon || null,
-        },
+        entry: res.entry
+          ? {
+              id: res.entry.id,
+              raffleId: res.entry.raffleId,
+              raffleTitle: res.entry.raffleTitle,
+              category: res.entry.category,
+              fullName: res.entry.fullName,
+              prizeWon: res.entry.prizeWon || null,
+            }
+          : null,
       });
 
       response.cookies.set("ch_raffle_device", deviceId, {
@@ -489,11 +498,14 @@ export async function POST(request: Request, context: Context) {
       } = await import("@/server/raffleStore");
 
       if (body.action === "update-settings") {
+        const targetId = body.raffleId || body.id;
         const updated = await updateRaffleSettings({
+          id: targetId,
           title: String(body.title || "Community Heroes Grand Raffle"),
+          category: body.category ? String(body.category) : undefined,
           description: String(body.description || ""),
           cutoffDate: String(body.cutoffDate || ""),
-          prizes: Array.isArray(body.prizes) ? body.prizes.map(String) : [],
+          prizes: Array.isArray(body.prizes) ? body.prizes : [],
           isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
         });
         return json({ success: true, raffle: updated });
@@ -502,20 +514,20 @@ export async function POST(request: Request, context: Context) {
       if (body.action === "assign-winner") {
         if (!body.entryId) return json({ error: "Missing entryId." }, 400);
         await setRaffleWinner(body.entryId, body.prizeWon || null);
-        const raffle = await getRaffleState();
+        const raffle = await getRaffleState(body.raffleId || "latest");
         return json({ success: true, raffle });
       }
 
       if (body.action === "delete-entry") {
         if (!body.entryId) return json({ error: "Missing entryId." }, 400);
         await removeRaffleEntry(body.entryId);
-        const raffle = await getRaffleState();
+        const raffle = await getRaffleState(body.raffleId || "latest");
         return json({ success: true, raffle });
       }
 
       if (body.action === "clear-entries") {
-        await clearAllRaffleEntries();
-        const raffle = await getRaffleState();
+        await clearAllRaffleEntries(body.raffleId || "default");
+        const raffle = await getRaffleState(body.raffleId || "latest");
         return json({ success: true, raffle });
       }
 
@@ -523,9 +535,15 @@ export async function POST(request: Request, context: Context) {
         const { createNewRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
         const created = await createNewRaffle({
           title: String(body.title || "Community Heroes Grand Raffle"),
+          category: body.category ? String(body.category) : "Diamonds Giveaway",
           description: String(body.description || ""),
           cutoffDate: String(body.cutoffDate || new Date(Date.now() + 14 * 86400000).toISOString()),
-          prizes: Array.isArray(body.prizes) ? body.prizes.map(String) : ["Starlight Card", "100 Diamonds"],
+          prizes: Array.isArray(body.prizes)
+            ? body.prizes
+            : [
+                { name: "100 Diamonds", winnerCount: 5 },
+                { name: "Starlight Card", winnerCount: 1 },
+              ],
           isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
         });
         const archives = await getArchivedRaffles();
@@ -534,7 +552,7 @@ export async function POST(request: Request, context: Context) {
 
       if (body.action === "delete-raffle") {
         const { deleteRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
-        const res = await deleteRaffle(body.raffleId || "default");
+        const res = await deleteRaffle(body.raffleId);
         const archives = await getArchivedRaffles();
         return json({ success: true, raffle: res.nextRaffle, archives });
       }
@@ -573,7 +591,7 @@ export async function POST(request: Request, context: Context) {
         const { submitRaffleEntry, getRaffleState } = await import("@/server/raffleStore");
         const res = await submitRaffleEntry(body.raffleId || "default", fullName);
         if (!res.success) return json({ error: res.error || "Could not add entry." }, 400);
-        const raffle = await getRaffleState(body.raffleId || "default");
+        const raffle = await getRaffleState(body.raffleId || "latest");
         return json({ success: true, raffle });
       }
 
@@ -581,6 +599,7 @@ export async function POST(request: Request, context: Context) {
         const { archiveCurrentRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
         const res = await archiveCurrentRaffle(body.raffleId, {
           title: body.title,
+          category: body.category,
           description: body.description,
           cutoffDate: body.cutoffDate,
           prizes: body.prizes,

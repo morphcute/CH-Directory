@@ -9,7 +9,10 @@ import {
   clearAllRaffleEntries,
   archiveCurrentRaffle,
   getArchivedRaffles,
+  deleteRaffle,
+  deleteArchivedRaffle,
 } from "../src/server/raffleStore";
+import { normalizePrizeItems } from "../src/types";
 
 test("raffle anti-spam: same device edits name without duplicate entries", async () => {
   const raffleId = "test-raffle-antispam";
@@ -19,6 +22,7 @@ test("raffle anti-spam: same device edits name without duplicate entries", async
   await updateRaffleSettings({
     id: raffleId,
     title: "Anti-Spam Test Raffle",
+    category: "Diamonds Giveaway",
     description: "Testing anti-spam device protection",
     cutoffDate: new Date(Date.now() + 86400000).toISOString(),
     prizes: ["100 Diamonds", "Starlight Card"],
@@ -32,6 +36,8 @@ test("raffle anti-spam: same device edits name without duplicate entries", async
   assert.equal(res1.success, true);
   assert.equal(res1.updated, false);
   assert.equal(res1.entry?.fullName, "Juan Dela Cruz");
+  assert.equal(res1.entry?.category, "Diamonds Giveaway");
+  assert.equal(res1.entry?.raffleTitle, "Anti-Spam Test Raffle");
 
   // 2. Same device submits an updated name (edit mode)
   const res2 = await submitRaffleEntry(raffleId, "Juan M. Dela Cruz", deviceId);
@@ -44,6 +50,8 @@ test("raffle anti-spam: same device edits name without duplicate entries", async
   const deviceEntries = state.entries.filter((e) => e.deviceId === deviceId || e.fullName.includes("Juan"));
   assert.equal(deviceEntries.length, 1);
   assert.equal(deviceEntries[0].fullName, "Juan M. Dela Cruz");
+
+  await deleteRaffle(raffleId);
 });
 
 test("raffle duplicate name prevention: different device cannot submit exact same full name", async () => {
@@ -69,6 +77,8 @@ test("raffle duplicate name prevention: different device cannot submit exact sam
   const resB = await submitRaffleEntry(raffleId, "  pedro penduko  ", devB);
   assert.equal(resB.success, false);
   assert.match(resB.error || "", /already registered/i);
+
+  await deleteRaffle(raffleId);
 });
 
 test("raffle cut-off deadline: submissions and edits are blocked when deadline passes", async () => {
@@ -88,6 +98,8 @@ test("raffle cut-off deadline: submissions and edits are blocked when deadline p
   const res = await submitRaffleEntry(raffleId, "Late Hero", "device-late");
   assert.equal(res.success, false);
   assert.match(res.error || "", /cut-off date/i);
+
+  await deleteRaffle(raffleId);
 });
 
 test("raffle winner assignment: admin can assign and remove prizes for winners", async () => {
@@ -122,6 +134,8 @@ test("raffle winner assignment: admin can assign and remove prizes for winners",
   state = await getRaffleState(raffleId);
   matched = state.entries.find((e) => e.id === entryId);
   assert.equal(matched?.prizeWon, null);
+
+  await deleteRaffle(raffleId);
 });
 
 test("raffle archive: completed raffle is moved to archive with winners and new edition starts", async () => {
@@ -157,5 +171,54 @@ test("raffle archive: completed raffle is moved to archive with winners and new 
     assert.equal(archived.winners[0].fullName, "Champion Player");
     assert.equal(archived.winners[0].prizeWon, "Starlight Card");
   }
+
+  // Cleanup newly created edition & archived raffle
+  if (archiveRes.newRaffle) {
+    await deleteRaffle(archiveRes.newRaffle.id);
+  }
+  await deleteArchivedRaffle(raffleId);
+});
+
+test("raffle winner quotas: supports setting 100 Diamonds with multiple winner count and tracking quota", async () => {
+  const raffleId = "test-raffle-quota";
+  await clearAllRaffleEntries(raffleId);
+
+  // Setup raffle with 100 Diamonds for 3 winners
+  await updateRaffleSettings({
+    id: raffleId,
+    title: "Diamond Fest",
+    category: "Diamonds Giveaway",
+    description: "Win 100 diamonds! 3 winners will be chosen.",
+    cutoffDate: new Date(Date.now() + 86400000).toISOString(),
+    prizes: [{ name: "100 Diamonds", winnerCount: 3 }],
+    isActive: true,
+  });
+
+  const e1 = await submitRaffleEntry(raffleId, "Winner One", "dev-q1");
+  const e2 = await submitRaffleEntry(raffleId, "Winner Two", "dev-q2");
+  const e3 = await submitRaffleEntry(raffleId, "Winner Three", "dev-q3");
+  const e4 = await submitRaffleEntry(raffleId, "Contestant Four", "dev-q4");
+
+  assert.equal(e1.success, true);
+  assert.equal(e1.entry?.category, "Diamonds Giveaway");
+  assert.equal(e1.entry?.raffleTitle, "Diamond Fest");
+
+  // Assign 100 Diamonds to e1 and e2
+  await setRaffleWinner(e1.entry!.id, "100 Diamonds");
+  await setRaffleWinner(e2.entry!.id, "100 Diamonds");
+
+  const state = await getRaffleState(raffleId);
+  const normalized = normalizePrizeItems(state.prizes);
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].name, "100 Diamonds");
+  assert.equal(normalized[0].winnerCount, 3);
+
+  const awardedCount = state.entries.filter((e) => e.prizeWon === "100 Diamonds").length;
+  assert.equal(awardedCount, 2);
+  const remainingQuota = normalized[0].winnerCount - awardedCount;
+  assert.equal(remainingQuota, 1);
+
+  // Cleanup
+  await deleteRaffle(raffleId);
 });
 

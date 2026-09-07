@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { Footer } from "./shared";
 import { MlbbDiamondIcon } from "./MlbbDiamondIcon";
-import type { RaffleArchiveSummary } from "@/types";
+import { normalizePrizeItems, type RaffleArchiveSummary, type RafflePrizeItem } from "@/types";
 
 interface RaffleEntryPublic {
   id: string;
@@ -34,9 +34,10 @@ interface RaffleEntryPublic {
 interface RaffleResponse {
   id: string;
   title: string;
+  category?: string;
   description: string;
   cutoffDate: string;
-  prizes: string[];
+  prizes: (string | RafflePrizeItem)[];
   isActive: boolean;
   isEnded: boolean;
   entriesCount: number;
@@ -318,38 +319,60 @@ export function RafflePage() {
           ) : (
             <div className="raffle-human-container">
               {/* Prize Pool Shelf */}
-              {Array.isArray(data.prizes) && data.prizes.length > 0 && (
-                <div className="raffle-human-card">
-                  <div className="raffle-human-card-head">
-                    <div className="raffle-human-card-title">
-                      <Gift size={16} style={{ color: "#facc15" }} />
-                      <strong>Giveaway Prizes ({data.prizes.length})</strong>
+              {(() => {
+                const normalizedPrizes = normalizePrizeItems(data.prizes);
+                if (normalizedPrizes.length === 0) return null;
+                const totalWinners = normalizedPrizes.reduce((acc, p) => acc + p.winnerCount, 0);
+                return (
+                  <div className="raffle-human-card">
+                    <div className="raffle-human-card-head">
+                      <div className="raffle-human-card-title">
+                        <Gift size={16} style={{ color: "#facc15" }} />
+                        <strong>
+                          Giveaway Prizes ({normalizedPrizes.length} {normalizedPrizes.length === 1 ? "Tier" : "Tiers"} · {totalWinners} {totalWinners === 1 ? "Winner" : "Winners"})
+                        </strong>
+                      </div>
+                      <span className="raffle-human-deadline">
+                        Deadline: {formatDeadline(data.cutoffDate)}
+                      </span>
                     </div>
-                    <span className="raffle-human-deadline">
-                      Deadline: {formatDeadline(data.cutoffDate)}
-                    </span>
-                  </div>
 
-                  <div className="raffle-human-prizes-grid">
-                    {data.prizes.map((prize, idx) => {
-                      const isStarlight = /starlight/i.test(prize);
-                      const isDiamond = /diamond/i.test(prize);
-                      return (
-                        <div key={idx} className="raffle-human-prize-pill">
-                          {isStarlight ? (
-                            <Crown size={16} style={{ color: "#facc15" }} />
-                          ) : isDiamond ? (
-                            <MlbbDiamondIcon size={16} />
-                          ) : (
-                            <Gift size={16} style={{ color: "#38bdf8" }} />
-                          )}
-                          <span className="raffle-human-prize-name">{prize}</span>
-                        </div>
-                      );
-                    })}
+                    <div className="raffle-human-prizes-grid">
+                      {normalizedPrizes.map((prize, idx) => {
+                        const isStarlight = /starlight/i.test(prize.name);
+                        const isDiamond = /diamond/i.test(prize.name);
+                        return (
+                          <div key={prize.id || idx} className="raffle-human-prize-pill">
+                            {isStarlight ? (
+                              <Crown size={16} style={{ color: "#facc15" }} />
+                            ) : isDiamond ? (
+                              <MlbbDiamondIcon size={16} />
+                            ) : (
+                              <Gift size={16} style={{ color: "#38bdf8" }} />
+                            )}
+                            <span className="raffle-human-prize-name">
+                              {prize.name}
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  fontSize: 11,
+                                  background: prize.winnerCount > 1 ? "rgba(56,189,248,0.18)" : "rgba(255,255,255,0.08)",
+                                  color: prize.winnerCount > 1 ? "#38bdf8" : "#cbd5e1",
+                                  padding: "2px 7px",
+                                  borderRadius: 4,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                × {prize.winnerCount} {prize.winnerCount === 1 ? "Winner" : "Winners"}
+                              </span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Official Winners (if winners already assigned in this latest raffle) */}
               {data.winners && data.winners.length > 0 && (
@@ -653,9 +676,14 @@ export function RafflePage() {
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                           Prizes:
                         </span>
-                        {arch.prizes.map((pz, pIdx) => (
-                          <span key={pIdx} className="raffle-archive-prize-chip">
-                            {pz}
+                        {normalizePrizeItems(arch.prizes).map((pz, pIdx) => (
+                          <span key={pz.id || pIdx} className="raffle-archive-prize-chip">
+                            {pz.name}
+                            {pz.winnerCount > 1 && (
+                              <span style={{ marginLeft: 4, opacity: 0.8, fontWeight: 700 }}>
+                                (×{pz.winnerCount})
+                              </span>
+                            )}
                           </span>
                         ))}
                       </div>

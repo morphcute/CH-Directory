@@ -97,20 +97,58 @@ export interface AdminConfig {
   headerBackground: HeaderBackgroundConfig;
 }
 
+export interface RafflePrizeItem {
+  id?: string;
+  name: string;
+  winnerCount: number;
+}
+
+export function normalizePrizeItems(prizes?: (string | RafflePrizeItem)[] | null): RafflePrizeItem[] {
+  if (!Array.isArray(prizes)) return [];
+  return prizes
+    .map((p, idx) => {
+      if (typeof p === "string") {
+        const trimmed = p.trim();
+        const leading = trimmed.match(/^(\d+)\s*[xX×]\s*(.+)$/);
+        if (leading) {
+          return { id: `pz-${idx}`, name: leading[2].trim(), winnerCount: parseInt(leading[1], 10) || 1 };
+        }
+        const trailing = trimmed.match(/^(.+?)\s*\((\d+)\s*[xX×]?\s*(?:winners)?\)$/i);
+        if (trailing) {
+          return { id: `pz-${idx}`, name: trailing[1].trim(), winnerCount: parseInt(trailing[2], 10) || 1 };
+        }
+        return { id: `pz-${idx}`, name: trimmed, winnerCount: 1 };
+      }
+      if (typeof p === "object" && p !== null) {
+        return {
+          id: p.id || `pz-${idx}`,
+          name: String(p.name || "").trim(),
+          winnerCount: Math.max(1, Number(p.winnerCount) || 1),
+        };
+      }
+      return { id: `pz-${idx}`, name: String(p).trim(), winnerCount: 1 };
+    })
+    .filter((p) => Boolean(p.name));
+}
+
 export interface RaffleEntry {
   id: string;
   fullName: string;
   prizeWon?: string | null;
   deviceId?: string;
+  raffleId?: string;
+  raffleTitle?: string;
+  category?: string;
   createdAt: string;
 }
 
 export interface RaffleData {
   id: string;
   title: string;
+  category?: string;
   description: string;
   cutoffDate: string; // ISO date or date string
-  prizes: string[]; // e.g. ["Starlight", "100 Diamonds", "50 Diamonds"]
+  prizes: (string | RafflePrizeItem)[];
   isActive: boolean;
   isArchived?: boolean;
   entries: RaffleEntry[];
@@ -121,9 +159,10 @@ export interface RaffleData {
 export interface RaffleArchiveSummary {
   id: string;
   title: string;
+  category?: string;
   description: string;
   cutoffDate: string;
-  prizes: string[];
+  prizes: (string | RafflePrizeItem)[];
   createdAt: string;
   entriesCount: number;
   winners: { id: string; fullName: string; prizeWon: string }[];

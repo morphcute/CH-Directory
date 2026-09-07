@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import type { AppState, RaffleData, RaffleArchiveSummary } from "@/types";
+import type { AppState, RaffleData, RaffleArchiveSummary, RafflePrizeItem } from "@/types";
 
 const NEON_DEFAULT_URL =
   "postgresql://neondb_owner:npg_sf48HAgKjVFW@ep-purple-sky-b3f8vspb-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
@@ -139,6 +139,9 @@ async function ensureRaffleTables(sql: any) {
     await sql`ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`;
     await sql`ALTER TABLE raffles ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;`;
     await sql`ALTER TABLE raffles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`;
+    await sql`ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS raffle_title VARCHAR(255);`;
+    await sql`ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS category VARCHAR(100);`;
+    await sql`ALTER TABLE raffles ADD COLUMN IF NOT EXISTS category VARCHAR(100);`;
     raffleTablesInitialized = true;
   } catch (err) {
     console.error("Failed to ensure raffle tables:", err);
@@ -155,7 +158,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
     if (raffleId === "default" || raffleId === "latest") {
       // Find the most recent unarchived raffle
       raffleRows = await sql`
-        SELECT id, title, description, cutoff_date, prizes, is_active, is_archived, created_at, updated_at
+        SELECT id, title, category, description, cutoff_date, prizes, is_active, is_archived, created_at, updated_at
         FROM raffles
         WHERE is_archived = false
         ORDER BY created_at DESC
@@ -163,7 +166,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
       `;
     } else {
       raffleRows = await sql`
-        SELECT id, title, description, cutoff_date, prizes, is_active, is_archived, created_at, updated_at
+        SELECT id, title, category, description, cutoff_date, prizes, is_active, is_archived, created_at, updated_at
         FROM raffles
         WHERE id = ${raffleId}
         LIMIT 1;
@@ -174,12 +177,16 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
       // Initialize default raffle
       const newId = raffleId === "default" || raffleId === "latest" ? "default" : raffleId;
       const defaultCutoff = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      const defaultPrizes = ["Starlight Card", "100 Diamonds", "100 Diamonds", "50 Diamonds"];
+      const defaultPrizes = [
+        { name: "100 Diamonds", winnerCount: 5 },
+        { name: "Starlight Card", winnerCount: 1 },
+      ];
       await sql`
-        INSERT INTO raffles (id, title, description, cutoff_date, prizes, is_active, is_archived)
+        INSERT INTO raffles (id, title, category, description, cutoff_date, prizes, is_active, is_archived)
         VALUES (
           ${newId},
           'Community Heroes Grand Raffle',
+          'Diamonds Giveaway',
           'Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.',
           ${defaultCutoff},
           ${JSON.stringify(defaultPrizes)}::jsonb,
@@ -191,6 +198,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
       return {
         id: newId,
         title: "Community Heroes Grand Raffle",
+        category: "Diamonds Giveaway",
         description:
           "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.",
         cutoffDate: defaultCutoff,
@@ -205,7 +213,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
 
     const r = raffleRows[0];
     const entryRows = await sql`
-      SELECT id, full_name, device_id, prize_won, created_at, updated_at
+      SELECT id, raffle_id, raffle_title, category, full_name, device_id, prize_won, created_at, updated_at
       FROM raffle_entries
       WHERE raffle_id = ${r.id}
       ORDER BY created_at ASC;
@@ -214,6 +222,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
     return {
       id: r.id,
       title: r.title,
+      category: r.category || "Diamonds Giveaway",
       description: r.description,
       cutoffDate: r.cutoff_date ? new Date(r.cutoff_date).toISOString() : "",
       prizes: Array.isArray(r.prizes) ? r.prizes : [],
@@ -221,6 +230,9 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
       isArchived: Boolean(r.is_archived),
       entries: entryRows.map((entry: any) => ({
         id: entry.id,
+        raffleId: entry.raffle_id || r.id,
+        raffleTitle: entry.raffle_title || r.title,
+        category: entry.category || r.category || "Diamonds Giveaway",
         fullName: entry.full_name,
         deviceId: entry.device_id || undefined,
         prizeWon: entry.prize_won || null,
@@ -350,9 +362,10 @@ export async function deleteDbRaffle(raffleId: string) {
 
 export async function createDbNewRaffle(data: {
   title: string;
+  category?: string;
   description: string;
   cutoffDate: string;
-  prizes: string[];
+  prizes: (string | RafflePrizeItem)[];
   isActive?: boolean;
 }) {
   const sql = getSql();
@@ -361,10 +374,11 @@ export async function createDbNewRaffle(data: {
   try {
     await ensureRaffleTables(sql);
     await sql`
-      INSERT INTO raffles (id, title, description, cutoff_date, prizes, is_active, is_archived, created_at, updated_at)
+      INSERT INTO raffles (id, title, category, description, cutoff_date, prizes, is_active, is_archived, created_at, updated_at)
       VALUES (
         ${newId},
         ${data.title},
+        ${data.category || "Diamonds Giveaway"},
         ${data.description},
         ${data.cutoffDate ? new Date(data.cutoffDate) : null},
         ${JSON.stringify(data.prizes)}::jsonb,
@@ -384,21 +398,39 @@ export async function createDbNewRaffle(data: {
 export async function writeDbRaffleSettings(data: {
   id?: string;
   title: string;
+  category?: string;
   description: string;
   cutoffDate: string;
-  prizes: string[];
+  prizes: (string | RafflePrizeItem)[];
   isActive?: boolean;
 }) {
   const sql = getSql();
   if (!sql) return null;
-  const raffleId = data.id || "default";
+  let raffleId = data.id;
+  if (!raffleId || raffleId === "latest" || raffleId === "default") {
+    try {
+      await ensureRaffleTables(sql);
+      const activeRows = await sql`
+        SELECT id FROM raffles WHERE is_archived = false ORDER BY created_at DESC LIMIT 1;
+      `;
+      if (activeRows && activeRows.length > 0) {
+        raffleId = activeRows[0].id;
+      } else {
+        raffleId = "default";
+      }
+    } catch {
+      raffleId = "default";
+    }
+  }
+
   try {
     await ensureRaffleTables(sql);
     await sql`
-      INSERT INTO raffles (id, title, description, cutoff_date, prizes, is_active, is_archived, updated_at)
+      INSERT INTO raffles (id, title, category, description, cutoff_date, prizes, is_active, is_archived, updated_at)
       VALUES (
         ${raffleId},
         ${data.title},
+        ${data.category || "Diamonds Giveaway"},
         ${data.description},
         ${data.cutoffDate ? new Date(data.cutoffDate) : null},
         ${JSON.stringify(data.prizes)}::jsonb,
@@ -409,6 +441,7 @@ export async function writeDbRaffleSettings(data: {
       ON CONFLICT (id) DO UPDATE
       SET
         title = EXCLUDED.title,
+        category = EXCLUDED.category,
         description = EXCLUDED.description,
         cutoff_date = EXCLUDED.cutoff_date,
         prizes = EXCLUDED.prizes,
@@ -436,14 +469,24 @@ export async function submitOrUpdateDbRaffleEntry(
   try {
     await ensureRaffleTables(sql);
 
-    // 1. Check raffle status & cut-off date
-    const raffleRows = await sql`
-      SELECT cutoff_date, is_active FROM raffles WHERE id = ${raffleId} LIMIT 1;
-    `;
+    // 1. Check raffle status & cut-off date, and resolve actual raffleId/title/category
+    let raffleRows;
+    if (raffleId === "default" || raffleId === "latest") {
+      raffleRows = await sql`
+        SELECT id, title, category, cutoff_date, is_active FROM raffles WHERE is_archived = false ORDER BY created_at DESC LIMIT 1;
+      `;
+    } else {
+      raffleRows = await sql`
+        SELECT id, title, category, cutoff_date, is_active FROM raffles WHERE id = ${raffleId} LIMIT 1;
+      `;
+    }
+
     if (!raffleRows || raffleRows.length === 0) {
       return { success: false, error: "Raffle not found." };
     }
-    const { cutoff_date, is_active } = raffleRows[0];
+    const { id: actualRaffleId, title: actualTitle, category: rawCategory, cutoff_date, is_active } = raffleRows[0];
+    const actualCategory = rawCategory || "Diamonds Giveaway";
+
     if (!is_active) {
       return { success: false, error: "This raffle is currently inactive." };
     }
@@ -457,9 +500,9 @@ export async function submitOrUpdateDbRaffleEntry(
     // 2. If deviceId is provided, check if this device already has an entry
     if (deviceId) {
       const deviceEntry = await sql`
-        SELECT id, full_name, prize_won, created_at
+        SELECT id, raffle_id, raffle_title, category, full_name, prize_won, created_at
         FROM raffle_entries
-        WHERE raffle_id = ${raffleId} AND device_id = ${deviceId}
+        WHERE raffle_id = ${actualRaffleId} AND device_id = ${deviceId}
         LIMIT 1;
       `;
 
@@ -468,9 +511,9 @@ export async function submitOrUpdateDbRaffleEntry(
         const existingEntryId = deviceEntry[0].id;
         const updateRes = await sql`
           UPDATE raffle_entries
-          SET full_name = ${trimmed}, updated_at = CURRENT_TIMESTAMP
+          SET full_name = ${trimmed}, raffle_title = ${actualTitle}, category = ${actualCategory}, updated_at = CURRENT_TIMESTAMP
           WHERE id = ${existingEntryId}
-          RETURNING id, full_name, prize_won, created_at;
+          RETURNING id, raffle_id, raffle_title, category, full_name, prize_won, created_at;
         `;
         const u = updateRes[0];
         return {
@@ -478,6 +521,9 @@ export async function submitOrUpdateDbRaffleEntry(
           updated: true,
           entry: {
             id: u.id,
+            raffleId: u.raffle_id || actualRaffleId,
+            raffleTitle: u.raffle_title || actualTitle,
+            category: u.category || actualCategory,
             fullName: u.full_name,
             prizeWon: u.prize_won || null,
             createdAt: u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
@@ -489,7 +535,7 @@ export async function submitOrUpdateDbRaffleEntry(
     // 3. Prevent duplicate full names (case-insensitive)
     const existingName = await sql`
       SELECT id FROM raffle_entries
-      WHERE raffle_id = ${raffleId} AND LOWER(TRIM(full_name)) = LOWER(${trimmed})
+      WHERE raffle_id = ${actualRaffleId} AND LOWER(TRIM(full_name)) = LOWER(${trimmed})
       LIMIT 1;
     `;
     if (existingName && existingName.length > 0) {
@@ -499,12 +545,12 @@ export async function submitOrUpdateDbRaffleEntry(
       };
     }
 
-    // 4. Insert new entry with deviceId
+    // 4. Insert new entry with raffle_title and category
     const entryId = `entry-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const result = await sql`
-      INSERT INTO raffle_entries (id, raffle_id, full_name, device_id)
-      VALUES (${entryId}, ${raffleId}, ${trimmed}, ${deviceId || null})
-      RETURNING id, full_name, prize_won, created_at;
+      INSERT INTO raffle_entries (id, raffle_id, raffle_title, category, full_name, device_id)
+      VALUES (${entryId}, ${actualRaffleId}, ${actualTitle}, ${actualCategory}, ${trimmed}, ${deviceId || null})
+      RETURNING id, raffle_id, raffle_title, category, full_name, prize_won, created_at;
     `;
 
     if (result && result.length > 0) {
@@ -514,6 +560,9 @@ export async function submitOrUpdateDbRaffleEntry(
         updated: false,
         entry: {
           id: e.id,
+          raffleId: e.raffle_id || actualRaffleId,
+          raffleTitle: e.raffle_title || actualTitle,
+          category: e.category || actualCategory,
           fullName: e.full_name,
           prizeWon: e.prize_won || null,
           createdAt: e.created_at ? new Date(e.created_at).toISOString() : new Date().toISOString(),
