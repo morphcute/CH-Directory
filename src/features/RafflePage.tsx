@@ -473,23 +473,25 @@ export function RafflePage() {
                   <div className="raffle-human-registered-view">
                     <div className="raffle-human-registered-left">
                       <div className="raffle-human-check">
-                        <CheckCircle2 size={20} />
+                        <CheckCircle2 size={16} />
                       </div>
-                      <div>
-                        <span className="raffle-human-registered-sub">Registered name</span>
-                        <div className="raffle-human-registered-name">{data.myEntry.fullName}</div>
+                      <div className="raffle-human-registered-details">
+                        <div className="raffle-human-registered-header-row">
+                          <span className="raffle-human-registered-name">{data.myEntry.fullName}</span>
+                          <span className="raffle-human-registered-tag">Active Entry</span>
+                        </div>
                         <p className="raffle-human-registered-note">
-                          Your device is entered in the raffle. You can edit your name before the deadline.
+                          Entered with this device · You can edit your name before the deadline
                         </p>
                       </div>
                     </div>
 
                     <button
                       type="button"
-                      className="button outline small"
+                      className="raffle-human-edit-btn"
                       onClick={() => setEditing(true)}
                     >
-                      <Edit2 size={13} />
+                      <Edit2 size={12} />
                       <span>Edit Name</span>
                     </button>
                   </div>

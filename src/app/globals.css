@@ -5772,44 +5772,110 @@ textarea:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 10px;
-  padding: 16px 18px;
+  gap: 12px;
+  background: rgba(16, 185, 129, 0.07);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  border-radius: 9px;
+  padding: 10px 14px;
+  transition: all 0.2s ease;
 }
 
 .raffle-human-registered-left {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .raffle-human-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
   color: #34d399;
-  margin-top: 2px;
+  flex-shrink: 0;
 }
 
-.raffle-human-registered-sub {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: #34d399;
-  letter-spacing: 0.5px;
+.raffle-human-registered-details {
+  min-width: 0;
+}
+
+.raffle-human-registered-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .raffle-human-registered-name {
-  font-size: 18px;
+  font-size: 14.5px;
   font-weight: 700;
   color: #ffffff;
-  margin: 2px 0 4px;
+  line-height: 1.2;
+}
+
+.raffle-human-registered-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
 }
 
 .raffle-human-registered-note {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #94a3b8;
-  margin: 0;
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.raffle-human-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  color: #e2e8f0;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.raffle-human-edit-btn:hover {
+  background: #1e293b;
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+@media (max-width: 540px) {
+  .raffle-human-registered-view {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .raffle-human-registered-note {
+    white-space: normal;
+  }
+  .raffle-human-edit-btn {
+    align-self: flex-start;
+  }
 }
 
 .raffle-human-form {
