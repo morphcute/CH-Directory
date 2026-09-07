@@ -269,35 +269,10 @@ export function Portal({ initialState }: { initialState: AppState }) {
                 Community Heroes <span>{players.length}</span>
               </h2>
               <p>
-                {datePassed
-                  ? "This month's tournament already ended, see you next month!"
-                  : "Registration closes when all team slots are filled."}
+                Registration closes when all team slots are filled.
               </p>
             </div>
           </div>
-          {datePassed && (
-            <div
-              className="ch-ended-banner"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "12px 16px",
-                background: "rgba(239, 68, 68, 0.08)",
-                border: "1px solid rgba(239, 68, 68, 0.2)",
-                borderRadius: 10,
-                color: "#fca5a5",
-                fontSize: "13px",
-                fontWeight: 500,
-                marginBottom: "16px",
-              }}
-            >
-              <LockKeyhole size={16} style={{ color: "#ef4444", flexShrink: 0 }} />
-              <span>
-                This month&apos;s tournament already ended, see you next month!
-              </span>
-            </div>
-          )}
           {error && (
             <div className="feedback error" role="alert">
               {error}
@@ -481,7 +456,9 @@ export function Portal({ initialState }: { initialState: AppState }) {
               </div>
               <h3>
                 {statusFilter === "open"
-                  ? "No Open Tournament Slots"
+                  ? datePassed
+                    ? "This month's tournament already ended, see you next month!"
+                    : "No Open Tournament Slots"
                   : searchQuery
                     ? `No matches for "${searchQuery}"`
                     : "No Tournaments Found"}
@@ -489,7 +466,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
               <p>
                 {statusFilter === "open"
                   ? datePassed
-                    ? "This month's tournament already ended, see you next month!"
+                    ? "All registrations are currently closed. Registration will reopen next month."
                     : "All current Community Heroes tournament slots are fully booked or closed."
                   : searchQuery
                     ? "Try searching for a different hero nickname or city."
