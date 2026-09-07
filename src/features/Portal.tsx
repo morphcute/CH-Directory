@@ -509,7 +509,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
         <footer className="ch-footer">
           <div>MLBB PH · Community Heroes</div>
           <span>
-            (c) MORPH ·{" "}
+            © {new Date().getFullYear()}{" "}
             <a
               href="https://www.facebook.com/ohsnpitskimmm/"
               target="_blank"
@@ -518,11 +518,8 @@ export function Portal({ initialState }: { initialState: AppState }) {
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
             >
-              Facebook
+              MORPH
             </a>
-          </span>
-          <span className="ch-footer-views" title="Total directory views">
-            <Eye size={12} /> {pageViews.toLocaleString()} views
           </span>
         </footer>
       </main>
