@@ -2556,7 +2556,10 @@ export function Admin() {
                                   <button
                                     type="button"
                                     className="button primary small"
-                                    onClick={() => setWheelModalOpen(true)}
+                                    onClick={async () => {
+                                      setWheelModalOpen(true);
+                                      void loadRaffleAdmin();
+                                    }}
                                     disabled={!eligibleEntrants.length}
                                     title="Open live interactive roulette wheel to pick a winner"
                                     style={{
@@ -2608,6 +2611,7 @@ export function Admin() {
                               entries={(raffleData.entries || []) as any}
                               prizes={raffleForm.prizes}
                               defaultPrize={selectedRandomPrize}
+                              onRefresh={loadRaffleAdmin}
                               onAssignWinner={async (entryId, prizeWon) => {
                                 await handleAssignPrize(entryId, prizeWon);
                               }}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { X, Trophy, Shuffle, Sparkles, Volume2, VolumeX, CheckCircle, Gift } from "lucide-react";
+import { X, Trophy, Shuffle, Sparkles, Volume2, VolumeX, CheckCircle, Gift, RefreshCw } from "lucide-react";
 import { type RafflePrizeItem, normalizePrizeItems } from "@/types";
 
 interface RaffleWheelEntry {
@@ -17,6 +17,7 @@ interface RaffleWheelModalProps {
   prizes: (string | RafflePrizeItem)[];
   defaultPrize?: string;
   onAssignWinner: (entryId: string, prizeWon: string) => Promise<boolean | void>;
+  onRefresh?: () => Promise<void>;
 }
 
 const PALETTE = [
@@ -39,6 +40,7 @@ export function RaffleWheelModal({
   prizes,
   defaultPrize,
   onAssignWinner,
+  onRefresh,
 }: RaffleWheelModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -47,6 +49,7 @@ export function RaffleWheelModal({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filterUnassigned, setFilterUnassigned] = useState(true);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [winner, setWinner] = useState<RaffleWheelEntry | null>(null);
   const [selectedPrize, setSelectedPrize] = useState<string>(defaultPrize || "");
   const [awarding, setAwarding] = useState(false);
@@ -429,6 +432,17 @@ export function RaffleWheelModal({
     };
   }, [isOpen, eligibleEntrants.length]);
 
+  // Realtime background sync while wheel modal is open
+  useEffect(() => {
+    if (!isOpen || !onRefresh) return;
+    const interval = setInterval(() => {
+      if (!isSpinning && document.visibilityState === "visible") {
+        void onRefresh();
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isOpen, isSpinning, onRefresh]);
+
   // Handle confirming prize assignment
   const handleConfirmAward = async () => {
     if (!winner || !selectedPrize || awarding) return;
@@ -436,6 +450,9 @@ export function RaffleWheelModal({
     try {
       await onAssignWinner(winner.id, selectedPrize);
       setAwardedSuccess(true);
+      if (onRefresh) {
+        await onRefresh();
+      }
     } finally {
       setAwarding(false);
     }
@@ -459,7 +476,12 @@ export function RaffleWheelModal({
           <div className="raffle-wheel-title">
             <Trophy size={20} style={{ color: "#facc15" }} />
             <div>
-              <h3>Interactive Live Draw Wheel</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h3>Interactive Live Draw Wheel</h3>
+                <span className="raffle-wheel-live-badge">
+                  <span className="raffle-wheel-live-dot" /> LIVE SYNC
+                </span>
+              </div>
               <small>
                 {eligibleEntrants.length} eligible participants · Livestream ready
               </small>
@@ -467,6 +489,23 @@ export function RaffleWheelModal({
           </div>
 
           <div className="raffle-wheel-header-actions">
+            <button
+              type="button"
+              className="raffle-wheel-tool-btn"
+              onClick={async () => {
+                if (refreshing || isSpinning) return;
+                setRefreshing(true);
+                try {
+                  if (onRefresh) await onRefresh();
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              disabled={isSpinning || refreshing}
+              title="Sync latest participants"
+            >
+              <RefreshCw size={15} className={refreshing ? "busy-spinner" : ""} />
+            </button>
             <button
               type="button"
               className="raffle-wheel-tool-btn"
@@ -574,9 +613,23 @@ export function RaffleWheelModal({
                 </p>
 
                 {awardedSuccess ? (
-                  <div className="raffle-wheel-awarded-alert">
-                    <CheckCircle size={16} />
-                    <span>Prize assigned to official winners list!</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div className="raffle-wheel-awarded-alert">
+                      <CheckCircle size={16} />
+                      <span>Prize assigned to official winners list!</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="button primary small"
+                      onClick={() => {
+                        setWinner(null);
+                        setAwardedSuccess(false);
+                        drawWheel(rotationRef.current);
+                      }}
+                      style={{ width: "100%", justifyContent: "center" }}
+                    >
+                      <span>🎯 Spin For Next Winner</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="raffle-wheel-actions-row">

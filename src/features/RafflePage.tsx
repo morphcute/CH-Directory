@@ -108,6 +108,13 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
 
   useEffect(() => {
     loadRaffle();
+    // Real-time live sync every 8 seconds while page is active
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadRaffle();
+      }
+    }, 8000);
+    return () => clearInterval(interval);
   }, []);
 
   async function handleJoinOrUpdate(e: React.FormEvent, isUpdate = false) {
