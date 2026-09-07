@@ -17,6 +17,7 @@ import {
   slotsLeft,
   tournamentStatus,
   registeredTeamsCount,
+  isTabDatePassed,
 } from "@/lib/tournaments";
 import { Brand } from "./shared";
 import { cleanAreaString } from "@/utils/sheetDetector";
@@ -29,10 +30,14 @@ export function Portal({ initialState }: { initialState: AppState }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [offline, setOffline] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<"open" | "closed">("open");
+  const isInitialPassed = isTabDatePassed(initialState.activeTabName);
+  const [statusFilter, setStatusFilter] = useState<"open" | "closed">(
+    isInitialPassed ? "closed" : "open",
+  );
   const [searchQuery, setSearchQuery] = useState("");
 
   const players = listedPlayers(state);
+  const datePassed = isTabDatePassed(state.activeTabName);
   const month = (state.activeTabName || "September 5, 2026").replace(
     /\s+\d{1,2},/,
     "",
@@ -261,13 +266,38 @@ export function Portal({ initialState }: { initialState: AppState }) {
           <div className="ch-list-heading">
             <div>
               <h2 id="ch-list-title">
-                Community Heroes <span>{filteredPlayers.length}</span>
+                Community Heroes <span>{players.length}</span>
               </h2>
               <p>
-                Registration closes when all team slots are filled.
+                {datePassed
+                  ? "This month's tournament already ended, see you next month!"
+                  : "Registration closes when all team slots are filled."}
               </p>
             </div>
           </div>
+          {datePassed && (
+            <div
+              className="ch-ended-banner"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "12px 16px",
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+                borderRadius: 10,
+                color: "#fca5a5",
+                fontSize: "13px",
+                fontWeight: 500,
+                marginBottom: "16px",
+              }}
+            >
+              <LockKeyhole size={16} style={{ color: "#ef4444", flexShrink: 0 }} />
+              <span>
+                This month&apos;s tournament already ended, see you next month!
+              </span>
+            </div>
+          )}
           {error && (
             <div className="feedback error" role="alert">
               {error}
@@ -458,7 +488,9 @@ export function Portal({ initialState }: { initialState: AppState }) {
               </h3>
               <p>
                 {statusFilter === "open"
-                  ? "All current Community Heroes tournament slots are fully booked or closed."
+                  ? datePassed
+                    ? "This month's tournament already ended, see you next month!"
+                    : "All current Community Heroes tournament slots are fully booked or closed."
                   : searchQuery
                     ? "Try searching for a different hero nickname or city."
                     : "There are currently no tournaments matching this filter."}

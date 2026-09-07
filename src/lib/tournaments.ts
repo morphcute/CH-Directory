@@ -10,11 +10,26 @@ export function listedPlayers(state: AppState) {
  * has already passed in Philippine Time (UTC+8).
  * If the date has passed, the directory becomes closed to all until the next month tab is set.
  */
-export function isTabDatePassed(_tabName?: string): boolean {
-  return false;
+export function isTabDatePassed(tabName?: string): boolean {
+  if (!tabName) return false;
+  const parsed = parseTabDate(tabName);
+  if (!parsed) return false;
+
+  const now = new Date();
+  const year = parsed.year;
+  const month = parsed.monthIndex;
+  // If specific day exists (e.g. September 5), deadline is 23:59:59 PHT (15:59:59 UTC)
+  const day =
+    parsed.day !== undefined
+      ? parsed.day
+      : new Date(year, month + 1, 0).getDate();
+  const deadlineUtcMs = Date.UTC(year, month, day, 15, 59, 59);
+
+  return now.getTime() > deadlineUtcMs;
 }
 
 export function canRegister(player: CHPlayer, tabName?: string) {
+  if (isTabDatePassed(tabName)) return false;
   return (
     ["open", "closing"].includes(tournamentStatus(player, tabName)) &&
     !!registrationUrl(player)
@@ -33,7 +48,8 @@ export type TournamentStatus = "open" | "closing" | "full" | "closed";
 export function slotsLeft(player: CHPlayer) {
   return Math.max(0, player.maxTeams - registeredTeamsCount(player));
 }
-export function tournamentStatus(player: CHPlayer, _tabName?: string): TournamentStatus {
+export function tournamentStatus(player: CHPlayer, tabName?: string): TournamentStatus {
+  if (isTabDatePassed(tabName)) return "closed";
   if (!player.active || player.formStatus === "closed") return "closed";
   const registered = registeredTeamsCount(player);
   if (player.formStatus === "full" || registered >= player.maxTeams) return "full";
