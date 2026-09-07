@@ -8,6 +8,8 @@ import {
   ArrowUpRight,
   Calendar,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Crown,
   Download,
@@ -128,6 +130,8 @@ export function Admin() {
   const [newPrizeCount, setNewPrizeCount] = useState<number>(1);
   const [selectedRandomPrize, setSelectedRandomPrize] = useState("");
   const [raffleQuery, setRaffleQuery] = useState("");
+  const [adminRafflePage, setAdminRafflePage] = useState(1);
+  const ADMIN_ENTRIES_PER_PAGE = 10;
   const [assignDropdownValue, setAssignDropdownValue] = useState<{ [entryId: string]: string }>({});
   const [archivedRaffles, setArchivedRaffles] = useState<RaffleArchiveSummary[]>([]);
   const [showCreateRaffleModal, setShowCreateRaffleModal] = useState(false);
@@ -2343,7 +2347,10 @@ export function Admin() {
                               <input
                                 placeholder="Search participant…"
                                 value={raffleQuery}
-                                onChange={(e) => setRaffleQuery(e.target.value)}
+                                onChange={(e) => {
+                                  setRaffleQuery(e.target.value);
+                                  setAdminRafflePage(1);
+                                }}
                                 style={{ minWidth: 150, fontSize: 12 }}
                               />
                             </div>
@@ -2511,17 +2518,23 @@ export function Admin() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {raffleData.entries
-                                    .filter((e) =>
-                                      !raffleQuery.trim() ||
-                                      e.fullName.toLowerCase().includes(raffleQuery.toLowerCase().trim()),
-                                    )
-                                    .map((entry, idx) => {
+                                  {(() => {
+                                    const filtered = (raffleData.entries || []).filter(
+                                      (e) =>
+                                        !raffleQuery.trim() ||
+                                        e.fullName.toLowerCase().includes(raffleQuery.toLowerCase().trim()),
+                                    );
+                                    const totalAdminPages = Math.max(1, Math.ceil(filtered.length / ADMIN_ENTRIES_PER_PAGE));
+                                    const safeAdminPage = Math.min(Math.max(1, adminRafflePage), totalAdminPages);
+                                    const adminStartIndex = (safeAdminPage - 1) * ADMIN_ENTRIES_PER_PAGE;
+                                    const pageItems = filtered.slice(adminStartIndex, adminStartIndex + ADMIN_ENTRIES_PER_PAGE);
+
+                                    return pageItems.map((entry, idx) => {
                                       const hasPrize = Boolean(entry.prizeWon);
                                       const currentVal = assignDropdownValue[entry.id] || "";
                                       return (
                                         <tr key={entry.id || idx}>
-                                          <td style={{ color: "#64748b", fontWeight: 700 }}>#{idx + 1}</td>
+                                          <td style={{ color: "#64748b", fontWeight: 700 }}>#{adminStartIndex + idx + 1}</td>
                                           <td>
                                             <strong style={{ color: "#ffffff", fontSize: 13.5 }}>
                                               {entry.fullName}
@@ -2631,9 +2644,58 @@ export function Admin() {
                                           </td>
                                         </tr>
                                       );
-                                    })}
+                                    });
+                                  })()}
                                 </tbody>
                               </table>
+
+                              {(() => {
+                                const filtered = (raffleData.entries || []).filter(
+                                  (e) =>
+                                    !raffleQuery.trim() ||
+                                    e.fullName.toLowerCase().includes(raffleQuery.toLowerCase().trim()),
+                                );
+                                const totalPages = Math.max(1, Math.ceil(filtered.length / ADMIN_ENTRIES_PER_PAGE));
+                                const safePage = Math.min(Math.max(1, adminRafflePage), totalPages);
+                                const adminStartIndex = (safePage - 1) * ADMIN_ENTRIES_PER_PAGE;
+                                if (totalPages <= 1) return null;
+
+                                return (
+                                  <div className="raffle-pagination-footer" style={{ padding: "10px 14px", margin: 0 }}>
+                                    <span className="raffle-pagination-info">
+                                      Showing <strong>{adminStartIndex + 1}–{Math.min(adminStartIndex + ADMIN_ENTRIES_PER_PAGE, filtered.length)}</strong> of <strong>{filtered.length}</strong> entries
+                                    </span>
+
+                                    <div className="raffle-pagination-controls">
+                                      <button
+                                        type="button"
+                                        className="raffle-page-btn"
+                                        disabled={safePage === 1}
+                                        onClick={() => setAdminRafflePage((p) => Math.max(1, p - 1))}
+                                        title="Previous page"
+                                      >
+                                        <ChevronLeft size={14} />
+                                        <span>Prev</span>
+                                      </button>
+
+                                      <span style={{ fontSize: 12, color: "#94a3b8", padding: "0 6px" }}>
+                                        Page {safePage} of {totalPages}
+                                      </span>
+
+                                      <button
+                                        type="button"
+                                        className="raffle-page-btn"
+                                        disabled={safePage === totalPages}
+                                        onClick={() => setAdminRafflePage((p) => Math.min(totalPages, p + 1))}
+                                        title="Next page"
+                                      >
+                                        <span>Next</span>
+                                        <ChevronRight size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )}
 

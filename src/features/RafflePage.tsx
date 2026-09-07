@@ -7,6 +7,8 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Crown,
   Edit2,
@@ -55,6 +57,8 @@ export function RafflePage() {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [participantsPage, setParticipantsPage] = useState(1);
+  const PARTICIPANTS_PER_PAGE = 10;
   const [activeTab, setActiveTab] = useState<"latest" | "archive">("latest");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(
     null,
@@ -155,6 +159,25 @@ export function RafflePage() {
     if (!searchQuery.trim()) return true;
     return e.fullName.toLowerCase().includes(searchQuery.toLowerCase().trim());
   });
+
+  const totalEntries = filteredEntries.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / PARTICIPANTS_PER_PAGE));
+  const safePage = Math.min(Math.max(1, participantsPage), totalPages);
+  const startIndex = (safePage - 1) * PARTICIPANTS_PER_PAGE;
+  const paginatedEntries = filteredEntries.slice(startIndex, startIndex + PARTICIPANTS_PER_PAGE);
+
+  function getPageNumbers(current: number, total: number): (number | string)[] {
+    if (total <= 5) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 3) {
+      return [1, 2, 3, 4, "...", total];
+    }
+    if (current >= total - 2) {
+      return [1, "...", total - 3, total - 2, total - 1, total];
+    }
+    return [1, "...", current - 1, current, current + 1, "...", total];
+  }
 
   const archives = data?.archives || [];
 
@@ -555,7 +578,10 @@ export function RafflePage() {
                         type="text"
                         placeholder="Search name..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setParticipantsPage(1);
+                        }}
                         className="ch-search-input"
                         style={{ fontSize: 12 }}
                       />
@@ -563,7 +589,10 @@ export function RafflePage() {
                         <button
                           type="button"
                           className="ch-search-clear"
-                          onClick={() => setSearchQuery("")}
+                          onClick={() => {
+                            setSearchQuery("");
+                            setParticipantsPage(1);
+                          }}
                         >
                           ×
                         </button>
@@ -579,61 +608,117 @@ export function RafflePage() {
                       : "No participants have entered yet. Be the first to join!"}
                   </div>
                 ) : (
-                  <ul className="ch-list" style={{ marginTop: 10 }}>
-                    {filteredEntries.map((entry, idx) => {
-                      const isMyEntry = data.myEntry && data.myEntry.id === entry.id;
-                      const hasWon = Boolean(entry.prizeWon);
-                      const initials = entry.fullName.trim().slice(0, 2).toUpperCase();
-                      return (
-                        <li
-                          key={entry.id || idx}
-                          className={`ch-row ${isMyEntry ? "raffle-my-row" : ""}`}
-                          style={{ cursor: "default" }}
-                        >
-                          <div className="ch-identity">
-                            <span className="hero-avatar" aria-hidden="true" style={{ width: 34, height: 34, fontSize: 12 }}>
-                              {initials}
-                            </span>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <h3 style={{ fontSize: 13.5, margin: 0, color: "#ffffff" }}>
-                                  {entry.fullName}
-                                </h3>
-                                {isMyEntry && (
-                                  <span className="raffle-you-badge">YOU</span>
-                                )}
-                                {hasWon && (
-                                  <span className="raffle-winner-tag">
-                                    <Crown size={11} />
-                                    <span>Winner</span>
-                                  </span>
-                                )}
-                              </div>
-                              <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                                {entry.createdAt
-                                  ? new Date(entry.createdAt).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                    })
-                                  : "Registered"}
+                  <>
+                    <ul className="ch-list" style={{ marginTop: 10 }}>
+                      {paginatedEntries.map((entry, idx) => {
+                        const isMyEntry = data.myEntry && data.myEntry.id === entry.id;
+                        const hasWon = Boolean(entry.prizeWon);
+                        const initials = entry.fullName.trim().slice(0, 2).toUpperCase();
+                        const rankNumber = startIndex + idx + 1;
+                        return (
+                          <li
+                            key={entry.id || idx}
+                            className={`ch-row ${isMyEntry ? "raffle-my-row" : ""}`}
+                            style={{ cursor: "default" }}
+                          >
+                            <div className="ch-identity">
+                              <span className="hero-avatar" aria-hidden="true" style={{ width: 34, height: 34, fontSize: 12 }}>
+                                {initials}
                               </span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <h3 style={{ fontSize: 13.5, margin: 0, color: "#ffffff" }}>
+                                    {entry.fullName}
+                                  </h3>
+                                  {isMyEntry && (
+                                    <span className="raffle-you-badge">YOU</span>
+                                  )}
+                                  {hasWon && (
+                                    <span className="raffle-winner-tag">
+                                      <Crown size={11} />
+                                      <span>Winner</span>
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                                  {entry.createdAt
+                                    ? new Date(entry.createdAt).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                      })
+                                    : "Registered"}
+                                </span>
+                              </div>
                             </div>
+
+                            {hasWon ? (
+                              <div className="raffle-row-prize-won">
+                                <Trophy size={13} style={{ color: "#facc15" }} />
+                                <span>{entry.prizeWon}</span>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>
+                                #{rankNumber}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {/* Pagination Footer per 10 */}
+                    {totalPages > 1 && (
+                      <div className="raffle-pagination-footer">
+                        <span className="raffle-pagination-info">
+                          Showing <strong>{startIndex + 1}–{Math.min(startIndex + PARTICIPANTS_PER_PAGE, totalEntries)}</strong> of{" "}
+                          <strong>{totalEntries}</strong>
+                        </span>
+
+                        <div className="raffle-pagination-controls">
+                          <button
+                            type="button"
+                            className="raffle-page-btn"
+                            disabled={safePage === 1}
+                            onClick={() => setParticipantsPage((p) => Math.max(1, p - 1))}
+                            title="Previous page"
+                          >
+                            <ChevronLeft size={14} />
+                            <span>Prev</span>
+                          </button>
+
+                          <div className="raffle-page-numbers">
+                            {getPageNumbers(safePage, totalPages).map((p, pIdx) =>
+                              p === "..." ? (
+                                <span key={`ellipsis-${pIdx}`} className="raffle-page-ellipsis">
+                                  …
+                                </span>
+                              ) : (
+                                <button
+                                  key={`page-${p}`}
+                                  type="button"
+                                  className={`raffle-page-num-btn ${safePage === p ? "active" : ""}`}
+                                  onClick={() => setParticipantsPage(Number(p))}
+                                >
+                                  {p}
+                                </button>
+                              )
+                            )}
                           </div>
 
-                          {hasWon ? (
-                            <div className="raffle-row-prize-won">
-                              <Trophy size={13} style={{ color: "#facc15" }} />
-                              <span>{entry.prizeWon}</span>
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>
-                              #{idx + 1}
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                          <button
+                            type="button"
+                            className="raffle-page-btn"
+                            disabled={safePage === totalPages}
+                            onClick={() => setParticipantsPage((p) => Math.min(totalPages, p + 1))}
+                            title="Next page"
+                          >
+                            <span>Next</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

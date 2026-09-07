@@ -6137,4 +6137,102 @@ textarea:focus-visible {
   }
 }
 
+/* Raffle Participants Pagination - Public and Admin */
+.raffle-pagination-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #1e293b;
+}
+
+.raffle-pagination-info {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.raffle-pagination-info strong {
+  color: #f1f5f9;
+}
+
+.raffle-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.raffle-page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.raffle-page-btn:hover:not(:disabled) {
+  background: #1e293b;
+  color: #ffffff;
+  border-color: #334155;
+}
+
+.raffle-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.raffle-page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.raffle-page-num-btn {
+  min-width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0 7px;
+  user-select: none;
+}
+
+.raffle-page-num-btn:hover:not(.active) {
+  background: #1e293b;
+  color: #ffffff;
+}
+
+.raffle-page-num-btn.active {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.45);
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+}
+
+.raffle-page-ellipsis {
+  padding: 0 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
 
