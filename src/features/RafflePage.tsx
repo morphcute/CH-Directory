@@ -487,6 +487,7 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                 <PublicLiveWheel
                   entries={data.entries || []}
                   prizes={data.prizes || []}
+                  onRefresh={loadRaffle}
                 />
               )}
 

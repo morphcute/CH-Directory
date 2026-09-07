@@ -6870,6 +6870,73 @@ textarea:focus-visible {
   color: #ffffff;
 }
 
+/* Awarded Winners Summary in Live Roulette */
+.raffle-wheel-awarded-summary-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 10px;
+  animation: chFadeUp 0.3s ease-out;
+}
+
+.raffle-wheel-awarded-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.raffle-wheel-awarded-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.raffle-wheel-awarded-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  gap: 8px;
+}
+
+.raffle-wheel-awarded-rank {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.raffle-wheel-awarded-winner-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.raffle-wheel-awarded-prize-chip {
+  font-size: 11px;
+  font-weight: 700;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.14);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  padding: 1px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* Real-time Live Spin & Sync Status Badges */
 .raffle-wheel-live-badge {
   display: inline-flex;

@@ -693,6 +693,27 @@ export async function POST(request: Request, context: Context) {
         if (!body.entryId) return json({ error: "Missing entryId." }, 400);
         await setRaffleWinner(body.entryId, body.prizeWon || null);
         const raffle = await getRaffleState(body.raffleId || "latest");
+        if (body.prizeWon && raffle) {
+          const entry = raffle.entries?.find((e: any) => e.id === body.entryId);
+          if (entry) {
+            const { broadcastLiveSpin } = await import("@/server/liveSpinStore");
+            broadcastLiveSpin({
+              id: `award-${Date.now()}`,
+              raffleId: raffle.id,
+              prize: String(body.prizeWon),
+              winnerId: entry.id,
+              winnerName: entry.fullName,
+              winningIndex: 0,
+              startedAt: Date.now(),
+              durationMs: 0,
+              sliceCount: 1,
+              status: "landed" as const,
+              claimDeadline: null,
+              claimSeconds: 0,
+              isAwarded: true,
+            });
+          }
+        }
         return json({ success: true, raffle });
       }
 

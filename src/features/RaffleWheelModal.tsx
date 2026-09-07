@@ -896,6 +896,38 @@ export function RaffleWheelModal({
                 )}
               </div>
             )}
+
+            {/* Confirmed Awarded Winners in Modal */}
+            {entries.some((e) => Boolean(e.prizeWon)) && (
+              <div className="raffle-wheel-awarded-summary-card" style={{ marginTop: 12 }}>
+                <div className="raffle-wheel-awarded-summary-header">
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Trophy size={14} style={{ color: "#facc15" }} />
+                    <strong style={{ fontSize: 12.5, color: "#ffffff" }}>
+                      Awarded Winners ({entries.filter((e) => Boolean(e.prizeWon)).length})
+                    </strong>
+                  </div>
+                  <span style={{ fontSize: 10.5, color: "#4ade80", fontWeight: 700, background: "rgba(34, 197, 94, 0.15)", padding: "1px 6px", borderRadius: 4, border: "1px solid rgba(34, 197, 94, 0.3)" }}>
+                    Recorded
+                  </span>
+                </div>
+                <div className="raffle-wheel-awarded-scroll">
+                  {entries
+                    .filter((e) => Boolean(e.prizeWon))
+                    .map((w, idx) => (
+                      <div key={w.id || idx} className="raffle-wheel-awarded-row">
+                        <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                          <span className="raffle-wheel-awarded-rank">#{idx + 1}</span>
+                          <span className="raffle-wheel-awarded-winner-name">{w.fullName}</span>
+                        </div>
+                        <span className="raffle-wheel-awarded-prize-chip">
+                          {w.prizeWon}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

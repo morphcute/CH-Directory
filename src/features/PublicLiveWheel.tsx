@@ -17,6 +17,7 @@ import type { LiveSpinState } from "@/server/liveSpinStore";
 interface PublicLiveWheelProps {
   entries: { id: string; fullName: string; prizeWon?: string | null }[];
   prizes?: (string | RafflePrizeItem)[];
+  onRefresh?: () => void;
 }
 
 const PALETTE = [
@@ -32,10 +33,14 @@ const PALETTE = [
   { bg: "#c026d3", text: "#ffffff" }, // Fuchsia
 ];
 
-export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
+export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const awardedWinners = entries.filter((e) => Boolean(e.prizeWon));
+  const eligibleEntrants = entries.filter((e) => !e.prizeWon);
+  const displayEntrants = eligibleEntrants.length > 0 ? eligibleEntrants : entries;
 
   const [liveSpin, setLiveSpin] = useState<LiveSpinState | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false); // muted by default for browser compliance
@@ -74,10 +79,15 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
         name: liveSpin.winnerName,
         prize: liveSpin.prize,
       });
+      if (liveSpin.isAwarded) {
+        playWinFanfare();
+        startConfetti();
+        onRefresh?.();
+      }
     } else if (liveSpin.status === "spinning") {
       setCelebratedWinner(null);
     }
-  }, [liveSpin?.id, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize]);
+  }, [liveSpin?.id, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded, onRefresh]);
 
   // Audio context initialization
   function getAudioContext() {
@@ -147,7 +157,7 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
 
     ctx.clearRect(0, 0, width, height);
 
-    const sliceCount = Math.max(1, entries.length);
+    const sliceCount = Math.max(1, displayEntrants.length);
     const sliceAngle = (2 * Math.PI) / sliceCount;
 
     // Outer glow ring
@@ -194,7 +204,7 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
       const fontSize = sliceCount > 50 ? 10 : sliceCount > 30 ? 11 : sliceCount > 15 ? 12 : 14;
       ctx.font = `600 ${fontSize}px Inter, sans-serif`;
 
-      const entrantName = entries[i]?.fullName || (entries.length === 0 ? "Awaiting participants…" : `Participant #${i + 1}`);
+      const entrantName = displayEntrants[i]?.fullName || (displayEntrants.length === 0 ? "Awaiting participants…" : `Participant #${i + 1}`);
       const maxTextWidth = radius - 60;
       let displayName = entrantName;
       if (ctx.measureText(displayName).width > maxTextWidth) {
@@ -430,7 +440,7 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
       drawWheel(rotationRef.current);
     }, 60);
     return () => clearTimeout(timer);
-  }, [entries.length]);
+  }, [displayEntrants.length]);
 
   const isLiveSpinning = Boolean(liveSpin && liveSpin.status === "spinning");
 
@@ -451,7 +461,9 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
               </span>
             </div>
             <small>
-              {entries.length} participants · Synced with live stream
+              {awardedWinners.length > 0
+                ? `${displayEntrants.length} eligible participants · ${awardedWinners.length} winner(s) awarded`
+                : `${entries.length} participants · Synced with live stream`}
             </small>
           </div>
         </div>
@@ -497,6 +509,10 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
               {isLiveSpinning ? (
                 <span style={{ color: "#facc15", fontWeight: 700 }}>
                   Organizer is spinning the wheel live for {liveSpin?.prize}!
+                </span>
+              ) : awardedWinners.length > 0 ? (
+                <span>
+                  <strong style={{ color: "#facc15" }}>{awardedWinners.length} winner(s)</strong> officially awarded. Wheel is active for remaining draws!
                 </span>
               ) : (
                 <span>Wheel is live and will automatically spin when the organizer draws a winner.</span>
@@ -561,6 +577,20 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
                 </>
               )}
             </div>
+          ) : awardedWinners.length > 0 ? (
+            <div className="raffle-wheel-winner-card">
+              <div className="raffle-wheel-winner-badge awarded" style={{ background: "rgba(34, 197, 94, 0.2)", borderColor: "rgba(34, 197, 94, 0.5)", color: "#4ade80" }}>
+                <CheckCircle size={14} />
+                <span>OFFICIAL WINNER RECORDED</span>
+              </div>
+              <h4 className="raffle-wheel-winner-name">{awardedWinners[awardedWinners.length - 1].fullName}</h4>
+              <p className="raffle-wheel-winner-prize">
+                Won: <strong>{awardedWinners[awardedWinners.length - 1].prizeWon}</strong>
+              </p>
+              <span style={{ fontSize: 11.5, color: "#4ade80", fontWeight: 600 }}>
+                Confirmed in livestream & saved in official database
+              </span>
+            </div>
           ) : (
             <div className="raffle-wheel-card" style={{ textAlign: "center", padding: "20px 14px" }}>
               <Gift size={24} style={{ color: "#facc15", margin: "0 auto 8px" }} />
@@ -570,6 +600,36 @@ export function PublicLiveWheel({ entries }: PublicLiveWheelProps) {
               <span style={{ fontSize: 12, color: "#94a3b8" }}>
                 Watch the live spin here as winners are drawn by the community organizer.
               </span>
+            </div>
+          )}
+
+          {/* Confirmed Awarded Winners in Live Roulette */}
+          {awardedWinners.length > 0 && (
+            <div className="raffle-wheel-awarded-summary-card">
+              <div className="raffle-wheel-awarded-summary-header">
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Trophy size={14} style={{ color: "#facc15" }} />
+                  <strong style={{ fontSize: 12.5, color: "#ffffff" }}>
+                    Awarded Winners ({awardedWinners.length})
+                  </strong>
+                </div>
+                <span style={{ fontSize: 10.5, color: "#4ade80", fontWeight: 700, background: "rgba(34, 197, 94, 0.15)", padding: "1px 6px", borderRadius: 4, border: "1px solid rgba(34, 197, 94, 0.3)" }}>
+                  Confirmed
+                </span>
+              </div>
+              <div className="raffle-wheel-awarded-scroll">
+                {awardedWinners.map((w, idx) => (
+                  <div key={w.id || idx} className="raffle-wheel-awarded-row">
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                      <span className="raffle-wheel-awarded-rank">#{idx + 1}</span>
+                      <span className="raffle-wheel-awarded-winner-name">{w.fullName}</span>
+                    </div>
+                    <span className="raffle-wheel-awarded-prize-chip">
+                      {w.prizeWon}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
