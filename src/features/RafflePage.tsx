@@ -57,7 +57,7 @@ interface RaffleResponse {
   entriesCount: number;
   winners: { id: string; fullName: string; prizeWon: string }[];
   entries: RaffleEntryPublic[];
-  myEntry: { id: string; fullName: string; prizeWon?: string | null } | null;
+  myEntry: { id: string; fullName: string; prizeWon?: string | null; createdAt?: string } | null;
   archives?: RaffleArchiveSummary[];
   branding?: RaffleBranding;
 }
@@ -516,7 +516,15 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                           <span className="raffle-human-registered-tag">Active Entry</span>
                         </div>
                         <p className="raffle-human-registered-note">
-                          Entered with this device · You can edit your name before the deadline
+                          {data.myEntry.createdAt
+                            ? `Entered ${new Date(data.myEntry.createdAt).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })} · `
+                            : "Entered with this device · "}
+                          You can edit your name before the deadline
                         </p>
                       </div>
                     </div>
@@ -682,6 +690,8 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                                     ? new Date(entry.createdAt).toLocaleDateString("en-US", {
                                         month: "short",
                                         day: "numeric",
+                                        hour: "numeric",
+                                        minute: "2-digit",
                                       })
                                     : "Registered"}
                                 </span>

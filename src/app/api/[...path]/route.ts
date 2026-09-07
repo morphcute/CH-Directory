@@ -95,7 +95,12 @@ export async function GET(request: Request, context: Context) {
           createdAt: e.createdAt,
         })),
         myEntry: myEntry
-          ? { id: myEntry.id, fullName: myEntry.fullName, prizeWon: myEntry.prizeWon || null }
+          ? {
+              id: myEntry.id,
+              fullName: myEntry.fullName,
+              prizeWon: myEntry.prizeWon || null,
+              createdAt: myEntry.createdAt,
+            }
           : null,
         archives,
         branding: {
