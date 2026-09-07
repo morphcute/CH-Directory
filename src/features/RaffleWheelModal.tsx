@@ -64,6 +64,7 @@ export function RaffleWheelModal({
   const lastTickSliceRef = useRef<number>(-1);
   const animationFrameRef = useRef<number | null>(null);
   const confettiFrameRef = useRef<number | null>(null);
+  const isFanfarePlayingRef = useRef<boolean>(false);
 
   // Filter entrants
   const normalizedPrizes = normalizePrizeItems(prizes);
@@ -114,9 +115,10 @@ export function RaffleWheelModal({
   }
 
   function playWinFanfare() {
-    if (!soundEnabled) return;
+    if (!soundEnabled || isFanfarePlayingRef.current) return;
     const ctx = getAudioContext();
     if (!ctx) return;
+    isFanfarePlayingRef.current = true;
     try {
       const now = ctx.currentTime;
       const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
@@ -124,16 +126,19 @@ export function RaffleWheelModal({
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
-        gain.gain.setValueAtTime(0.2, now + idx * 0.12);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.4);
+        osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+        gain.gain.setValueAtTime(0.14, now + idx * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.1 + 0.3);
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.start(now + idx * 0.12);
-        osc.stop(now + idx * 0.12 + 0.4);
+        osc.start(now + idx * 0.1);
+        osc.stop(now + idx * 0.1 + 0.3);
       });
+      setTimeout(() => {
+        isFanfarePlayingRef.current = false;
+      }, 3500);
     } catch {
-      // ignore
+      isFanfarePlayingRef.current = false;
     }
   }
 
@@ -253,15 +258,21 @@ export function RaffleWheelModal({
     ctx.restore();
   };
 
-  // Launch Confetti
+  // Launch Confetti - strictly 3 seconds duration, no looping
   const startConfetti = () => {
     const canvas = confettiCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    if (confettiFrameRef.current) {
+      cancelAnimationFrame(confettiFrameRef.current);
+      confettiFrameRef.current = null;
+    }
+
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     interface Particle {
       x: number;
@@ -299,6 +310,15 @@ export function RaffleWheelModal({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const elapsed = Date.now() - startTime;
 
+      if (elapsed >= 3000) {
+        if (confettiFrameRef.current) {
+          cancelAnimationFrame(confettiFrameRef.current);
+          confettiFrameRef.current = null;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
         p.x += p.vx;
@@ -306,8 +326,8 @@ export function RaffleWheelModal({
         p.vy += 0.38; // gravity
         p.vx *= 0.98; // air drag
         p.rotation += p.rotationSpeed;
-        if (elapsed > 2000) {
-          p.alpha = Math.max(0, p.alpha - 0.015);
+        if (elapsed > 1800) {
+          p.alpha = Math.max(0, p.alpha - 0.025);
         }
 
         ctx.save();
@@ -341,14 +361,10 @@ export function RaffleWheelModal({
         ctx.restore();
       }
 
-      if (elapsed < 4000) {
-        confettiFrameRef.current = requestAnimationFrame(render);
-      } else {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+      confettiFrameRef.current = requestAnimationFrame(render);
     };
 
-    render();
+    confettiFrameRef.current = requestAnimationFrame(render);
   };
 
   // Trigger spin animation

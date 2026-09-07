@@ -442,36 +442,6 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
                 );
               })()}
 
-              {/* Official Winners (if winners already assigned in this latest raffle) */}
-              {data.winners && data.winners.length > 0 && (
-                <div className="raffle-human-card winners-box">
-                  <div className="raffle-human-card-head">
-                    <div className="raffle-human-card-title">
-                      <Trophy size={16} style={{ color: "#facc15" }} />
-                      <strong>Raffle Winners ({data.winners.length})</strong>
-                    </div>
-                    <span style={{ fontSize: 12, color: "#facc15", fontWeight: 600 }}>
-                      Official Announcement
-                    </span>
-                  </div>
-
-                  <div className="raffle-human-winners-grid">
-                    {data.winners.map((winner, idx) => (
-                      <div key={winner.id || idx} className="raffle-human-winner-row">
-                        <span className="raffle-human-winner-rank">#{idx + 1}</span>
-                        <div className="raffle-human-winner-info">
-                          <strong>{winner.fullName}</strong>
-                          <span className="raffle-human-winner-prize">
-                            Won: {winner.prizeWon}
-                          </span>
-                        </div>
-                        <Crown size={15} style={{ color: "#facc15" }} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* If event has ended/started, show registered status pill if user entered */}
               {data.isEnded && data.myEntry && (
                 <div className="raffle-human-registered-badge">

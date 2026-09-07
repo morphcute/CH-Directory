@@ -54,6 +54,9 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
   const lastTickSliceRef = useRef<number>(-1);
   const animationFrameRef = useRef<number | null>(null);
   const confettiFrameRef = useRef<number | null>(null);
+  const celebratedEventsRef = useRef<Set<string>>(new Set());
+  const refreshedAwardsRef = useRef<Set<string>>(new Set());
+  const isFanfarePlayingRef = useRef<boolean>(false);
 
   // Synchronized claim countdown calculation
   useEffect(() => {
@@ -70,24 +73,42 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
     return () => clearInterval(interval);
   }, [liveSpin?.claimDeadline, liveSpin?.isAwarded]);
 
-  // Sync celebrated winner with liveSpin state
+  // Sync celebrated winner with liveSpin state - only celebrate ONCE per spin, never loop
   useEffect(() => {
     if (!liveSpin || liveSpin.status === "idle") {
       setCelebratedWinner(null);
-    } else if (liveSpin.status === "landed") {
+      return;
+    }
+
+    if (liveSpin.status === "spinning") {
+      setCelebratedWinner(null);
+      return;
+    }
+
+    if (liveSpin.status === "landed") {
       setCelebratedWinner({
         name: liveSpin.winnerName,
         prize: liveSpin.prize,
       });
-      if (liveSpin.isAwarded) {
+
+      const spinId = liveSpin.id;
+      // Only celebrate if this spin completed within the last 5 seconds and has not been celebrated yet
+      const justFinished =
+        Boolean(liveSpin.startedAt) &&
+        Date.now() - (liveSpin.startedAt + (liveSpin.durationMs || 5200)) < 5000;
+
+      if (spinId && justFinished && !celebratedEventsRef.current.has(spinId)) {
+        celebratedEventsRef.current.add(spinId);
         playWinFanfare();
         startConfetti();
+      }
+
+      if (liveSpin.isAwarded && !refreshedAwardsRef.current.has(liveSpin.id)) {
+        refreshedAwardsRef.current.add(liveSpin.id);
         onRefresh?.();
       }
-    } else if (liveSpin.status === "spinning") {
-      setCelebratedWinner(null);
     }
-  }, [liveSpin?.id, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded, onRefresh]);
+  }, [liveSpin?.id, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded]);
 
   // Audio context initialization
   function getAudioContext() {
@@ -121,25 +142,31 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
   }
 
   function playWinFanfare() {
-    if (!soundEnabled) return;
+    if (!soundEnabled || isFanfarePlayingRef.current) return;
     const ctx = getAudioContext();
     if (!ctx) return;
+    isFanfarePlayingRef.current = true;
     try {
       const now = ctx.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.5];
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
       notes.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
-        gain.gain.setValueAtTime(0.2, now + idx * 0.12);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.4);
+        osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+        gain.gain.setValueAtTime(0.14, now + idx * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.1 + 0.3);
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.start(now + idx * 0.12);
-        osc.stop(now + idx * 0.12 + 0.4);
+        osc.start(now + idx * 0.1);
+        osc.stop(now + idx * 0.1 + 0.3);
       });
-    } catch {}
+      setTimeout(() => {
+        isFanfarePlayingRef.current = false;
+      }, 3500);
+    } catch {
+      isFanfarePlayingRef.current = false;
+    }
   }
 
   // Draw wheel on canvas
@@ -267,15 +294,21 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
     ctx.restore();
   };
 
-  // Confetti effect on win
+  // Confetti effect on win - strictly 3 seconds duration, no looping
   const startConfetti = () => {
     const canvas = confettiCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    if (confettiFrameRef.current) {
+      cancelAnimationFrame(confettiFrameRef.current);
+      confettiFrameRef.current = null;
+    }
+
     canvas.width = canvas.parentElement?.clientWidth || 700;
     canvas.height = canvas.parentElement?.clientHeight || 500;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const particles: {
       x: number;
@@ -307,6 +340,15 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
       const elapsed = performance.now() - startTime;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      if (elapsed >= 3000) {
+        if (confettiFrameRef.current) {
+          cancelAnimationFrame(confettiFrameRef.current);
+          confettiFrameRef.current = null;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
       particles.forEach((p) => {
         p.x += p.speedX;
         p.y += p.speedY;
@@ -321,14 +363,10 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
         ctx.restore();
       });
 
-      if (elapsed < 4000) {
-        confettiFrameRef.current = requestAnimationFrame(render);
-      } else {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+      confettiFrameRef.current = requestAnimationFrame(render);
     };
 
-    render();
+    confettiFrameRef.current = requestAnimationFrame(render);
   };
 
   // Real-time synchronization via SSE and fallback polling
@@ -422,8 +460,12 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
           name: liveSpin.winnerName,
           prize: liveSpin.prize,
         });
-        playWinFanfare();
-        startConfetti();
+        const spinId = liveSpin.id;
+        if (spinId && !celebratedEventsRef.current.has(spinId)) {
+          celebratedEventsRef.current.add(spinId);
+          playWinFanfare();
+          startConfetti();
+        }
       }
     };
 
@@ -433,6 +475,16 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
   }, [liveSpin?.id, liveSpin?.status, entries.length]);
+
+  // Clean up confetti animation on unmount
+  useEffect(() => {
+    return () => {
+      if (confettiFrameRef.current) {
+        cancelAnimationFrame(confettiFrameRef.current);
+        confettiFrameRef.current = null;
+      }
+    };
+  }, []);
 
   // Initial draw and redraw on resize/entries change
   useEffect(() => {
