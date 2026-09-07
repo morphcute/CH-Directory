@@ -37,6 +37,7 @@ export interface AppState {
   googleTokenExpiresAt?: number;
   logoUrl?: string;
   bannerUrl?: string;
+  pageViews?: number;
 }
 
 export interface SheetTab {

@@ -4323,8 +4323,63 @@ textarea:focus-visible {
 }
 
 .ch-ribbon-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: #64748b;
   font-size: 11px;
+}
+
+.ch-ribbon-views {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 11.5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+}
+
+.ch-ribbon-views svg {
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.ch-fb-views {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.ch-footer {
+  margin-top: 36px;
+  padding-top: 20px;
+  padding-bottom: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.ch-footer-views {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.ch-footer-views svg {
+  color: #38bdf8;
+  flex-shrink: 0;
 }
 
 .ch-row-fb-link {
@@ -4528,113 +4583,58 @@ textarea:focus-visible {
   }
 }
 
-/* Centered Profile Meta */
-.ch-fb-meta-center {
-  width: 100%;
-  text-align: center;
-  margin-top: 10px;
-}
-
-@media (max-width: 767px) {
-  .ch-fb-meta-center {
-    margin-top: 6px;
-  }
-}
-
 .ch-fb-name-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 14px;
   flex-wrap: wrap;
+  margin-top: 10px;
+  width: 100%;
 }
 
 .ch-fb-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 23px;
   font-weight: 800;
   color: #ffffff;
   margin: 0;
   letter-spacing: -0.01em;
   line-height: 1.25;
-  text-align: center;
 }
 
 @media (max-width: 767px) {
+  .ch-fb-name-row {
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
   .ch-fb-name {
-    font-size: 17px;
-    max-width: 280px;
+    font-size: 18px;
+    max-width: 100%;
     margin: 0 auto;
-  }
-}
-
-.ch-fb-bio {
-  font-size: 13px;
-  color: #94a3b8;
-  margin: 4px 0 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  line-height: 1.4;
-  text-align: center;
-}
-
-@media (max-width: 767px) {
-  .ch-fb-bio {
-    font-size: 11px;
-    gap: 4px;
-  }
-}
-
-.ch-fb-dot {
-  opacity: 0.4;
-}
-
-.ch-fb-followers {
-  color: #cbd5e1;
-  font-weight: 500;
-}
-
-.ch-fb-actions-center {
-  display: flex;
-  justify-content: center;
-  margin-top: 12px;
-  width: 100%;
-}
-
-@media (max-width: 767px) {
-  .ch-fb-actions-center {
-    margin-top: 8px;
+    text-align: center;
+    justify-content: center;
   }
 }
 
 .ch-fb-ribbon {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 12px;
-  gap: 8px;
   width: 100%;
 }
 
 @media (max-width: 767px) {
   .ch-fb-ribbon {
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    margin-top: 8px;
-    padding-top: 8px;
-    font-size: 10.5px;
-  }
-  .ch-ribbon-left {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
   }
 }
 

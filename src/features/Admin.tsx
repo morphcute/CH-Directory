@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Crown,
   Download,
+  Eye,
   FileSpreadsheet,
   Image as ImageIcon,
   LayoutDashboard,
@@ -620,6 +621,11 @@ export function Admin() {
                       .reduce((n, p) => n + slotsLeft(p), 0)}
                   </strong>
                   <span>Available team slots</span>
+                </div>
+                <div>
+                  <Eye size={25} />
+                  <strong>{(state.pageViews || 0).toLocaleString()}</strong>
+                  <span>Total Page Views</span>
                 </div>
               </div>
               <nav className="admin-tabs" aria-label="Workspace sections">
@@ -1326,34 +1332,7 @@ export function Admin() {
                               }
                             />
                           </label>
-                          <label className="form-field">
-                            Bio / Subtitle
-                            <input
-                              value={state.bannerSettings?.subtitle ?? "Official MLBB Tournament Directory"}
-                              onChange={(e) =>
-                                update({
-                                  bannerSettings: {
-                                    ...(state.bannerSettings || { type: "preset", presetId: "official" }),
-                                    subtitle: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                          </label>
-                          <label className="form-field">
-                            Follower Stats
-                            <input
-                              value={state.bannerSettings?.followersText ?? "286K followers • 5 following"}
-                              onChange={(e) =>
-                                update({
-                                  bannerSettings: {
-                                    ...(state.bannerSettings || { type: "preset", presetId: "official" }),
-                                    followersText: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                          </label>
+
                           <label className="form-field">
                             Facebook Page URL
                             <input

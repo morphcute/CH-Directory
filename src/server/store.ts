@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { readDbState, writeDbState } from "@/server/db";
+import { readDbState, writeDbState, incrementPageViewsDb } from "@/server/db";
 import type { AppState } from "@/types";
 
 export const defaultState: AppState = {
@@ -108,4 +108,29 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
   });
   writeQueue = task.catch(() => undefined);
   return task;
+}
+
+export async function incrementPageViews(): Promise<number> {
+  try {
+    const dbViews = await incrementPageViewsDb();
+    if (typeof dbViews === "number") {
+      try {
+        const file = statePath();
+        const content = await readFile(file, "utf8");
+        const data = JSON.parse(content);
+        data.pageViews = dbViews;
+        await writeFile(file, JSON.stringify(data, null, 2), "utf8");
+      } catch {
+        // Non-critical local file update
+      }
+      return dbViews;
+    }
+  } catch (err) {
+    console.error("Failed to increment views in DB, using store fallback:", err);
+  }
+
+  const current = await readState();
+  const nextViews = (current.pageViews || 0) + 1;
+  await saveState({ pageViews: nextViews });
+  return nextViews;
 }

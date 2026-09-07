@@ -72,3 +72,29 @@ export async function writeDbState(state: AppState): Promise<boolean> {
     return false;
   }
 }
+
+export async function incrementPageViewsDb(): Promise<number | null> {
+  const sql = getSql();
+  if (!sql) return null;
+  try {
+    await ensureTable(sql);
+    const rows = await sql`
+      UPDATE app_state
+      SET data = jsonb_set(
+        data,
+        '{pageViews}',
+        to_jsonb(COALESCE((data->>'pageViews')::int, 0) + 1)
+      ),
+      updated_at = CURRENT_TIMESTAMP
+      WHERE id = 'default'
+      RETURNING (data->>'pageViews')::int AS page_views;
+    `;
+    if (rows && rows.length > 0 && typeof rows[0].page_views === "number") {
+      return rows[0].page_views;
+    }
+    return null;
+  } catch (err) {
+    console.error("Error incrementing pageViews in Neon:", err);
+    return null;
+  }
+}

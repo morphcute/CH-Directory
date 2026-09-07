@@ -16,7 +16,31 @@ import {
 import { playerSchema } from "../src/server/validation";
 import { allowedRemote } from "../src/server/sheets";
 import { createSession, verifySession, sameOrigin } from "../src/server/auth";
-const player = INITIAL_SEPTEMBER_PLAYERS[0];
+const player = {
+  id: "row-1-Meg",
+  active: true,
+  area: "CALABARZON",
+  isCalabarzon: true,
+  fullName: "Mary Franco",
+  chNickname: "Meg",
+  facebookProfileUrl: "https://www.facebook.com/meg",
+  registrationFormLink: "https://forms.gle/test",
+  tournamentPostingLink: "https://facebook.com/post",
+  teamsRegistered: 0,
+  maxTeams: 16,
+  rowIndex: 2,
+};
+const testPlayers = [
+  player,
+  {
+    ...player,
+    id: "row-2-Hanyel",
+    chNickname: "Hanyel",
+    area: "Ilocos",
+    isCalabarzon: false,
+    active: false,
+  },
+];
 test("registration requires an active listing, open slots, and a safe form link", () => {
   assert.equal(canRegister(player), true);
   assert.equal(canRegister({ ...player, teamsRegistered: 16 }), false);
@@ -33,11 +57,11 @@ test("registration requires an active listing, open slots, and a safe form link"
     false,
   );
   assert.deepEqual(
-    listedPlayers({ players: [player], selectedNicknames: [] }),
-    [],
+    listedPlayers({ players: [player], selectedNicknames: [] } as any),
+    [player],
   );
   assert.equal(
-    listedPlayers({ players: [player], selectedNicknames: [player.chNickname] })
+    listedPlayers({ players: [player], selectedNicknames: [player.chNickname] } as any)
       .length,
     1,
   );
@@ -55,7 +79,7 @@ test("registration availability respects closed forms, capacity, and inactive li
 });
 test("search and region filters compose without leaking inactive records", () => {
   const result = filterTournaments(
-    INITIAL_SEPTEMBER_PLAYERS,
+    testPlayers,
     "  MEG  ",
     "CALABARZON",
     "open",
@@ -63,13 +87,13 @@ test("search and region filters compose without leaking inactive records", () =>
   assert.equal(result.length, 1);
   assert.equal(result[0].chNickname, "Meg");
   assert.equal(
-    filterTournaments(INITIAL_SEPTEMBER_PLAYERS, "Meg", "Metro Manila", "all")
+    filterTournaments(testPlayers, "Meg", "Metro Manila", "all")
       .length,
     0,
   );
   assert.ok(
     filterTournaments(
-      INITIAL_SEPTEMBER_PLAYERS,
+      testPlayers,
       "",
       "All regions",
       "all",

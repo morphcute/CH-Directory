@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readState, saveState } from "@/server/store";
+import { readState, saveState, incrementPageViews } from "@/server/store";
 import {
   authConfigured,
   createSession,
@@ -27,6 +27,10 @@ ensureSyncSchedulerRunning();
 
 type Context = { params: Promise<{ path: string[] }> };
 const attempts = new Map<string, { count: number; reset: number }>();
+const recentViewIps = new Map<string, number>();
+const PV_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes cooldown window
+const PV_COOKIE = "ch_pv_session";
+
 const json = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -34,6 +38,10 @@ export async function GET(request: Request, context: Context) {
   const route = (await context.params).path.join("/");
   try {
     if (route === "health") return json({ status: "ok", framework: "Next.js" });
+    if (route === "page-view") {
+      const state = await readState();
+      return json({ pageViews: state.pageViews || 0 });
+    }
     if (route === "auth")
       return json({
         authenticated: await isOrganizer(),
@@ -153,6 +161,51 @@ export async function POST(request: Request, context: Context) {
     return json({ error: "Request origin is not allowed." }, 403);
   const route = (await context.params).path.join("/");
   try {
+    if (route === "page-view") {
+      const cookieHeader = request.headers.get("cookie") || "";
+      const hasCookie = cookieHeader.includes(`${PV_COOKIE}=`);
+
+      const ip =
+        request.headers.get("cf-connecting-ip") ||
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        request.headers.get("x-real-ip") ||
+        request.headers.get("x-client-ip") ||
+        "unknown";
+      const ua = request.headers.get("user-agent") || "";
+      const identifier =
+        ip !== "unknown"
+          ? ip
+          : `ua_${Buffer.from(ua).toString("base64").slice(0, 32)}`;
+
+      const now = Date.now();
+      const lastTime = recentViewIps.get(identifier) || 0;
+      const isCooledDown = now - lastTime < PV_COOLDOWN_MS;
+
+      const state = await readState();
+      const currentViews = state.pageViews || 0;
+
+      // If already visited within 30-min window, do not increment
+      if (hasCookie || isCooledDown) {
+        return json({ pageViews: currentViews, counted: false });
+      }
+
+      recentViewIps.set(identifier, now);
+      if (recentViewIps.size > 10000) {
+        for (const [id, time] of recentViewIps.entries()) {
+          if (now - time > PV_COOLDOWN_MS) recentViewIps.delete(id);
+        }
+      }
+
+      const newViews = await incrementPageViews();
+      const response = json({ pageViews: newViews, counted: true });
+      response.cookies.set(PV_COOKIE, "1", {
+        httpOnly: false,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 1800, // 30 minutes
+      });
+      return response;
+    }
     if (route === "auth/logout") {
       const response = json({ success: true });
       response.cookies.set(SESSION_COOKIE, "", {

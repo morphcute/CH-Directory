@@ -337,7 +337,7 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
         else if (/posting|announcement|post\s*link/i.test(header)) colPostingIdx = idx;
         else if (/registration|form/i.test(header)) colRegIdx = idx;
         else if (
-          /registered\s*teams|teams?\s*registered|no\.?\s*of\s*teams?|teams?\s*count/i.test(header) &&
+          /(registered\s*teams|teams?\s*registered|no\.?\s*of\s*teams?|teams?\s*count|^teams?$)/i.test(header.trim()) &&
           !/total|player|prize|diamond/i.test(header)
         )
           colTeamsIdx = idx;

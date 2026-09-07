@@ -20,7 +20,6 @@ import {
   registrationUrl,
   slotsLeft,
   tournamentStatus,
-  isTabDatePassed,
 } from "@/lib/tournaments";
 import { cleanAreaString } from "@/utils/sheetDetector";
 import { Modal } from "./shared";
@@ -79,7 +78,6 @@ export function CHCardModal({
         ? player.registeredTeams.length
         : player.teamsRegistered || 0;
   const maxTeams = player.maxTeams || 16;
-  const datePassed = isTabDatePassed(activeTabName);
   const status = tournamentStatus(
     { ...player, teamsRegistered: registered },
     activeTabName,
@@ -375,13 +373,11 @@ export function CHCardModal({
               }}
             >
               <LockKeyhole size={16} />
-              {datePassed
-                ? "Registration Closed — Tournament Date Passed"
-                : full
-                  ? `Full slots (${registered}/${maxTeams}) — Registration Closed`
-                  : status === "closed"
-                    ? "Registration Closed by Organizer"
-                    : "Registration Unavailable"}
+              {full
+                ? `Full slots (${registered}/${maxTeams}) — Registration Closed`
+                : status === "closed"
+                  ? "Registration Closed by Organizer"
+                  : "Registration Unavailable"}
             </button>
           )}
 

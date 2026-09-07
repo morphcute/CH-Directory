@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   CalendarDays,
+  Eye,
   LoaderCircle,
   LockKeyhole,
   MapPin,
@@ -15,7 +16,6 @@ import {
   listedPlayers,
   slotsLeft,
   tournamentStatus,
-  isTabDatePassed,
   registeredTeamsCount,
 } from "@/lib/tournaments";
 import { Brand } from "./shared";
@@ -24,6 +24,7 @@ import { CHCardModal } from "./CHCardModal";
 
 export function Portal({ initialState }: { initialState: AppState }) {
   const [state, setState] = useState(initialState);
+  const [pageViews, setPageViews] = useState<number>(state.pageViews || 0);
   const [selectedPlayer, setSelectedPlayer] = useState<CHPlayer | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -36,20 +37,15 @@ export function Portal({ initialState }: { initialState: AppState }) {
     /\s+\d{1,2},/,
     "",
   );
-  const datePassed = isTabDatePassed(state.activeTabName);
-  const openCount = datePassed
-    ? 0
-    : players.filter((p) => {
-        const s = tournamentStatus(p, state.activeTabName);
-        return s === "open" || s === "closing";
-      }).length;
+  const openCount = players.filter((p) => {
+    const s = tournamentStatus(p, state.activeTabName);
+    return s === "open" || s === "closing";
+  }).length;
 
-  const closedCount = datePassed
-    ? players.length
-    : players.filter((p) => {
-        const s = tournamentStatus(p, state.activeTabName);
-        return s === "full" || s === "closed";
-      }).length;
+  const closedCount = players.filter((p) => {
+    const s = tournamentStatus(p, state.activeTabName);
+    return s === "full" || s === "closed";
+  }).length;
 
   const filteredPlayers = players.filter((p) => {
     const s = tournamentStatus(p, state.activeTabName);
@@ -66,14 +62,6 @@ export function Portal({ initialState }: { initialState: AppState }) {
     }
     return true;
   });
-  const syncTime = state.lastHourlySync
-    ? new Intl.DateTimeFormat("en-PH", {
-        timeZone: "Asia/Manila",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      }).format(new Date(state.lastHourlySync)) + " PHT"
-    : "Recently";
 
   async function refresh() {
     try {
@@ -107,6 +95,52 @@ export function Portal({ initialState }: { initialState: AppState }) {
       controller.abort();
       clearInterval(timer);
       window.removeEventListener("focus", sync);
+    };
+  }, []);
+
+  // Track page view with cooldown deduplication (does not inflate count on rapid refresh)
+  useEffect(() => {
+    let isMounted = true;
+    const trackView = async () => {
+      try {
+        const COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes cooldown
+        const now = Date.now();
+        const lastRecorded = localStorage.getItem("ch_pv_time");
+        const isCooledDown =
+          lastRecorded && now - Number(lastRecorded) < COOLDOWN_MS;
+
+        if (isCooledDown) {
+          // If refreshed within 30 min, do NOT increment! Just get the latest count
+          const res = await fetch("/api/page-view", { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            if (isMounted && typeof data.pageViews === "number") {
+              setPageViews(data.pageViews);
+            }
+          }
+          return;
+        }
+
+        // Beyond cooldown: record new view
+        const res = await fetch("/api/page-view", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          localStorage.setItem("ch_pv_time", String(now));
+          if (isMounted && typeof data.pageViews === "number") {
+            setPageViews(data.pageViews);
+          }
+        }
+      } catch {
+        // Silently ignore network failures
+      }
+    };
+
+    trackView();
+    return () => {
+      isMounted = false;
     };
   }, []);
 
@@ -154,16 +188,10 @@ export function Portal({ initialState }: { initialState: AppState }) {
             />
             <div className="ch-fb-cover-shade" />
 
-            {/* Top-left date pill */}
-            <div className="ch-fb-badge top-left">
+            {/* Top-right date pill */}
+            <div className="ch-fb-badge top-right">
               <CalendarDays size={12} />
               <span>{month}</span>
-            </div>
-
-            {/* Top-right live directory pill */}
-            <div className="ch-fb-badge top-right">
-              <span className="ch-pulse-dot" />
-              <span>Live Directory</span>
             </div>
           </div>
 
@@ -185,31 +213,20 @@ export function Portal({ initialState }: { initialState: AppState }) {
               <span className="ch-fb-active-dot" title="Active Now" />
             </div>
 
-            <div className="ch-fb-meta-center">
-              <div className="ch-fb-name-row">
-                <h1 className="ch-fb-name">
-                  {state.bannerSettings?.title || "MLBB PH - Community Heroes"}
-                  <span className="verified-badge" title="Verified Page">
-                    <svg className="verified-badge-icon" viewBox="0 0 20 20" fill="currentColor">
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </span>
-                </h1>
-              </div>
-              <p className="ch-fb-bio">
-                {state.bannerSettings?.subtitle || "Official MLBB Tournament Directory"}
-                <span className="ch-fb-dot">•</span>
-                <span className="ch-fb-followers">
-                  {state.bannerSettings?.followersText || "286K followers • 5 following"}
+            <div className="ch-fb-name-row">
+              <h1 className="ch-fb-name">
+                {state.bannerSettings?.title || "MLBB PH - Community Heroes"}
+                <span className="verified-badge" title="Verified Page">
+                  <svg className="verified-badge-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
                 </span>
-              </p>
-            </div>
+              </h1>
 
-            <div className="ch-fb-actions-center">
               <a
                 href={
                   state.bannerSettings?.facebookPageUrl ||
@@ -227,43 +244,12 @@ export function Portal({ initialState }: { initialState: AppState }) {
               </a>
             </div>
 
-            {/* Status Ribbon inside Card */}
+            {/* Page Views Pill inside Card */}
             <div className="ch-fb-ribbon">
-              <div className="ch-ribbon-left">
-                {datePassed ? (
-                  <span className="ch-ribbon-badge full">
-                    <LockKeyhole size={11} />
-                    Registration Closed (Tournament Ended)
-                  </span>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter("open")}
-                      className={`ch-ribbon-badge open ${statusFilter === "open" ? "ch-badge-active" : ""}`}
-                      style={{ cursor: "pointer", border: "none", font: "inherit" }}
-                      title="Filter by open tournaments"
-                    >
-                      <span className="ch-pulse-dot" />
-                      {openCount} Open
-                    </button>
-                    {closedCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setStatusFilter("closed")}
-                        className={`ch-ribbon-badge full ${statusFilter === "closed" ? "ch-badge-active" : ""}`}
-                        style={{ cursor: "pointer", border: "none", font: "inherit" }}
-                        title="Filter by full or closed tournaments"
-                      >
-                        {closedCount} Full / Closed
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-              <div className="ch-ribbon-right">
-                <span>Synced {syncTime}</span>
-              </div>
+              <span className="ch-ribbon-views" title="Total directory page views">
+                <Eye size={13} />
+                <span>{pageViews.toLocaleString()} views</span>
+              </span>
             </div>
           </div>
         </section>
@@ -278,15 +264,9 @@ export function Portal({ initialState }: { initialState: AppState }) {
                 Community Heroes <span>{filteredPlayers.length}</span>
               </h2>
               <p>
-                {datePassed
-                  ? "This tournament cycle has concluded. Registration will reopen for next month."
-                  : "Registration closes when all team slots are filled."}
+                Registration closes when all team slots are filled.
               </p>
             </div>
-            <span className="ch-cycle">
-              <CalendarDays size={15} />
-              {month}
-            </span>
           </div>
           {error && (
             <div className="feedback error" role="alert">
@@ -478,9 +458,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
               </h3>
               <p>
                 {statusFilter === "open"
-                  ? datePassed
-                    ? "This tournament cycle has concluded. Registration will reopen for next month."
-                    : "All current Community Heroes tournament slots are fully booked or closed."
+                  ? "All current Community Heroes tournament slots are fully booked or closed."
                   : searchQuery
                     ? "Try searching for a different hero nickname or city."
                     : "There are currently no tournaments matching this filter."}
@@ -512,8 +490,11 @@ export function Portal({ initialState }: { initialState: AppState }) {
           />
         )}
         <footer className="ch-footer">
-          MLBB PH · Community Heroes
+          <div>MLBB PH · Community Heroes</div>
           <span>Team counts reflect the latest published lineup.</span>
+          <span className="ch-footer-views" title="Total directory views">
+            <Eye size={12} /> {pageViews.toLocaleString()} views
+          </span>
         </footer>
       </main>
   );
