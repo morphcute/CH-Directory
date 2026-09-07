@@ -10,29 +10,19 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="layout">
-      <header className="header">
-        <Brand />
-        <Link href="/" className="button outline small">
-          <ArrowLeft size={14} /> Back to Directory
-        </Link>
+    <div>
+      <header className="site-header simple-header">
+        <div className="header-inner">
+          <Brand />
+          <Link href="/" className="button outline small">
+            <ArrowLeft size={14} /> Back to Directory
+          </Link>
+        </div>
       </header>
 
-      <main style={{ maxWidth: 840, margin: "0 auto", padding: "40px 20px 80px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: "#252210",
-              border: "1px solid #5a4b12",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#facc15",
-            }}
-          >
+      <main className="legal-main" id="main-content">
+        <div className="legal-header-meta">
+          <div className="legal-icon-box">
             <FileText size={22} />
           </div>
           <div>
@@ -41,24 +31,11 @@ export default function TermsPage() {
           </div>
         </div>
 
-        <p style={{ color: "#94a3b8", fontSize: "14px", marginBottom: 32 }}>
+        <p style={{ color: "#94a3b8", fontSize: "14px", marginBottom: 24 }}>
           Last updated: September 7, 2026
         </p>
 
-        <div
-          style={{
-            background: "#121824",
-            border: "1px solid #222d3e",
-            borderRadius: 16,
-            padding: "32px",
-            lineHeight: 1.7,
-            color: "#cbd5e1",
-            fontSize: "14px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 24,
-          }}
-        >
+        <div className="legal-card">
           <section>
             <h2 style={{ color: "#facc15", fontSize: "18px", marginTop: 0 }}>1. Agreement to Terms</h2>
             <p>

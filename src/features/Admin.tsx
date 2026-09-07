@@ -478,9 +478,14 @@ export function Admin() {
               </p>
             </section>
             <div className="login-form">
-              <span className="modal-symbol">
-                <ShieldCheck size={24} />
-              </span>
+              <div className="login-avatar-box">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={state?.logoUrl || "/images/mlbb-ch-avatar.png"}
+                  alt="MLBB Community Heroes Logo"
+                  className="login-avatar-img"
+                />
+              </div>
               <h2>Welcome back, Hero.</h2>
               <p>
                 Sign in to your organizer workspace with Google OAuth to manage the directory, team capacity, and spreadsheet links.

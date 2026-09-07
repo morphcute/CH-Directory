@@ -4,24 +4,32 @@ import { ArrowUpRight, Crown, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 export function Brand({ logoUrl }: { logoUrl?: string } = {}) {
+  const currentLogo = logoUrl || "/images/mlbb-ch-avatar.png";
   return (
     <Link className="brand" href="/" aria-label="CH Directory home">
-      <span className="brand-mark">
-        {logoUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={logoUrl}
-            alt="Logo"
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              borderRadius: "8px",
-            }}
-          />
-        ) : (
-          <Crown size={25} strokeWidth={2.3} />
-        )}
+      <span
+        className="brand-mark"
+        style={{
+          overflow: "hidden",
+          background: "#0f172a",
+          border: "1.5px solid #243044",
+          padding: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={currentLogo}
+          alt="MLBB PH - Community Heroes"
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            borderRadius: "7px",
+          }}
+        />
       </span>
       <span>
         CH DIRECTORY

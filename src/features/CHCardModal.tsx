@@ -169,7 +169,7 @@ export function CHCardModal({
         <div className="ch-modal-header">
           <div className="ch-modal-avatar">{initials}</div>
           <div className="ch-modal-identity">
-            <div className="ch-modal-title-row" style={{ flexWrap: "nowrap", whiteSpace: "nowrap" }}>
+            <div className="ch-modal-title-row">
               {fbUrl ? (
                 <a
                   href={fbUrl}
@@ -181,18 +181,14 @@ export function CHCardModal({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 8,
-                    whiteSpace: "nowrap",
                   }}
                   title={`Open ${player.chNickname}'s Facebook profile`}
                 >
-                  <h2 style={{ margin: 0, whiteSpace: "nowrap" }}>{player.chNickname}</h2>
+                  <h2 style={{ margin: 0 }}>{player.chNickname}</h2>
                   <FacebookIcon size={18} style={{ color: "#1877F2", flexShrink: 0 }} />
                 </a>
               ) : (
-                <h2 style={{ margin: 0, whiteSpace: "nowrap" }}>{player.chNickname}</h2>
-              )}
-              {player.isCalabarzon && (
-                <span className="ch-modal-calabarzon">CALABARZON</span>
+                <h2 style={{ margin: 0 }}>{player.chNickname}</h2>
               )}
             </div>
             <div className="ch-modal-meta">

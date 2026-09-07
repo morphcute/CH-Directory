@@ -9,7 +9,14 @@ export const metadata: Metadata = {
   },
   description:
     "CH Directory: Find your local MLBB community tournament. Meet your Community Hero, discover available team slots, and take your squad to the next level.",
-  icons: { icon: "/icon.svg" },
+  icons: {
+    icon: [
+      { url: "/images/mlbb-ch-avatar.png", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/images/mlbb-ch-avatar.png",
+    shortcut: "/images/mlbb-ch-avatar.png",
+  },
   openGraph: {
     siteName: "CH Directory",
     title: "CH Directory — Community Heroes Tournament Directory",
