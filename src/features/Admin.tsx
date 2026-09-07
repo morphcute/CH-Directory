@@ -41,6 +41,7 @@ import { parseCsvOrTsv, transformRowsToPlayers, cleanAreaString } from "@/utils/
 import { compressImageFile } from "@/utils/imageUtils";
 import { slotsLeft, statusLabels, tournamentStatus, isTabDatePassed } from "@/lib/tournaments";
 import { Brand, Footer, Modal } from "./shared";
+import { RaffleWheelModal } from "./RaffleWheelModal";
 
 const GoogleIcon = ({ size = 18 }: { size?: number }) => (
   <svg
@@ -129,6 +130,7 @@ export function Admin() {
   const [newPrizeName, setNewPrizeName] = useState("");
   const [newPrizeCount, setNewPrizeCount] = useState<number>(1);
   const [selectedRandomPrize, setSelectedRandomPrize] = useState("");
+  const [wheelModalOpen, setWheelModalOpen] = useState(false);
   const [raffleQuery, setRaffleQuery] = useState("");
   const [adminRafflePage, setAdminRafflePage] = useState(1);
   const ADMIN_ENTRIES_PER_PAGE = 10;
@@ -517,6 +519,70 @@ export function Admin() {
     } catch (err: any) {
       setError(err.message || "Failed to clear entries");
     }
+  }
+
+  function handleExportRaffleCsv() {
+    if (!raffleData?.entries || raffleData.entries.length === 0) return;
+
+    const escapeCsv = (str: string | number | undefined | null) => {
+      const val = str === null || str === undefined ? "" : String(str);
+      if (val.includes(",") || val.includes('"') || val.includes("\n") || val.includes("\r")) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+
+    const headers = [
+      "#",
+      "Full Name",
+      "Prize Won",
+      "Status",
+      "Registered Date (Local)",
+      "Registered At (ISO UTC)",
+      "Device ID",
+      "IP Address",
+    ];
+
+    const rows = raffleData.entries.map((entry, idx) => {
+      const formattedDate = entry.createdAt
+        ? new Date(entry.createdAt).toLocaleString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+          })
+        : "";
+
+      return [
+        idx + 1,
+        escapeCsv(entry.fullName),
+        escapeCsv(entry.prizeWon || ""),
+        entry.prizeWon ? "Winner" : "Participant",
+        escapeCsv(formattedDate),
+        escapeCsv(entry.createdAt || ""),
+        escapeCsv((entry as any).deviceId || ""),
+        escapeCsv((entry as any).ipAddress || ""),
+      ].join(",");
+    });
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeTitle = (raffleData.title || "raffle")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `ch-raffle-${safeTitle}-${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   async function handlePickRandomWinner(batchCount = 1) {
@@ -2341,18 +2407,33 @@ export function Admin() {
                               </div>
                             </div>
 
-                            {/* Search bar */}
-                            <div className="raffle-search-box" style={{ padding: "4px 10px" }}>
-                              <Search size={13} />
-                              <input
-                                placeholder="Search participant…"
-                                value={raffleQuery}
-                                onChange={(e) => {
-                                  setRaffleQuery(e.target.value);
-                                  setAdminRafflePage(1);
-                                }}
-                                style={{ minWidth: 150, fontSize: 12 }}
-                              />
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              {/* Search bar */}
+                              <div className="raffle-search-box" style={{ padding: "4px 10px" }}>
+                                <Search size={13} />
+                                <input
+                                  placeholder="Search participant…"
+                                  value={raffleQuery}
+                                  onChange={(e) => {
+                                    setRaffleQuery(e.target.value);
+                                    setAdminRafflePage(1);
+                                  }}
+                                  style={{ minWidth: 150, fontSize: 12 }}
+                                />
+                              </div>
+
+                              {/* 1-Click Export CSV Button */}
+                              <button
+                                type="button"
+                                className="button outline small"
+                                onClick={handleExportRaffleCsv}
+                                disabled={!raffleData?.entries || raffleData.entries.length === 0}
+                                title="Download full participant list as Excel-ready CSV"
+                                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", fontSize: 12 }}
+                              >
+                                <Download size={13} />
+                                <span>Export CSV</span>
+                              </button>
                             </div>
                           </div>
 
@@ -2471,15 +2552,34 @@ export function Admin() {
                                     />
                                   )}
 
+                                  {/* Interactive Spin the Wheel live draw */}
                                   <button
                                     type="button"
                                     className="button primary small"
+                                    onClick={() => setWheelModalOpen(true)}
+                                    disabled={!eligibleEntrants.length}
+                                    title="Open live interactive roulette wheel to pick a winner"
+                                    style={{
+                                      background: "linear-gradient(135deg, #eab308 0%, #f59e0b 100%)",
+                                      color: "#090d16",
+                                      fontWeight: 700,
+                                      border: "none",
+                                      boxShadow: "0 0 16px rgba(234, 179, 8, 0.35)",
+                                    }}
+                                  >
+                                    <Trophy size={14} style={{ color: "#090d16" }} />
+                                    <span>🎡 Spin the Wheel</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="button outline small"
                                     onClick={() => handlePickRandomWinner(1)}
                                     disabled={!eligibleEntrants.length || remainingForPrize === 0}
-                                    title="Draw 1 random winner"
+                                    title="Draw 1 random winner directly"
                                   >
                                     <Shuffle size={14} />
-                                    <span>🎲 Draw 1 Winner</span>
+                                    <span>🎲 Quick Pick (1)</span>
                                   </button>
 
                                   {remainingForPrize > 1 && (
@@ -2499,6 +2599,20 @@ export function Admin() {
                               </div>
                             );
                           })()}
+
+                          {/* Interactive Wheel Modal */}
+                          {wheelModalOpen && raffleData && (
+                            <RaffleWheelModal
+                              isOpen={wheelModalOpen}
+                              onClose={() => setWheelModalOpen(false)}
+                              entries={(raffleData.entries || []) as any}
+                              prizes={raffleForm.prizes}
+                              defaultPrize={selectedRandomPrize}
+                              onAssignWinner={async (entryId, prizeWon) => {
+                                await handleAssignPrize(entryId, prizeWon);
+                              }}
+                            />
+                          )}
 
                           {/* Entrants Table */}
                           {(!raffleData?.entries || raffleData.entries.length === 0) ? (

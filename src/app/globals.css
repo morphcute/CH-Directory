@@ -6480,4 +6480,298 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
+/* ==========================================================================
+   INTERACTIVE LIVE DRAW WHEEL MODAL
+   ========================================================================== */
+.raffle-wheel-modal {
+  position: relative;
+  background: #090d16;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.85), 0 0 45px rgba(250, 204, 21, 0.12);
+  border-radius: 18px;
+  max-width: 880px;
+  width: 95%;
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: chScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
+.raffle-wheel-confetti-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 25;
+}
+
+.raffle-wheel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  position: relative;
+  z-index: 10;
+}
+
+.raffle-wheel-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.raffle-wheel-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.raffle-wheel-title small {
+  display: block;
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.raffle-wheel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.raffle-wheel-tool-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.raffle-wheel-tool-btn:hover:not(:disabled) {
+  background: #334155;
+  color: #ffffff;
+}
+
+.raffle-wheel-tool-btn.close:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.raffle-wheel-body {
+  display: flex;
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  gap: 24px;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .raffle-wheel-body {
+    flex-direction: column;
+    padding: 16px;
+    gap: 16px;
+  }
+}
+
+.raffle-wheel-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.raffle-wheel-pointer {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  border-top: 26px solid #facc15;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.7));
+  z-index: 15;
+  pointer-events: none;
+}
+
+.raffle-wheel-canvas {
+  max-width: 440px;
+  max-height: 440px;
+  width: 100%;
+  height: auto;
+  border-radius: 50%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+@media (max-width: 500px) {
+  .raffle-wheel-canvas {
+    max-width: 320px;
+    max-height: 320px;
+  }
+}
+
+.raffle-wheel-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-width: 260px;
+  max-width: 340px;
+  width: 100%;
+}
+
+.raffle-wheel-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.raffle-wheel-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.raffle-wheel-select,
+.raffle-wheel-input {
+  width: 100%;
+  background: #0b1120;
+  border: 1px solid #334155;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.raffle-wheel-select:focus,
+.raffle-wheel-input:focus {
+  border-color: #facc15;
+}
+
+.raffle-wheel-filter-row {
+  color: #94a3b8;
+  padding: 0 4px;
+}
+
+.raffle-wheel-filter-row input {
+  accent-color: #facc15;
+  cursor: pointer;
+}
+
+.raffle-wheel-spin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #facc15 0%, #eab308 50%, #ca8a04 100%);
+  color: #090d16;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 25px rgba(250, 204, 21, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.raffle-wheel-spin-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 0 35px rgba(250, 204, 21, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.raffle-wheel-spin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.raffle-wheel-winner-card {
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  border-radius: 14px;
+  padding: 16px;
+  text-align: center;
+  animation: chFadeUp 0.3s ease-out;
+  box-shadow: 0 0 30px rgba(250, 204, 21, 0.15);
+}
+
+.raffle-wheel-winner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(250, 204, 21, 0.2);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  color: #facc15;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.raffle-wheel-winner-name {
+  margin: 4px 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 0 12px rgba(250, 204, 21, 0.4);
+  word-break: break-word;
+}
+
+.raffle-wheel-winner-prize {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.raffle-wheel-winner-prize strong {
+  color: #facc15;
+}
+
+.raffle-wheel-awarded-alert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.raffle-wheel-actions-row {
+  display: flex;
+  gap: 8px;
+}
