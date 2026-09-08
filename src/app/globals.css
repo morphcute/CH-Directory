@@ -6960,6 +6960,27 @@ textarea:focus-visible {
   animation: pulseBorderRed 1.5s infinite;
 }
 
+.raffle-wheel-viewers-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5.5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #bae6fd;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.raffle-wheel-viewers-badge:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
 .raffle-wheel-live-dot {
   width: 6px;
   height: 6px;

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { X, Trophy, Shuffle, Volume2, VolumeX, CheckCircle, Gift, RefreshCw, Timer, Clock, UserCheck, RotateCcw } from "lucide-react";
+import { X, Trophy, Shuffle, Volume2, VolumeX, CheckCircle, Gift, RefreshCw, Timer, Clock, UserCheck, RotateCcw, Eye } from "lucide-react";
 import { type RafflePrizeItem, normalizePrizeItems } from "@/types";
 
 interface RaffleWheelEntry {
@@ -59,6 +59,30 @@ export function RaffleWheelModal({
   const [claimDurationSeconds, setClaimDurationSeconds] = useState<number>(60);
   const [claimDeadline, setClaimDeadline] = useState<number | null>(null);
   const [claimRemaining, setClaimRemaining] = useState<number>(60);
+  const [liveViewers, setLiveViewers] = useState<number>(0);
+
+  // Poll genuine live viewers while wheel modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    const fetchViewers = async () => {
+      try {
+        const res = await fetch("/api/raffle/viewers");
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (typeof data.viewerCount === "number") {
+            setLiveViewers(data.viewerCount);
+          }
+        }
+      } catch {}
+    };
+    void fetchViewers();
+    const interval = setInterval(fetchViewers, 4000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isOpen]);
 
   // Wheel physics state
   const rotationRef = useRef<number>(0);
@@ -639,6 +663,13 @@ export function RaffleWheelModal({
                 <h3>Interactive Live Draw Wheel</h3>
                 <span className="raffle-wheel-live-badge">
                   <span className="raffle-wheel-live-dot" /> LIVE SYNC
+                </span>
+                <span
+                  className="raffle-wheel-viewers-badge"
+                  title="Genuine active viewers currently watching the public wheel"
+                >
+                  <Eye size={13} style={{ color: "#38bdf8" }} />
+                  <span>{liveViewers} {liveViewers === 1 ? "Live Viewer" : "Live Viewers"}</span>
                 </span>
               </div>
               <small>

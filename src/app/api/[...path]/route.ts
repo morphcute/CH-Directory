@@ -78,17 +78,34 @@ export async function GET(request: Request, context: Context) {
       const { getLiveSpinState } = await import("@/server/liveSpinStore");
       return json({ liveSpin: getLiveSpinState() });
     }
+    if (route === "raffle/viewers") {
+      const { getLiveViewerCount } = await import("@/server/liveViewerStore");
+      return json({ viewerCount: getLiveViewerCount() });
+    }
     if (route === "raffle/live-stream") {
       const { getLiveSpinState, subscribeLiveSpin } = await import("@/server/liveSpinStore");
+      const { getLiveViewerCount, subscribeViewerCount } = await import("@/server/liveViewerStore");
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
           const initialData = `data: ${JSON.stringify(getLiveSpinState())}\n\n`;
           controller.enqueue(encoder.encode(initialData));
 
-          const unsubscribe = subscribeLiveSpin((state) => {
+          const initialViewers = `event: viewers\ndata: ${JSON.stringify({ viewerCount: getLiveViewerCount() })}\n\n`;
+          controller.enqueue(encoder.encode(initialViewers));
+
+          const unsubscribeSpin = subscribeLiveSpin((state) => {
             try {
               const data = `data: ${JSON.stringify(state)}\n\n`;
+              controller.enqueue(encoder.encode(data));
+            } catch {
+              // stream closed
+            }
+          });
+
+          const unsubscribeViewers = subscribeViewerCount((count) => {
+            try {
+              const data = `event: viewers\ndata: ${JSON.stringify({ viewerCount: count })}\n\n`;
               controller.enqueue(encoder.encode(data));
             } catch {
               // stream closed
@@ -105,7 +122,8 @@ export async function GET(request: Request, context: Context) {
 
           request.signal.addEventListener("abort", () => {
             clearInterval(pingInterval);
-            unsubscribe();
+            unsubscribeSpin();
+            unsubscribeViewers();
             try {
               controller.close();
             } catch {}
@@ -311,6 +329,37 @@ export async function POST(request: Request, context: Context) {
     return json({ error: "Request origin is not allowed." }, 403);
   const route = (await context.params).path.join("/");
   try {
+    if (route === "raffle/heartbeat") {
+      const { registerViewer, removeViewer } = await import("@/server/liveViewerStore");
+      const url = new URL(request.url);
+      const queryAction = url.searchParams.get("action");
+      let viewerId = url.searchParams.get("viewerId") || "";
+      let action = queryAction || "pulse";
+
+      try {
+        const text = await request.text();
+        if (text) {
+          try {
+            const body = JSON.parse(text);
+            if (body.viewerId) viewerId = String(body.viewerId);
+            if (body.action) action = String(body.action);
+          } catch {
+            if (!viewerId) viewerId = text.trim();
+          }
+        }
+      } catch {}
+
+      const ip = getClientIp(request);
+      const userAgent = request.headers.get("user-agent");
+
+      if (action === "leave") {
+        const viewerCount = removeViewer(viewerId);
+        return json({ success: true, viewerCount });
+      }
+
+      const viewerCount = registerViewer(viewerId, ip, userAgent);
+      return json({ success: true, viewerCount });
+    }
     if (route === "page-view") {
       const cookieHeader = request.headers.get("cookie") || "";
       const hasCookie = cookieHeader.includes(`${PV_COOKIE}=`);

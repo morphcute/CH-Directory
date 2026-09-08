@@ -10,9 +10,11 @@ import {
   Clock,
   UserCheck,
   CheckCircle,
+  Eye,
 } from "lucide-react";
 import { type RafflePrizeItem } from "@/types";
 import type { LiveSpinState } from "@/server/liveSpinStore";
+import { useRafflePresence } from "./useRafflePresence";
 
 interface PublicLiveWheelProps {
   entries: { id: string; fullName: string; prizeWon?: string | null }[];
@@ -34,6 +36,7 @@ const PALETTE = [
 ];
 
 export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelProps) {
+  const { viewerCount, setViewerCount } = useRafflePresence();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -387,6 +390,15 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
           setLiveSpin(data);
         } catch {}
       };
+      eventSource.addEventListener("viewers", (event: MessageEvent) => {
+        try {
+          if (!event.data) return;
+          const data = JSON.parse(event.data);
+          if (typeof data.viewerCount === "number") {
+            setViewerCount(data.viewerCount);
+          }
+        } catch {}
+      });
     } catch {
       // EventSource failed or unsupported
     }
@@ -516,6 +528,13 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
               <span className={`raffle-wheel-live-badge ${isLiveSpinning ? "active-spin" : ""}`}>
                 <span className="raffle-wheel-live-dot" />
                 {isLiveSpinning ? "LIVE DRAWING" : "READY FOR DRAW"}
+              </span>
+              <span
+                className="raffle-wheel-viewers-badge"
+                title="Genuine active viewers watching this live wheel"
+              >
+                <Eye size={13} style={{ color: "#38bdf8" }} />
+                <span>{viewerCount} {viewerCount === 1 ? "Live Viewer" : "Live Viewers"}</span>
               </span>
             </div>
             <small>
