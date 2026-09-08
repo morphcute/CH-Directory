@@ -666,10 +666,10 @@ export function RaffleWheelModal({
                 </span>
                 <span
                   className="raffle-wheel-viewers-badge"
-                  title="Genuine active viewers currently watching the public wheel"
+                  title={`${liveViewers} watching live`}
                 >
                   <Eye size={13} style={{ color: "#38bdf8" }} />
-                  <span>{liveViewers} {liveViewers === 1 ? "Live Viewer" : "Live Viewers"}</span>
+                  <span>{liveViewers}</span>
                 </span>
               </div>
               <small>

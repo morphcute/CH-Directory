@@ -531,10 +531,10 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
               </span>
               <span
                 className="raffle-wheel-viewers-badge"
-                title="Genuine active viewers watching this live wheel"
+                title={`${viewerCount} watching live`}
               >
                 <Eye size={13} style={{ color: "#38bdf8" }} />
-                <span>{viewerCount} {viewerCount === 1 ? "Live Viewer" : "Live Viewers"}</span>
+                <span>{viewerCount}</span>
               </span>
             </div>
             <small>
