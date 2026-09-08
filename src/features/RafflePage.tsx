@@ -87,26 +87,15 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
     null,
   );
 
-  function getHardwareFingerprint(): string {
+  function getClientDeviceId(): string {
     if (typeof window === "undefined") return "";
     try {
-      const nav = window.navigator;
-      const screen = window.screen;
-      const signals = [
-        screen.width + "x" + screen.height,
-        screen.colorDepth,
-        Intl.DateTimeFormat().resolvedOptions().timeZone,
-        nav.hardwareConcurrency || 0,
-        (nav as any).deviceMemory || 0,
-        nav.platform || "",
-      ];
-      let hash = 0;
-      const str = signals.join("|");
-      for (let i = 0; i < str.length; i++) {
-        hash = (hash << 5) - hash + str.charCodeAt(i);
-        hash |= 0;
+      let id = localStorage.getItem("ch_raffle_device_id");
+      if (!id) {
+        id = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem("ch_raffle_device_id", id);
       }
-      return "hw_" + Math.abs(hash).toString(36);
+      return id;
     } catch {
       return "";
     }
@@ -114,25 +103,21 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
 
   async function loadRaffle() {
     try {
-      const storedDevId = localStorage.getItem("ch_raffle_device_id");
-      const fp = getHardwareFingerprint();
+      const devId = getClientDeviceId();
       const params = new URLSearchParams();
-      if (storedDevId) params.set("deviceId", storedDevId);
-      if (fp) params.set("fp", fp);
+      if (devId) params.set("deviceId", devId);
       const queryString = params.toString();
       const url = queryString ? `/api/raffle?${queryString}` : "/api/raffle";
       const res = await fetch(url, {
         cache: "no-store",
-        headers: fp ? { "x-device-fingerprint": fp } : undefined,
       });
       if (!res.ok) throw new Error("Failed to load raffle data");
       const json: RaffleResponse = await res.json();
       setData(json);
       if (json.myEntry) {
         setEditName(json.myEntry.fullName);
-        if (json.myEntry.deviceId) {
-          localStorage.setItem("ch_raffle_device_id", json.myEntry.deviceId);
-        }
+      } else {
+        setEditing(false);
       }
     } catch (err) {
       console.error(err);
@@ -169,18 +154,16 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
     setSubmitting(true);
     setFeedback(null);
     try {
-      const storedDevId = localStorage.getItem("ch_raffle_device_id");
-      const fp = getHardwareFingerprint();
+      const devId = getClientDeviceId();
       const res = await fetch("/api/raffle/join", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(fp ? { "x-device-fingerprint": fp } : {}),
         },
         body: JSON.stringify({
           fullName: nameToSubmit,
-          deviceId: storedDevId || undefined,
-          fingerprint: fp || undefined,
+          deviceId: devId || undefined,
+          raffleId: data?.id || "default",
         }),
       });
       const resJson = await res.json();
@@ -189,8 +172,10 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
         throw new Error(resJson.error || "Failed to submit entry.");
       }
 
-      if (resJson.deviceId) {
-        localStorage.setItem("ch_raffle_device_id", resJson.deviceId);
+      if (resJson.deviceId && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("ch_raffle_device_id", resJson.deviceId);
+        } catch {}
       }
 
       setFeedback({

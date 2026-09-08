@@ -503,6 +503,21 @@ export async function writeDbRaffleSettings(data: {
   }
 }
 
+function isSameIp(ipA?: string, ipB?: string): boolean {
+  if (!ipA || !ipB) return false;
+  const cleanA = ipA.trim().toLowerCase().replace(/^::ffff:/, "");
+  const cleanB = ipB.trim().toLowerCase().replace(/^::ffff:/, "");
+  const normA = cleanA === "::1" || cleanA === "localhost" ? "127.0.0.1" : cleanA;
+  const normB = cleanB === "::1" || cleanB === "localhost" ? "127.0.0.1" : cleanB;
+  if (normA === normB) return true;
+  if (normA.includes(":") && normB.includes(":")) {
+    const prefixA = normA.split(":").slice(0, 4).join(":");
+    const prefixB = normB.split(":").slice(0, 4).join(":");
+    if (prefixA && prefixB && prefixA === prefixB) return true;
+  }
+  return false;
+}
+
 export async function submitOrUpdateDbRaffleEntry(
   raffleId = "default",
   fullName: string,
@@ -554,45 +569,39 @@ export async function submitOrUpdateDbRaffleEntry(
     // 1. Check deviceId (stored in browser cookie / localStorage)
     if (deviceId) {
       const deviceEntry = await sql`
-        SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, fingerprint, prize_won, created_at
+        SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, prize_won, created_at
         FROM raffle_entries
         WHERE raffle_id = ${actualRaffleId} AND device_id = ${deviceId}
         LIMIT 1;
       `;
       if (deviceEntry && deviceEntry.length > 0) {
-        existingEntry = deviceEntry[0];
-        matchedByDevice = true;
+        const registeredIp = deviceEntry[0].ip_address;
+        // Verify registered IP matches client IP if recorded.
+        // If IP does not match, the device token is from another network (e.g. cross-contaminated or session hijacked).
+        if (!registeredIp || !clientIp || isSameIp(registeredIp, clientIp)) {
+          existingEntry = deviceEntry[0];
+          matchedByDevice = true;
+        } else {
+          // IP mismatch: discard old deviceId to assign a fresh clean deviceId
+          deviceId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        }
       }
     }
 
-    // 2. Check hardware fingerprint (matches different browsers on the exact same device)
-    if (!existingEntry && fingerprint) {
-      const fpEntry = await sql`
-        SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, fingerprint, prize_won, created_at
-        FROM raffle_entries
-        WHERE raffle_id = ${actualRaffleId} AND fingerprint = ${fingerprint}
-        LIMIT 1;
-      `;
-      if (fpEntry && fpEntry.length > 0) {
-        existingEntry = fpEntry[0];
-        matchedByDevice = true;
-      }
-    }
-
-    // 3. Check client IP (including IPv6 /64 prefix to prevent network evasion)
+    // 2. Check client IP (to prevent multiple entries from the same network)
     if (!existingEntry && clientIp) {
       let ipEntry;
       if (clientIp.includes(":")) {
         const ipv6Prefix = clientIp.split(":").slice(0, 4).join(":") + ":%";
         ipEntry = await sql`
-          SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, fingerprint, prize_won, created_at
+          SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, prize_won, created_at
           FROM raffle_entries
           WHERE raffle_id = ${actualRaffleId} AND (ip_address = ${clientIp} OR ip_address LIKE ${ipv6Prefix})
           LIMIT 1;
         `;
       } else {
         ipEntry = await sql`
-          SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, fingerprint, prize_won, created_at
+          SELECT id, raffle_id, raffle_title, category, full_name, device_id, ip_address, prize_won, created_at
           FROM raffle_entries
           WHERE raffle_id = ${actualRaffleId} AND ip_address = ${clientIp}
           LIMIT 1;
@@ -605,12 +614,22 @@ export async function submitOrUpdateDbRaffleEntry(
     }
 
     if (existingEntry) {
-      // If found by IP only (different browser/session on same network)
-      if (!matchedByDevice && existingEntry.full_name.toLowerCase() !== trimmed.toLowerCase()) {
+      // If found by IP only (different browser/device on same network)
+      if (!matchedByDevice) {
         return {
           success: false,
           error: `Only 1 entry is allowed per network / IP. An entry has already been registered under "${existingEntry.full_name}".`,
         };
+      }
+
+      // Check if duplicate full name exists for ANOTHER entry in this raffle
+      const existingOtherName = await sql`
+        SELECT id FROM raffle_entries
+        WHERE raffle_id = ${actualRaffleId} AND LOWER(TRIM(full_name)) = LOWER(${trimmed}) AND id != ${existingEntry.id}
+        LIMIT 1;
+      `;
+      if (existingOtherName && existingOtherName.length > 0) {
+        return { success: false, error: `"${trimmed}" is already registered in this raffle!` };
       }
 
       const existingEntryId = existingEntry.id;
@@ -621,10 +640,9 @@ export async function submitOrUpdateDbRaffleEntry(
             category = ${actualCategory},
             device_id = COALESCE(${deviceId || null}, device_id),
             ip_address = COALESCE(${clientIp || null}, ip_address),
-            fingerprint = COALESCE(${fingerprint || null}, fingerprint),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ${existingEntryId}
-        RETURNING id, raffle_id, raffle_title, category, full_name, device_id, ip_address, fingerprint, prize_won, created_at;
+        RETURNING id, raffle_id, raffle_title, category, full_name, device_id, ip_address, prize_won, created_at;
       `;
       const u = updateRes[0];
       return {
@@ -638,7 +656,6 @@ export async function submitOrUpdateDbRaffleEntry(
           fullName: u.full_name,
           deviceId: u.device_id || deviceId || undefined,
           ipAddress: u.ip_address || clientIp || undefined,
-          fingerprint: u.fingerprint || fingerprint || undefined,
           prizeWon: u.prize_won || null,
           createdAt: u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
         },

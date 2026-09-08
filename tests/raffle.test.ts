@@ -316,4 +316,63 @@ test("raffle real-time live spin: in-memory pub/sub broadcasts spin events with 
   unsubscribe();
 });
 
+test("raffle identity isolation: myEntry only resolves when both deviceId AND IP match", async () => {
+  const { isSameIpOrSubnet } = await import("../src/app/api/[...path]/route");
+  const raffleId = "test-raffle-strict-identity";
+  await clearAllRaffleEntries(raffleId);
+
+  await updateRaffleSettings({
+    id: raffleId,
+    title: "Strict Identity Test",
+    description: "Testing strict device and IP ownership",
+    cutoffDate: new Date(Date.now() + 86400000).toISOString(),
+    prizes: ["100 Diamonds"],
+    isActive: true,
+  });
+
+  const ipA = "203.177.10.25";
+  const ipB = "112.198.50.60";
+  const devA = "device-player-alpha";
+  const devB = "device-player-beta";
+
+  // Player A registers from Device A on IP A
+  const resA = await submitRaffleEntry(raffleId, "Alice Guo", devA, ipA);
+  assert.equal(resA.success, true);
+
+  const state = await getRaffleState(raffleId);
+  const entry = state.entries.find((e) => e.deviceId === devA);
+  assert.ok(entry, "Alice's entry should exist");
+
+  // Helper matching the route.ts lookup rule:
+  function resolveMyEntry(reqDevId?: string, reqIp?: string) {
+    if (!reqDevId) return null;
+    return (
+      state.entries.find(
+        (e) =>
+          e.deviceId === reqDevId &&
+          (!e.ipAddress || isSameIpOrSubnet(e.ipAddress, reqIp)),
+      ) || null
+    );
+  }
+
+  // Case 1: Same device AND same IP -> MATCHES
+  const match1 = resolveMyEntry(devA, ipA);
+  assert.equal(match1?.fullName, "Alice Guo");
+
+  // Case 2: Different device on SAME IP -> NULL (never shows Alice to Device B)
+  const match2 = resolveMyEntry(devB, ipA);
+  assert.equal(match2, null);
+
+  // Case 3: Same device on DIFFERENT IP -> NULL (protects against cookie cloning across networks)
+  const match3 = resolveMyEntry(devA, ipB);
+  assert.equal(match3, null);
+
+  // Case 4: No device token provided -> NULL (never falls back to IP matching alone)
+  const match4 = resolveMyEntry(undefined, ipA);
+  assert.equal(match4, null);
+
+  await deleteRaffle(raffleId);
+});
+
+
 

@@ -169,14 +169,18 @@ export async function GET(request: Request, context: Context) {
       const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
       const urlParamDev = url.searchParams.get("deviceId");
       const deviceId = match ? decodeURIComponent(match[1]) : urlParamDev || undefined;
-      const urlParamFp = url.searchParams.get("fp") || request.headers.get("x-device-fingerprint") || undefined;
       const clientIp = getClientIp(request);
-      const myEntry = raffle.entries.find(
-        (e) =>
-          (deviceId && e.deviceId === deviceId) ||
-          (urlParamFp && e.fingerprint && e.fingerprint === urlParamFp) ||
-          (clientIp && e.ipAddress && isSameIpOrSubnet(e.ipAddress, clientIp)),
-      );
+
+      // STRICT IDENTITY:
+      // An entry will ONLY appear as 'myEntry' if BOTH the exact deviceId AND the matching IP are verified.
+      // Never show another player's registered entry via loose IP or coarse fingerprint ORs.
+      const myEntry = deviceId
+        ? raffle.entries.find(
+            (e) =>
+              e.deviceId === deviceId &&
+              (!e.ipAddress || isSameIpOrSubnet(e.ipAddress, clientIp)),
+          )
+        : null;
 
       const now = Date.now();
       const cutoffMs = raffle.cutoffDate ? new Date(raffle.cutoffDate).getTime() : Infinity;
@@ -232,14 +236,6 @@ export async function GET(request: Request, context: Context) {
             "https://www.facebook.com/MLBBPHCommunityHeroes",
         },
       });
-
-      if (myEntry?.deviceId && !match) {
-        response.cookies.set("ch_raffle_device", myEntry.deviceId, {
-          path: "/",
-          maxAge: 365 * 24 * 60 * 60,
-          sameSite: "lax",
-        });
-      }
 
       return response;
     }
@@ -676,14 +672,11 @@ export async function POST(request: Request, context: Context) {
 
       const cookieHeader = request.headers.get("cookie") || "";
       const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
-      const deviceId = match
-        ? decodeURIComponent(match[1])
-        : body.deviceId || `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const fingerprint = body.fingerprint || request.headers.get("x-device-fingerprint") || undefined;
+      const deviceId = body.deviceId || (match ? decodeURIComponent(match[1]) : `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
       const clientIp = getClientIp(request);
 
       const { submitRaffleEntry } = await import("@/server/raffleStore");
-      const res = await submitRaffleEntry(body.raffleId || "default", fullName, deviceId, clientIp, fingerprint);
+      const res = await submitRaffleEntry(body.raffleId || "default", fullName, deviceId, clientIp);
 
       if (!res.success) {
         return json({ error: res.error || "Could not join raffle." }, 400);

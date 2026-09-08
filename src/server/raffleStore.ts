@@ -161,8 +161,6 @@ export async function submitRaffleEntry(
       const existingIdx = local.entries.findIndex(
         (e) =>
           (deviceId && e.deviceId === deviceId) ||
-          (fingerprint && e.fingerprint === fingerprint) ||
-          (clientIp && e.ipAddress && isSameIp(e.ipAddress, clientIp)) ||
           e.id === res.entry.id,
       );
       if (existingIdx !== -1) {
@@ -171,7 +169,6 @@ export async function submitRaffleEntry(
           fullName: res.entry.fullName,
           deviceId: res.entry.deviceId || local.entries[existingIdx].deviceId,
           ipAddress: res.entry.ipAddress || local.entries[existingIdx].ipAddress,
-          fingerprint: res.entry.fingerprint || local.entries[existingIdx].fingerprint,
         };
       } else {
         local.entries.push(res.entry);
@@ -196,16 +193,15 @@ export async function submitRaffleEntry(
     return { success: false, error: "The cut-off date for this raffle has passed. Entries are closed." };
   }
 
-  // Check device, fingerprint, or IP existing
+  // Check device and IP
   let existingEntry = deviceId ? local.entries.find((e) => e.deviceId === deviceId) : undefined;
   let matchedByDevice = Boolean(existingEntry);
 
-  if (!existingEntry && fingerprint) {
-    const fpEntry = local.entries.find((e) => e.fingerprint === fingerprint);
-    if (fpEntry) {
-      existingEntry = fpEntry;
-      matchedByDevice = true;
-    }
+  if (existingEntry && existingEntry.ipAddress && clientIp && !isSameIp(existingEntry.ipAddress, clientIp)) {
+    // IP mismatch: token from another network
+    existingEntry = undefined;
+    matchedByDevice = false;
+    deviceId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
   if (!existingEntry && clientIp) {
@@ -217,17 +213,20 @@ export async function submitRaffleEntry(
   }
 
   if (existingEntry) {
-    // If matched by IP only (different browser/session on same network)
-    if (!matchedByDevice && existingEntry.fullName.toLowerCase() !== trimmed.toLowerCase()) {
+    // If found by IP only (different browser/session on same network)
+    if (!matchedByDevice) {
       return {
         success: false,
         error: `Only 1 entry is allowed per network / IP. An entry has already been registered under "${existingEntry.fullName}".`,
       };
     }
+    // Duplicate check with other entries
+    if (local.entries.some((e) => e.id !== existingEntry.id && e.fullName.toLowerCase() === trimmed.toLowerCase())) {
+      return { success: false, error: `"${trimmed}" is already registered in this raffle!` };
+    }
     existingEntry.fullName = trimmed;
     if (deviceId && !existingEntry.deviceId) existingEntry.deviceId = deviceId;
     if (clientIp && !existingEntry.ipAddress) existingEntry.ipAddress = clientIp;
-    if (fingerprint && !existingEntry.fingerprint) existingEntry.fingerprint = fingerprint;
     await writeLocalRaffle(local);
     return { success: true, updated: true, entry: existingEntry };
   }
