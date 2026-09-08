@@ -33,24 +33,45 @@ const PV_COOKIE = "ch_pv_session";
 
 function normalizeIp(ip: string): string {
   if (!ip) return "";
-  let clean = ip.trim();
+  let clean = ip.trim().toLowerCase();
   if (clean.startsWith("::ffff:")) clean = clean.slice(7);
   if (clean === "::1" || clean === "localhost") return "127.0.0.1";
   return clean;
 }
 
+export function isSameIpOrSubnet(ipA?: string, ipB?: string): boolean {
+  if (!ipA || !ipB) return false;
+  const a = normalizeIp(ipA);
+  const b = normalizeIp(ipB);
+  if (a === b) return true;
+  // IPv6 prefix comparison (/64 subnet)
+  if (a.includes(":") && b.includes(":")) {
+    const prefixA = a.split(":").slice(0, 4).join(":");
+    const prefixB = b.split(":").slice(0, 4).join(":");
+    if (prefixA && prefixB && prefixA === prefixB) return true;
+  }
+  return false;
+}
+
 function getClientIp(request: Request): string {
+  const cfConnectingIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfConnectingIp) return normalizeIp(cfConnectingIp);
+
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return normalizeIp(realIp);
+
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
     const first = forwarded.split(",")[0]?.trim();
     if (first) return normalizeIp(first);
   }
-  const cfConnectingIp = request.headers.get("cf-connecting-ip")?.trim();
-  if (cfConnectingIp) return normalizeIp(cfConnectingIp);
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  if (realIp) return normalizeIp(realIp);
+
+  const clientIpHeader = request.headers.get("x-client-ip")?.trim();
+  if (clientIpHeader) return normalizeIp(clientIpHeader);
+
   const nextIp = (request as any).ip;
   if (nextIp) return normalizeIp(String(nextIp));
+
   return "127.0.0.1";
 }
 
@@ -148,11 +169,13 @@ export async function GET(request: Request, context: Context) {
       const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
       const urlParamDev = url.searchParams.get("deviceId");
       const deviceId = match ? decodeURIComponent(match[1]) : urlParamDev || undefined;
+      const urlParamFp = url.searchParams.get("fp") || request.headers.get("x-device-fingerprint") || undefined;
       const clientIp = getClientIp(request);
       const myEntry = raffle.entries.find(
         (e) =>
           (deviceId && e.deviceId === deviceId) ||
-          (clientIp && e.ipAddress && e.ipAddress === clientIp),
+          (urlParamFp && e.fingerprint && e.fingerprint === urlParamFp) ||
+          (clientIp && e.ipAddress && isSameIpOrSubnet(e.ipAddress, clientIp)),
       );
 
       const now = Date.now();
@@ -645,7 +668,7 @@ export async function POST(request: Request, context: Context) {
       return json({ liveSpin: getLiveSpinState() });
     }
     if (route === "raffle/join") {
-      const body = (await request.json()) as { fullName?: string; deviceId?: string; raffleId?: string };
+      const body = (await request.json()) as { fullName?: string; deviceId?: string; raffleId?: string; fingerprint?: string };
       const fullName = (body.fullName || "").trim();
       if (!fullName) {
         return json({ error: "Please enter your full name." }, 400);
@@ -656,10 +679,11 @@ export async function POST(request: Request, context: Context) {
       const deviceId = match
         ? decodeURIComponent(match[1])
         : body.deviceId || `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const fingerprint = body.fingerprint || request.headers.get("x-device-fingerprint") || undefined;
       const clientIp = getClientIp(request);
 
       const { submitRaffleEntry } = await import("@/server/raffleStore");
-      const res = await submitRaffleEntry(body.raffleId || "default", fullName, deviceId, clientIp);
+      const res = await submitRaffleEntry(body.raffleId || "default", fullName, deviceId, clientIp, fingerprint);
 
       if (!res.success) {
         return json({ error: res.error || "Could not join raffle." }, 400);

@@ -87,13 +87,44 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
     null,
   );
 
+  function getHardwareFingerprint(): string {
+    if (typeof window === "undefined") return "";
+    try {
+      const nav = window.navigator;
+      const screen = window.screen;
+      const signals = [
+        screen.width + "x" + screen.height,
+        screen.colorDepth,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        nav.hardwareConcurrency || 0,
+        (nav as any).deviceMemory || 0,
+        nav.platform || "",
+      ];
+      let hash = 0;
+      const str = signals.join("|");
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return "hw_" + Math.abs(hash).toString(36);
+    } catch {
+      return "";
+    }
+  }
+
   async function loadRaffle() {
     try {
       const storedDevId = localStorage.getItem("ch_raffle_device_id");
-      const url = storedDevId
-        ? `/api/raffle?deviceId=${encodeURIComponent(storedDevId)}`
-        : "/api/raffle";
-      const res = await fetch(url, { cache: "no-store" });
+      const fp = getHardwareFingerprint();
+      const params = new URLSearchParams();
+      if (storedDevId) params.set("deviceId", storedDevId);
+      if (fp) params.set("fp", fp);
+      const queryString = params.toString();
+      const url = queryString ? `/api/raffle?${queryString}` : "/api/raffle";
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: fp ? { "x-device-fingerprint": fp } : undefined,
+      });
       if (!res.ok) throw new Error("Failed to load raffle data");
       const json: RaffleResponse = await res.json();
       setData(json);
@@ -139,12 +170,17 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
     setFeedback(null);
     try {
       const storedDevId = localStorage.getItem("ch_raffle_device_id");
+      const fp = getHardwareFingerprint();
       const res = await fetch("/api/raffle/join", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(fp ? { "x-device-fingerprint": fp } : {}),
+        },
         body: JSON.stringify({
           fullName: nameToSubmit,
           deviceId: storedDevId || undefined,
+          fingerprint: fp || undefined,
         }),
       });
       const resJson = await res.json();

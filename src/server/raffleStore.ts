@@ -132,22 +132,37 @@ export async function updateRaffleSettings(data: {
   return merged;
 }
 
+function isSameIp(ipA?: string, ipB?: string): boolean {
+  if (!ipA || !ipB) return false;
+  const a = ipA.trim().toLowerCase();
+  const b = ipB.trim().toLowerCase();
+  if (a === b) return true;
+  if (a.includes(":") && b.includes(":")) {
+    const prefixA = a.split(":").slice(0, 4).join(":");
+    const prefixB = b.split(":").slice(0, 4).join(":");
+    if (prefixA && prefixB && prefixA === prefixB) return true;
+  }
+  return false;
+}
+
 export async function submitRaffleEntry(
   raffleId = "default",
   fullName: string,
   deviceId?: string,
   clientIp?: string,
+  fingerprint?: string,
 ): Promise<{ success: boolean; entry?: RaffleEntry; updated?: boolean; error?: string }> {
   // 1. Try Neon DB
   try {
-    const res = await submitOrUpdateDbRaffleEntry(raffleId, fullName, deviceId, clientIp);
+    const res = await submitOrUpdateDbRaffleEntry(raffleId, fullName, deviceId, clientIp, fingerprint);
     if (res.success && res.entry) {
       // Sync local fallback
       const local = await readLocalRaffle();
       const existingIdx = local.entries.findIndex(
         (e) =>
           (deviceId && e.deviceId === deviceId) ||
-          (clientIp && e.ipAddress === clientIp) ||
+          (fingerprint && e.fingerprint === fingerprint) ||
+          (clientIp && e.ipAddress && isSameIp(e.ipAddress, clientIp)) ||
           e.id === res.entry.id,
       );
       if (existingIdx !== -1) {
@@ -156,6 +171,7 @@ export async function submitRaffleEntry(
           fullName: res.entry.fullName,
           deviceId: res.entry.deviceId || local.entries[existingIdx].deviceId,
           ipAddress: res.entry.ipAddress || local.entries[existingIdx].ipAddress,
+          fingerprint: res.entry.fingerprint || local.entries[existingIdx].fingerprint,
         };
       } else {
         local.entries.push(res.entry);
@@ -180,12 +196,20 @@ export async function submitRaffleEntry(
     return { success: false, error: "The cut-off date for this raffle has passed. Entries are closed." };
   }
 
-  // Check device or IP existing
+  // Check device, fingerprint, or IP existing
   let existingEntry = deviceId ? local.entries.find((e) => e.deviceId === deviceId) : undefined;
   let matchedByDevice = Boolean(existingEntry);
 
+  if (!existingEntry && fingerprint) {
+    const fpEntry = local.entries.find((e) => e.fingerprint === fingerprint);
+    if (fpEntry) {
+      existingEntry = fpEntry;
+      matchedByDevice = true;
+    }
+  }
+
   if (!existingEntry && clientIp) {
-    const ipEntry = local.entries.find((e) => e.ipAddress === clientIp);
+    const ipEntry = local.entries.find((e) => isSameIp(e.ipAddress, clientIp));
     if (ipEntry) {
       existingEntry = ipEntry;
       matchedByDevice = false;
@@ -203,6 +227,7 @@ export async function submitRaffleEntry(
     existingEntry.fullName = trimmed;
     if (deviceId && !existingEntry.deviceId) existingEntry.deviceId = deviceId;
     if (clientIp && !existingEntry.ipAddress) existingEntry.ipAddress = clientIp;
+    if (fingerprint && !existingEntry.fingerprint) existingEntry.fingerprint = fingerprint;
     await writeLocalRaffle(local);
     return { success: true, updated: true, entry: existingEntry };
   }
@@ -220,6 +245,7 @@ export async function submitRaffleEntry(
     fullName: trimmed,
     deviceId,
     ipAddress: clientIp,
+    fingerprint,
     createdAt: new Date().toISOString(),
   };
   local.entries.push(newEntry);
