@@ -121,6 +121,12 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (data?.title && typeof document !== "undefined") {
+      document.title = `${data.title} | MLBB Community Heroes`;
+    }
+  }, [data?.title]);
+
   async function handleJoinOrUpdate(e: React.FormEvent, isUpdate = false) {
     e.preventDefault();
     const nameToSubmit = isUpdate ? editName.trim() : fullName.trim();
@@ -332,7 +338,7 @@ export function RafflePage({ initialAppState }: { initialAppState?: AppState } =
         <div className="ch-list-heading" style={{ marginBottom: 12 }}>
           <div>
             <h2 id="raffle-section-heading" style={{ fontSize: 24, marginBottom: 4 }}>
-              {activeTab === "latest" ? "Community Raffle" : "Past Winners Archive"}
+              {activeTab === "latest" ? (data?.title || "Community Raffle") : "Past Winners Archive"}
             </h2>
             <p style={{ marginTop: 2, fontSize: 12 }}>
               {activeTab === "latest"
