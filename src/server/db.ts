@@ -1,5 +1,11 @@
 import { neon } from "@neondatabase/serverless";
-import type { AppState, RaffleData, RaffleArchiveSummary, RafflePrizeItem } from "@/types";
+import type {
+  AppState,
+  RaffleActiveSummary,
+  RaffleData,
+  RaffleArchiveSummary,
+  RafflePrizeItem,
+} from "@/types";
 
 const NEON_DEFAULT_URL =
   "postgresql://neondb_owner:npg_sf48HAgKjVFW@ep-purple-sky-b3f8vspb-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
@@ -25,6 +31,8 @@ const STATE_CACHE_TTL_MS = 60_000; // 60 seconds TTL
 const cachedRaffles = new Map<string, CacheItem<RaffleData>>();
 const RAFFLE_CACHE_TTL_MS = 30_000; // 30 seconds TTL
 
+let cachedActiveRaffles: CacheItem<RaffleActiveSummary[]> | null = null;
+
 let cachedArchives: CacheItem<RaffleArchiveSummary[]> | null = null;
 const ARCHIVES_CACHE_TTL_MS = 60_000; // 60 seconds TTL
 
@@ -32,11 +40,13 @@ export function clearDbCache(type?: "state" | "raffle" | "archives" | "all") {
   if (!type || type === "all") {
     cachedState = null;
     cachedRaffles.clear();
+    cachedActiveRaffles = null;
     cachedArchives = null;
   } else if (type === "state") {
     cachedState = null;
   } else if (type === "raffle") {
     cachedRaffles.clear();
+    cachedActiveRaffles = null;
   } else if (type === "archives") {
     cachedArchives = null;
   }
@@ -272,6 +282,62 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
     cachedRaffles.set(cacheKey, { data: raffleResult, timestamp: Date.now() });
     cachedRaffles.set(r.id, { data: raffleResult, timestamp: Date.now() });
     return raffleResult;
+  } catch {
+    return null;
+  }
+}
+
+export async function readDbActiveRaffles(): Promise<RaffleActiveSummary[] | null> {
+  if (
+    cachedActiveRaffles &&
+    Date.now() - cachedActiveRaffles.timestamp < RAFFLE_CACHE_TTL_MS
+  ) {
+    return cachedActiveRaffles.data;
+  }
+
+  const sql = getSql();
+  if (!sql) return null;
+  try {
+    await ensureRaffleTables(sql);
+    const rows = await sql`
+      SELECT
+        r.id,
+        r.title,
+        r.category,
+        r.description,
+        r.cutoff_date,
+        r.prizes,
+        r.is_active,
+        r.created_at,
+        COUNT(e.id)::int AS entries_count
+      FROM raffles r
+      LEFT JOIN raffle_entries e ON e.raffle_id = r.id
+      WHERE r.is_archived = false AND r.is_active = true
+      GROUP BY r.id
+      ORDER BY r.created_at DESC;
+    `;
+
+    const activeRaffles = rows.map((row: any) => ({
+      id: row.id,
+      title: row.title,
+      category: row.category || "Diamonds Giveaway",
+      description: row.description || "",
+      cutoffDate: row.cutoff_date
+        ? new Date(row.cutoff_date).toISOString()
+        : "",
+      prizes: Array.isArray(row.prizes) ? row.prizes : [],
+      isActive: Boolean(row.is_active),
+      entriesCount: Number(row.entries_count) || 0,
+      createdAt: row.created_at
+        ? new Date(row.created_at).toISOString()
+        : new Date().toISOString(),
+    }));
+
+    cachedActiveRaffles = {
+      data: activeRaffles,
+      timestamp: Date.now(),
+    };
+    return activeRaffles;
   } catch {
     return null;
   }

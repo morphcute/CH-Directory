@@ -1,8 +1,38 @@
 import type { AppState, CHPlayer } from "../types";
 import { parseTabDate } from "@/utils/sheetDetector";
 
-export function listedPlayers(state: AppState) {
-  return state.players.filter((player) => Boolean(player.active));
+export function listedPlayers(state: AppState): CHPlayer[] {
+  const active = (state.players || []).filter((player) => Boolean(player.active));
+  const selected = state.selectedNicknames;
+  if (!selected || selected.length === 0) {
+    return active;
+  }
+
+  const orderMap = new Map<string, number>();
+  selected.forEach((nick, idx) => {
+    orderMap.set(nick.toLowerCase().trim(), idx);
+  });
+
+  return [...active].sort((a, b) => {
+    const aNick = (a.chNickname || "").toLowerCase().trim();
+    const bNick = (b.chNickname || "").toLowerCase().trim();
+    const aId = (a.id || "").toLowerCase().trim();
+    const bId = (b.id || "").toLowerCase().trim();
+
+    const aIdx = orderMap.has(aNick)
+      ? orderMap.get(aNick)!
+      : orderMap.has(aId)
+        ? orderMap.get(aId)!
+        : 999999;
+
+    const bIdx = orderMap.has(bNick)
+      ? orderMap.get(bNick)!
+      : orderMap.has(bId)
+        ? orderMap.get(bId)!
+        : 999999;
+
+    return aIdx - bIdx;
+  });
 }
 
 /**

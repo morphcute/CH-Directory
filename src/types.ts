@@ -158,6 +158,18 @@ export interface RaffleData {
   updatedAt?: string;
 }
 
+export interface RaffleActiveSummary {
+  id: string;
+  title: string;
+  category?: string;
+  description: string;
+  cutoffDate: string;
+  prizes: (string | RafflePrizeItem)[];
+  isActive: boolean;
+  entriesCount: number;
+  createdAt: string;
+}
+
 export interface RaffleArchiveSummary {
   id: string;
   title: string;
@@ -169,4 +181,3 @@ export interface RaffleArchiveSummary {
   entriesCount: number;
   winners: { id: string; fullName: string; prizeWon: string }[];
 }
-

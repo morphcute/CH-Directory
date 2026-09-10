@@ -143,6 +143,27 @@ test("raffle winner assignment: admin can assign and remove prizes for winners",
   await deleteRaffle(raffleId);
 });
 
+test("raffle archive: remains active until a winner is assigned", async () => {
+  const raffleId = "test-raffle-awaiting-winner";
+  await clearAllRaffleEntries(raffleId);
+  await updateRaffleSettings({
+    id: raffleId,
+    title: "Awaiting Winner Test",
+    description: "Closed raffles stay active until winners are assigned.",
+    cutoffDate: new Date(Date.now() - 60_000).toISOString(),
+    prizes: ["100 Diamonds"],
+    isActive: true,
+  });
+
+  const result = await archiveCurrentRaffle(raffleId);
+  assert.equal(result.success, false);
+  assert.match(result.error || "", /assign at least one winner/i);
+
+  const raffle = await getRaffleState(raffleId);
+  assert.equal(raffle.isArchived, false);
+  await deleteRaffle(raffleId);
+});
+
 test("raffle archive: completed raffle is moved to archive with winners and new edition starts", async () => {
   const raffleId = "test-raffle-archive";
   await clearAllRaffleEntries(raffleId);
@@ -373,6 +394,5 @@ test("raffle identity isolation: myEntry only resolves when both deviceId AND IP
 
   await deleteRaffle(raffleId);
 });
-
 
 

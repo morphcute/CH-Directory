@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
   readDbRaffle,
+  readDbActiveRaffles,
   readDbArchivedRaffles,
   archiveDbRaffle,
   createDbNewRaffle,
@@ -14,7 +15,13 @@ import {
   unarchiveDbRaffle,
   updateDbArchivedRaffle,
 } from "@/server/db";
-import type { RaffleData, RaffleEntry, RaffleArchiveSummary, RafflePrizeItem } from "@/types";
+import type {
+  RaffleActiveSummary,
+  RaffleData,
+  RaffleEntry,
+  RaffleArchiveSummary,
+  RafflePrizeItem,
+} from "@/types";
 
 const DEFAULT_RAFFLE: RaffleData = {
   id: "default",
@@ -77,6 +84,31 @@ export async function getRaffleState(raffleId = "default"): Promise<RaffleData> 
 
   // 2. Fallback to local file
   return readLocalRaffle();
+}
+
+export async function getActiveRaffles(): Promise<RaffleActiveSummary[]> {
+  try {
+    const activeRaffles = await readDbActiveRaffles();
+    if (activeRaffles) return activeRaffles;
+  } catch (err) {
+    console.warn("Neon DB read error for active raffles, using local file:", err);
+  }
+
+  const local = await readLocalRaffle();
+  if (!local.isActive || local.isArchived) return [];
+  return [
+    {
+      id: local.id,
+      title: local.title,
+      category: local.category || "Diamonds Giveaway",
+      description: local.description,
+      cutoffDate: local.cutoffDate,
+      prizes: local.prizes,
+      isActive: local.isActive,
+      entriesCount: local.entries.length,
+      createdAt: local.createdAt || new Date().toISOString(),
+    },
+  ];
 }
 
 export async function updateRaffleSettings(data: {
@@ -353,9 +385,19 @@ export async function archiveCurrentRaffle(
     cutoffDate?: string;
     prizes?: (string | RafflePrizeItem)[];
   },
-): Promise<{ success: boolean; newRaffle?: RaffleData }> {
+): Promise<{ success: boolean; newRaffle?: RaffleData; error?: string }> {
   try {
     const current = await getRaffleState(raffleId);
+    const hasAssignedWinner = current.entries.some((entry) =>
+      Boolean(entry.prizeWon?.trim()),
+    );
+    if (!hasAssignedWinner) {
+      return {
+        success: false,
+        error:
+          "Assign at least one winner before moving this raffle to Past Winners.",
+      };
+    }
 
     // 1. Try Neon DB archive
     try {
@@ -538,5 +580,3 @@ export async function editArchivedRaffle(
     return false;
   }
 }
-
-

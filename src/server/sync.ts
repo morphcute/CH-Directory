@@ -184,11 +184,31 @@ export async function syncSpreadsheetBackground(): Promise<{
     }));
 
     const now = Date.now();
+    // Preserve existing selection order if present
+    const existingOrder = state.selectedNicknames || [];
+    const activePlayers = finalPlayers.filter((p) => p.active);
+    const activeNickSet = new Set(
+      activePlayers.map((p) => p.chNickname.toLowerCase().trim()),
+    );
+
+    // Keep previously selected nicknames that remain active
+    const preservedOrder = existingOrder.filter((nick) =>
+      activeNickSet.has(nick.toLowerCase().trim()),
+    );
+    const preservedSet = new Set(
+      preservedOrder.map((n) => n.toLowerCase().trim()),
+    );
+
+    // Append newly active players not in preservedOrder
+    const newActiveNicks = activePlayers
+      .map((p) => p.chNickname)
+      .filter((nick) => !preservedSet.has(nick.toLowerCase().trim()));
+
+    const finalSelectedNicknames = [...preservedOrder, ...newActiveNicks];
+
     await saveState({
       players: finalPlayers,
-      selectedNicknames: finalPlayers
-        .filter((p) => p.active)
-        .map((p) => p.chNickname),
+      selectedNicknames: finalSelectedNicknames,
       lastHourlySync: now,
       prlCutoff: finalPrlCutoff,
     });

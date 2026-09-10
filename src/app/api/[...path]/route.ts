@@ -161,7 +161,9 @@ export async function GET(request: Request, context: Context) {
       });
     }
     if (route === "raffle") {
-      const { getRaffleState, getArchivedRaffles } = await import("@/server/raffleStore");
+      const { getRaffleState, getActiveRaffles, getArchivedRaffles } = await import(
+        "@/server/raffleStore"
+      );
       const url = new URL(request.url);
       const requestedId = url.searchParams.get("id") || "default";
       const raffle = await getRaffleState(requestedId);
@@ -185,7 +187,10 @@ export async function GET(request: Request, context: Context) {
       const now = Date.now();
       const cutoffMs = raffle.cutoffDate ? new Date(raffle.cutoffDate).getTime() : Infinity;
       const isEnded = !raffle.isActive || now > cutoffMs;
-      const archives = await getArchivedRaffles();
+      const [activeRaffles, archives] = await Promise.all([
+        getActiveRaffles(),
+        getArchivedRaffles(),
+      ]);
       const appState = await readState();
 
       const response = json({
@@ -220,6 +225,7 @@ export async function GET(request: Request, context: Context) {
               deviceId: myEntry.deviceId,
             }
           : null,
+        activeRaffles,
         archives,
         branding: {
           bannerUrl:
@@ -909,6 +915,12 @@ export async function POST(request: Request, context: Context) {
           cutoffDate: body.cutoffDate,
           prizes: body.prizes,
         });
+        if (!res.success) {
+          return json(
+            { error: res.error || "Assign a winner before archiving this raffle." },
+            400,
+          );
+        }
         const archives = await getArchivedRaffles();
         return json({ success: true, raffle: res.newRaffle, archives });
       }

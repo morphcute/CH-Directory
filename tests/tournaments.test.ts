@@ -203,3 +203,48 @@ test("pasted sheet data preserves commas, escaped quotes, and multiline cells", 
   assert.equal(result[0].teamsRegistered, 10);
   assert.equal(result[0].isCalabarzon, true);
 });
+
+test("listedPlayers orders heroes strictly according to selection sequence (1 by 1)", () => {
+  const p1: CHPlayer = { ...player, id: "ch-1", chNickname: "Lester", active: true };
+  const p2: CHPlayer = { ...player, id: "ch-2", chNickname: "Meg", active: true };
+  const p3: CHPlayer = { ...player, id: "ch-3", chNickname: "Vien", active: true };
+  const p4: CHPlayer = { ...player, id: "ch-4", chNickname: "Hanyel", active: false };
+
+  // Initial order in array is [Lester, Meg, Vien, Hanyel]
+  const allPlayers = [p1, p2, p3, p4];
+
+  // If unselected all, then selected Vien first, Lester second, Meg third:
+  const selectionOrder = ["Vien", "Lester", "Meg"];
+  const ordered = listedPlayers({
+    players: allPlayers,
+    selectedNicknames: selectionOrder,
+  } as any);
+
+  assert.equal(ordered.length, 3);
+  assert.equal(ordered[0].chNickname, "Vien", "1st selection should be #1 in directory");
+  assert.equal(ordered[1].chNickname, "Lester", "2nd selection should be #2 in directory");
+  assert.equal(ordered[2].chNickname, "Meg", "3rd selection should be #3 in directory");
+
+  // Inactive hero Hanyel must never appear in listedPlayers
+  assert.ok(!ordered.some((p) => p.chNickname === "Hanyel"));
+
+  // If deselect all (selectedNicknames is empty), active heroes fall back to array order
+  const emptySelection = listedPlayers({
+    players: allPlayers,
+    selectedNicknames: [],
+  } as any);
+  assert.equal(emptySelection.length, 3);
+  assert.equal(emptySelection[0].chNickname, "Lester");
+  assert.equal(emptySelection[1].chNickname, "Meg");
+  assert.equal(emptySelection[2].chNickname, "Vien");
+
+  // If Meg is deselected, then re-selected after Vien and Lester:
+  const reselectedOrder = ["Lester", "Vien", "Meg"];
+  const reselected = listedPlayers({
+    players: allPlayers,
+    selectedNicknames: reselectedOrder,
+  } as any);
+  assert.equal(reselected[0].chNickname, "Lester");
+  assert.equal(reselected[1].chNickname, "Vien");
+  assert.equal(reselected[2].chNickname, "Meg");
+});

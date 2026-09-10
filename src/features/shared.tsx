@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { ArrowUpRight, Crown, Gift, X } from "lucide-react";
+import { ArrowUpRight, Gift, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 export function Brand({ logoUrl }: { logoUrl?: string } = {}) {
@@ -11,8 +11,8 @@ export function Brand({ logoUrl }: { logoUrl?: string } = {}) {
         className="brand-mark"
         style={{
           overflow: "hidden",
-          background: "#0f172a",
-          border: "1.5px solid #243044",
+          background: "#20231f",
+          border: "1px solid rgba(237, 250, 121, 0.28)",
           padding: 2,
           display: "flex",
           alignItems: "center",
@@ -33,11 +33,41 @@ export function Brand({ logoUrl }: { logoUrl?: string } = {}) {
       </span>
       <span>
         CH DIRECTORY
-        <span>
-          COMMUNITY HEROES<span className="brand-ph">PH</span>
-        </span>
+        <span>COMMUNITY HEROES</span>
       </span>
     </Link>
+  );
+}
+
+export function SiteHeader({
+  active,
+  logoUrl,
+}: {
+  active: "directory" | "raffle";
+  logoUrl?: string;
+}) {
+  return (
+    <header className="site-header public-site-header">
+      <div className="header-inner">
+        <Brand logoUrl={logoUrl} />
+        <nav className="public-nav" aria-label="Primary navigation">
+          <Link
+            href="/"
+            className={active === "directory" ? "active" : ""}
+            aria-current={active === "directory" ? "page" : undefined}
+          >
+            Directory
+          </Link>
+          <Link
+            href="/raffle"
+            className={active === "raffle" ? "active" : ""}
+            aria-current={active === "raffle" ? "page" : undefined}
+          >
+            Community raffle
+          </Link>
+        </nav>
+      </div>
+    </header>
   );
 }
 export function Footer({ logoUrl }: { logoUrl?: string } = {}) {

@@ -1,0 +1,933 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Clock,
+  Crown,
+  Edit2,
+  Gift,
+  LoaderCircle,
+  LockKeyhole,
+  Search,
+  ShieldCheck,
+  Trophy,
+  User,
+  Users,
+  X,
+} from "lucide-react";
+import { Footer } from "./shared";
+import { MlbbDiamondIcon } from "./MlbbDiamondIcon";
+import { PublicLiveWheel } from "./PublicLiveWheel";
+import {
+  normalizePrizeItems,
+  type AppState,
+  type RaffleArchiveSummary,
+  type RafflePrizeItem,
+} from "@/types";
+
+interface RaffleEntryPublic {
+  id: string;
+  fullName: string;
+  prizeWon?: string | null;
+  createdAt: string;
+}
+
+export interface RaffleBranding {
+  bannerUrl?: string;
+  logoUrl?: string;
+  title?: string;
+  facebookPageUrl?: string;
+}
+
+interface RaffleResponse {
+  id: string;
+  title: string;
+  category?: string;
+  description: string;
+  cutoffDate: string;
+  prizes: (string | RafflePrizeItem)[];
+  isActive: boolean;
+  isEnded: boolean;
+  entriesCount: number;
+  winners: { id: string; fullName: string; prizeWon: string }[];
+  entries: RaffleEntryPublic[];
+  myEntry: {
+    id: string;
+    fullName: string;
+    prizeWon?: string | null;
+    createdAt?: string;
+    deviceId?: string;
+  } | null;
+  archives?: RaffleArchiveSummary[];
+  branding?: RaffleBranding;
+}
+
+export function RafflePage({ initialAppState }: { initialAppState?: AppState } = {}) {
+  const [data, setData] = useState<RaffleResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [participantsPage, setParticipantsPage] = useState(1);
+  const PARTICIPANTS_PER_PAGE = 10;
+  const [activeTab, setActiveTab] = useState<"latest" | "archive">("latest");
+  const [participantsDropdownOpen, setParticipantsDropdownOpen] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(
+    null,
+  );
+
+  function getClientDeviceId(): string {
+    if (typeof window === "undefined") return "";
+    try {
+      let id = localStorage.getItem("ch_raffle_device_id");
+      if (!id) {
+        id = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem("ch_raffle_device_id", id);
+      }
+      return id;
+    } catch {
+      return "";
+    }
+  }
+
+  async function loadRaffle() {
+    try {
+      const devId = getClientDeviceId();
+      const params = new URLSearchParams();
+      if (devId) params.set("deviceId", devId);
+      const queryString = params.toString();
+      const url = queryString ? `/api/raffle?${queryString}` : "/api/raffle";
+      const res = await fetch(url, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to load raffle data");
+      const json: RaffleResponse = await res.json();
+      setData(json);
+      if (json.myEntry) {
+        setEditName(json.myEntry.fullName);
+      } else {
+        setEditing(false);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadRaffle();
+    // Real-time live sync every 8 seconds while page is active
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadRaffle();
+      }
+    }, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (data?.title && typeof document !== "undefined") {
+      document.title = `${data.title} | MLBB Community Heroes`;
+    }
+  }, [data?.title]);
+
+  async function handleJoinOrUpdate(e: React.FormEvent, isUpdate = false) {
+    e.preventDefault();
+    const nameToSubmit = isUpdate ? editName.trim() : fullName.trim();
+    if (!nameToSubmit) {
+      setFeedback({ type: "error", text: "Please enter your full name." });
+      return;
+    }
+
+    setSubmitting(true);
+    setFeedback(null);
+    try {
+      const devId = getClientDeviceId();
+      const res = await fetch("/api/raffle/join", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: nameToSubmit,
+          deviceId: devId || undefined,
+          raffleId: data?.id || "default",
+        }),
+      });
+      const resJson = await res.json();
+
+      if (!res.ok) {
+        throw new Error(resJson.error || "Failed to submit entry.");
+      }
+
+      if (resJson.deviceId && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("ch_raffle_device_id", resJson.deviceId);
+        } catch {}
+      }
+
+      setFeedback({
+        type: "success",
+        text: isUpdate
+          ? "Your name has been updated successfully."
+          : "You have joined the raffle. Good luck!",
+      });
+
+      if (!isUpdate) {
+        setFullName("");
+      } else {
+        setEditing(false);
+      }
+
+      await loadRaffle();
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message || "Could not submit entry." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function formatDeadline(isoString?: string) {
+    if (!isoString) return "To be announced";
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    } catch {
+      return isoString;
+    }
+  }
+
+  const filteredEntries = (data?.entries || []).filter((e) => {
+    if (!searchQuery.trim()) return true;
+    return e.fullName.toLowerCase().includes(searchQuery.toLowerCase().trim());
+  });
+
+  const totalEntries = filteredEntries.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / PARTICIPANTS_PER_PAGE));
+  const safePage = Math.min(Math.max(1, participantsPage), totalPages);
+  const startIndex = (safePage - 1) * PARTICIPANTS_PER_PAGE;
+  const paginatedEntries = filteredEntries.slice(startIndex, startIndex + PARTICIPANTS_PER_PAGE);
+
+  function getPageNumbers(current: number, total: number): (number | string)[] {
+    if (total <= 5) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 3) {
+      return [1, 2, 3, 4, "...", total];
+    }
+    if (current >= total - 2) {
+      return [1, "...", total - 3, total - 2, total - 1, total];
+    }
+    return [1, "...", current - 1, current, current + 1, "...", total];
+  }
+
+  const archives = data?.archives || [];
+
+  const bannerUrl =
+    data?.branding?.bannerUrl ||
+    initialAppState?.bannerUrl ||
+    initialAppState?.bannerSettings?.customUrl ||
+    "/images/mlbb-ch-banner.png";
+
+  const logoUrl =
+    data?.branding?.logoUrl ||
+    initialAppState?.logoUrl ||
+    initialAppState?.bannerSettings?.avatarCustomUrl ||
+    "/images/mlbb-ch-avatar.png";
+
+  const pageTitle =
+    data?.branding?.title ||
+    initialAppState?.bannerSettings?.title ||
+    "MLBB PH - Community Heroes";
+
+  const facebookUrl =
+    data?.branding?.facebookPageUrl ||
+    initialAppState?.bannerSettings?.facebookPageUrl ||
+    "https://www.facebook.com/MLBBPHCommunityHeroes";
+
+  return (
+    <main id="main-content" className="simple-directory">
+      {/* Facebook-style Profile Header Card - 100% matched with Homepage */}
+      <section className="ch-fb-card" aria-label="Community Heroes Raffle Profile">
+        <div className="ch-fb-cover">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={bannerUrl}
+            alt={`${pageTitle} Tournament Banner`}
+            className="ch-fb-cover-img"
+          />
+          <div className="ch-fb-cover-shade" />
+
+          {/* Top-left back link */}
+          <Link href="/" className="ch-fb-badge top-left">
+            <ArrowLeft size={12} />
+            <span>Tournament Directory</span>
+          </Link>
+
+          {/* Top-right date badge */}
+          {data?.cutoffDate && (
+            <div className="ch-fb-badge top-right">
+              <CalendarDays size={12} />
+              <span>{formatDeadline(data.cutoffDate)}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="ch-fb-profile-content">
+          <div className="ch-fb-avatar-center">
+            <div className="ch-fb-avatar-box">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoUrl}
+                alt={`${pageTitle} Profile`}
+                className="ch-fb-avatar-img"
+              />
+            </div>
+            <span className="ch-fb-active-dot" title="Active Now" />
+          </div>
+
+          <div className="ch-fb-name-row">
+            <h1 className="ch-fb-name">
+              {pageTitle}
+              <span className="verified-badge" title="Verified Page">
+                <svg className="verified-badge-icon" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </span>
+            </h1>
+
+            <a
+              href={facebookUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-follow-fb"
+              title={`Follow ${pageTitle} on Facebook`}
+            >
+              <svg className="btn-fb-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+              </svg>
+              <span>Follow on FB</span>
+            </a>
+          </div>
+
+          {/* Informational ribbon */}
+          <div className="ch-fb-ribbon">
+            {data?.isEnded ? (
+              <span className="ch-ribbon-views" style={{ color: "#f87171" }}>
+                <LockKeyhole size={13} />
+                <span>Entries closed</span>
+              </span>
+            ) : (
+              <span className="ch-ribbon-views" style={{ color: "#4ade80" }}>
+                <Clock size={13} />
+                <span>Registration open</span>
+              </span>
+            )}
+
+            <span className="ch-ribbon-views">
+              <ShieldCheck size={13} />
+              <span>1 entry per device & IP</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Directory Section & Navigation Tabs */}
+      <section className="ch-directory-section" aria-labelledby="raffle-section-heading">
+        <div className="ch-list-heading" style={{ marginBottom: 12 }}>
+          <div>
+            <h2 id="raffle-section-heading" style={{ fontSize: 24, marginBottom: 4 }}>
+              {activeTab === "latest" ? (data?.title || "Community Raffle") : "Past Winners Archive"}
+            </h2>
+            <p style={{ marginTop: 2, fontSize: 12 }}>
+              {activeTab === "latest"
+                ? data?.description || "Enter your full name to join the official Community Heroes raffle."
+                : "Archive of past completed raffles and lucky community winners."}
+            </p>
+          </div>
+        </div>
+
+        {/* Filter Tabs matching Homepage style */}
+        <div className="ch-filter-bar" style={{ marginBottom: 12 }}>
+          <div className="ch-filter-tabs" role="tablist" aria-label="Raffle sections">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "latest"}
+              className={`ch-filter-tab ${activeTab === "latest" ? "active" : ""}`}
+              onClick={() => setActiveTab("latest")}
+            >
+              {!data?.isEnded && <span className="ch-pulse-dot" />}
+              Latest Raffle
+              <span className="ch-filter-count open">{data?.entriesCount || 0}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "archive"}
+              className={`ch-filter-tab ${activeTab === "archive" ? "active" : ""}`}
+              onClick={() => setActiveTab("archive")}
+            >
+              Past Winners Archive
+              <span className="ch-filter-count closed">{archives.length}</span>
+            </button>
+          </div>
+        </div>
+
+        {feedback && (
+          <div className={`feedback ${feedback.type}`} role="alert" style={{ marginBottom: 16 }}>
+            {feedback.text}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "40px 16px", color: "#94a3b8" }}>
+            <LoaderCircle size={28} className="busy-spinner" style={{ margin: "0 auto 10px" }} />
+            <p>Loading raffle information…</p>
+          </div>
+        ) : activeTab === "latest" ? (
+          /* TAB 1: LATEST RAFFLE ONLY */
+          !data ? (
+            <div style={{ textAlign: "center", padding: "40px 16px", color: "#94a3b8" }}>
+              <p>No active raffle at this moment. Please check back soon!</p>
+              <Link href="/" className="button outline small" style={{ marginTop: 12 }}>
+                Browse Tournaments
+              </Link>
+            </div>
+          ) : (
+            <div className="raffle-human-container">
+              {/* Prize Pool Shelf - 1-Line Space Saver with Realtime Live Draw Wheel */}
+              {(() => {
+                const normalizedPrizes = normalizePrizeItems(data.prizes);
+                return (
+                  <div className="raffle-prizes-bar">
+                    <div className="raffle-prizes-bar-left">
+                      <div className="raffle-prizes-bar-title">
+                        <div className="raffle-prizes-bar-icon">
+                          <Gift size={15} />
+                        </div>
+                        <span>Giveaway Prizes</span>
+                      </div>
+
+                      {normalizedPrizes.length > 0 ? (
+                        <div className="raffle-prizes-chips-row">
+                          {normalizedPrizes.map((prize, idx) => {
+                            const isStarlight = /starlight/i.test(prize.name);
+                            const isDiamond = /diamond/i.test(prize.name);
+                            const themeClass = isStarlight
+                              ? "theme-starlight"
+                              : isDiamond
+                                ? "theme-diamond"
+                                : "theme-generic";
+
+                            return (
+                              <div key={prize.id || idx} className={`raffle-prize-chip ${themeClass}`}>
+                                <div className="raffle-prize-chip-icon">
+                                  {isStarlight ? (
+                                    <Crown size={14} />
+                                  ) : isDiamond ? (
+                                    <MlbbDiamondIcon size={14} />
+                                  ) : (
+                                    <Gift size={14} />
+                                  )}
+                                </div>
+                                <span className="raffle-prize-chip-name">{prize.name}</span>
+                                <span className="raffle-prize-chip-qty">x{prize.winnerCount}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12.5, color: "#94a3b8" }}>
+                          Prizes to be announced soon
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* If event has ended/started, show registered status pill if user entered */}
+              {data.isEnded && data.myEntry && (
+                <div className="raffle-human-registered-badge">
+                  <CheckCircle2 size={16} style={{ color: "#4ade80", flexShrink: 0 }} />
+                  <span>
+                    Your Registered Entry: <strong>{data.myEntry.fullName}</strong>
+                  </span>
+                </div>
+              )}
+
+              {/* AUTOMATIC REAL-TIME LIVE DRAW WHEEL (Shown automatically when event is started) */}
+              {data.isEnded && (
+                <PublicLiveWheel
+                  entries={data.entries || []}
+                  prizes={data.prizes || []}
+                  onRefresh={loadRaffle}
+                />
+              )}
+
+              {/* Entry Pass Form (Only shown when registration is open) */}
+              {!data.isEnded && (
+                <div className="raffle-human-card">
+                  <div className="raffle-human-card-head">
+                    <div className="raffle-human-card-title">
+                      <User size={16} style={{ color: "#38bdf8" }} />
+                      <strong>
+                        {data.myEntry ? "Your Registered Entry" : "Join the Raffle"}
+                      </strong>
+                    </div>
+                    <span style={{ fontSize: 11.5, color: "#94a3b8" }}>
+                      1 entry per device & IP
+                    </span>
+                  </div>
+
+                  {data.myEntry && !editing ? (
+                    <div className="raffle-human-registered-view">
+                      <div className="raffle-human-registered-left">
+                        <div className="raffle-human-check">
+                          <CheckCircle2 size={16} />
+                        </div>
+                        <div className="raffle-human-registered-details">
+                          <div className="raffle-human-registered-header-row">
+                            <span className="raffle-human-registered-name">{data.myEntry.fullName}</span>
+                            <span className="raffle-human-registered-tag">Active Entry</span>
+                          </div>
+                          <p className="raffle-human-registered-note">
+                            {data.myEntry.createdAt
+                              ? `Entered ${new Date(data.myEntry.createdAt).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })} · `
+                              : "Entered with this device · "}
+                            You can edit your name before the deadline
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="raffle-human-edit-btn"
+                        onClick={() => setEditing(true)}
+                      >
+                        <Edit2 size={12} />
+                        <span>Edit Name</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <form
+                      onSubmit={(e) => handleJoinOrUpdate(e, Boolean(data.myEntry && editing))}
+                      className="raffle-human-form"
+                    >
+                      <div className="raffle-human-input-group">
+                        <label htmlFor="full-name-input">
+                          Full Name / Player Name <span style={{ color: "#ef4444" }}>*</span>
+                        </label>
+                        <input
+                          id="full-name-input"
+                          type="text"
+                          placeholder="e.g. Juan Dela Cruz"
+                          value={editing ? editName : fullName}
+                          onChange={(e) =>
+                            editing ? setEditName(e.target.value) : setFullName(e.target.value)
+                          }
+                          maxLength={100}
+                          required
+                          autoFocus={editing}
+                          className="raffle-human-input"
+                        />
+                      </div>
+
+                      <div className="raffle-human-btn-row">
+                        <button
+                          type="submit"
+                          className="button primary"
+                          disabled={submitting || (editing ? !editName.trim() : !fullName.trim())}
+                        >
+                          {submitting ? (
+                            <>
+                              <LoaderCircle size={15} className="busy-spinner" />
+                              <span>Saving…</span>
+                            </>
+                          ) : editing ? (
+                            <>
+                              <Check size={15} />
+                              <span>Save Updated Name</span>
+                            </>
+                          ) : (
+                            <span>Join Raffle</span>
+                          )}
+                        </button>
+
+                        {editing && (
+                          <button
+                            type="button"
+                            className="button outline"
+                            onClick={() => {
+                              setEditing(false);
+                              if (data?.myEntry) setEditName(data.myEntry.fullName);
+                            }}
+                          >
+                            <X size={15} />
+                            <span>Cancel</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="raffle-human-hint">
+                        <ShieldCheck size={14} style={{ color: "#34d399", flexShrink: 0 }} />
+                        <span>
+                          No account needed. Protected by device & IP anti-duplicate verification.
+                        </span>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* Registered Participants Roster (Dropdown accordion when event has started) */}
+              <div className={`raffle-human-card ${data.isEnded ? "participants-dropdown-card" : ""}`}>
+                {data.isEnded ? (
+                  <button
+                    type="button"
+                    className="raffle-participants-accordion-toggle"
+                    onClick={() => setParticipantsDropdownOpen((prev) => !prev)}
+                    aria-expanded={participantsDropdownOpen}
+                  >
+                    <div className="raffle-human-card-title">
+                      <Users size={16} style={{ color: "#94a3b8" }} />
+                      <strong>Registered Participants ({data.entriesCount})</strong>
+                    </div>
+                    <div className="raffle-accordion-chevron">
+                      <span>{participantsDropdownOpen ? "Hide Roster" : "View Roster"}</span>
+                      {participantsDropdownOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                  </button>
+                ) : (
+                  <div className="raffle-human-card-head" style={{ flexWrap: "wrap", gap: 10 }}>
+                    <div className="raffle-human-card-title">
+                      <Users size={16} style={{ color: "#94a3b8" }} />
+                      <strong>Registered Participants ({data.entriesCount})</strong>
+                    </div>
+
+                    {data.entriesCount > 3 && (
+                      <div className="ch-search-wrap" style={{ maxWidth: 220, padding: "4px 10px" }}>
+                        <Search size={13} className="ch-search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search name..."
+                          value={searchQuery}
+                          onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setParticipantsPage(1);
+                          }}
+                          className="ch-search-input"
+                          style={{ fontSize: 12 }}
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            className="ch-search-clear"
+                            onClick={() => {
+                              setSearchQuery("");
+                              setParticipantsPage(1);
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(!data.isEnded || participantsDropdownOpen) && (
+                  <div className="raffle-participants-dropdown-content">
+                    {data.isEnded && data.entriesCount > 3 && (
+                      <div style={{ padding: "10px 0 12px" }}>
+                        <div className="ch-search-wrap" style={{ maxWidth: 240, padding: "4px 10px" }}>
+                          <Search size={13} className="ch-search-icon" />
+                          <input
+                            type="text"
+                            placeholder="Search name..."
+                            value={searchQuery}
+                            onChange={(e) => {
+                              setSearchQuery(e.target.value);
+                              setParticipantsPage(1);
+                            }}
+                            className="ch-search-input"
+                            style={{ fontSize: 12 }}
+                          />
+                          {searchQuery && (
+                            <button
+                              type="button"
+                              className="ch-search-clear"
+                              onClick={() => {
+                                setSearchQuery("");
+                                setParticipantsPage(1);
+                              }}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                {filteredEntries.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "26px 16px", color: "#94a3b8", fontSize: 13 }}>
+                    {searchQuery
+                      ? `No participants found matching "${searchQuery}".`
+                      : "No participants have entered yet. Be the first to join!"}
+                  </div>
+                ) : (
+                  <>
+                    <ul className="ch-list" style={{ marginTop: 10 }}>
+                      {paginatedEntries.map((entry, idx) => {
+                        const isMyEntry = data.myEntry && data.myEntry.id === entry.id;
+                        const hasWon = Boolean(entry.prizeWon);
+                        const initials = entry.fullName.trim().slice(0, 2).toUpperCase();
+                        const rankNumber = startIndex + idx + 1;
+                        return (
+                          <li
+                            key={entry.id || idx}
+                            className={`ch-row ${isMyEntry ? "raffle-my-row" : ""}`}
+                            style={{ cursor: "default" }}
+                          >
+                            <div className="ch-identity">
+                              <span className="hero-avatar" aria-hidden="true" style={{ width: 34, height: 34, fontSize: 12 }}>
+                                {initials}
+                              </span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <h3 style={{ fontSize: 13.5, margin: 0, color: "#ffffff" }}>
+                                    {entry.fullName}
+                                  </h3>
+                                  {isMyEntry && (
+                                    <span className="raffle-you-badge">YOU</span>
+                                  )}
+                                  {hasWon && (
+                                    <span className="raffle-winner-tag">
+                                      <Crown size={11} />
+                                      <span>Winner</span>
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                                  {entry.createdAt
+                                    ? new Date(entry.createdAt).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                      })
+                                    : "Registered"}
+                                </span>
+                              </div>
+                            </div>
+
+                            {hasWon ? (
+                              <div className="raffle-row-prize-won">
+                                <Trophy size={13} style={{ color: "#facc15" }} />
+                                <span>{entry.prizeWon}</span>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>
+                                #{rankNumber}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {/* Pagination Footer per 10 */}
+                    {totalPages > 1 && (
+                      <div className="raffle-pagination-footer">
+                        <span className="raffle-pagination-info">
+                          Showing <strong>{startIndex + 1}–{Math.min(startIndex + PARTICIPANTS_PER_PAGE, totalEntries)}</strong> of{" "}
+                          <strong>{totalEntries}</strong>
+                        </span>
+
+                        <div className="raffle-pagination-controls">
+                          <button
+                            type="button"
+                            className="raffle-page-btn"
+                            disabled={safePage === 1}
+                            onClick={() => setParticipantsPage((p) => Math.max(1, p - 1))}
+                            title="Previous page"
+                          >
+                            <ChevronLeft size={14} />
+                            <span>Prev</span>
+                          </button>
+
+                          <div className="raffle-page-numbers">
+                            {getPageNumbers(safePage, totalPages).map((p, pIdx) =>
+                              p === "..." ? (
+                                <span key={`ellipsis-${pIdx}`} className="raffle-page-ellipsis">
+                                  …
+                                </span>
+                              ) : (
+                                <button
+                                  key={`page-${p}`}
+                                  type="button"
+                                  className={`raffle-page-num-btn ${safePage === p ? "active" : ""}`}
+                                  onClick={() => setParticipantsPage(Number(p))}
+                                >
+                                  {p}
+                                </button>
+                              )
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="raffle-page-btn"
+                            disabled={safePage === totalPages}
+                            onClick={() => setParticipantsPage((p) => Math.min(totalPages, p + 1))}
+                            title="Next page"
+                          >
+                            <span>Next</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )
+        ) : (
+          /* TAB 2: PAST WINNERS ARCHIVE */
+          <div className="raffle-archive-container">
+            {archives.length === 0 ? (
+              <div className="raffle-human-card" style={{ textAlign: "center", padding: "40px 16px" }}>
+                <Trophy size={32} style={{ color: "#64748b", margin: "0 auto 10px" }} />
+                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#ffffff" }}>
+                  No Archived Raffles Yet
+                </h3>
+                <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
+                  Once the current raffle concludes with winners and a new giveaway begins, past editions will be archived here.
+                </p>
+                <button
+                  type="button"
+                  className="button outline small"
+                  style={{ marginTop: 14 }}
+                  onClick={() => setActiveTab("latest")}
+                >
+                  View Latest Raffle
+                </button>
+              </div>
+            ) : (
+              <div className="raffle-archive-list">
+                {archives.map((arch, idx) => (
+                  <div key={arch.id || idx} className="raffle-human-card archive-card">
+                    <div className="raffle-human-card-head">
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span className="raffle-archive-pill">Concluded Raffle</span>
+                          <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                            {formatDeadline(arch.cutoffDate)}
+                          </span>
+                        </div>
+                        <h3 style={{ margin: "2px 0 6px", fontSize: 17, color: "#ffffff" }}>
+                          {arch.title}
+                        </h3>
+                        {arch.description && (
+                          <p style={{ margin: 0, fontSize: 12.5, color: "#94a3b8" }}>
+                            {arch.description}
+                          </p>
+                        )}
+                      </div>
+                      <span className="raffle-archive-entrants-badge">
+                        <Users size={13} />
+                        <span>{arch.entriesCount} Entrants</span>
+                      </span>
+                    </div>
+
+                    {/* Prizes that were offered */}
+                    {arch.prizes && arch.prizes.length > 0 && (
+                      <div className="raffle-archive-prizes-row">
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                          Prizes:
+                        </span>
+                        {normalizePrizeItems(arch.prizes).map((pz, pIdx) => (
+                          <span key={pz.id || pIdx} className="raffle-archive-prize-chip">
+                            {pz.name}
+                            {pz.winnerCount > 1 && (
+                              <span style={{ marginLeft: 4, opacity: 0.8, fontWeight: 700 }}>
+                                (×{pz.winnerCount})
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Winners Showcase for this archived raffle */}
+                    <div className="raffle-archive-winners-section">
+                      <div className="raffle-archive-winners-title">
+                        <Crown size={14} style={{ color: "#facc15" }} />
+                        <span>Winners Hall of Fame ({arch.winners?.length || 0})</span>
+                      </div>
+
+                      {!arch.winners || arch.winners.length === 0 ? (
+                        <p style={{ margin: "6px 0 0", fontSize: 12.5, color: "#94a3b8" }}>
+                          No winners were recorded for this edition.
+                        </p>
+                      ) : (
+                        <div className="raffle-archive-winners-grid">
+                          {arch.winners.map((win, wIdx) => (
+                            <div key={win.id || wIdx} className="raffle-archive-winner-item">
+                              <span className="raffle-archive-winner-rank">#{wIdx + 1}</span>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <strong style={{ display: "block", fontSize: 13, color: "#ffffff" }}>
+                                  {win.fullName}
+                                </strong>
+                                <span style={{ fontSize: 11.5, color: "#38bdf8", fontWeight: 600 }}>
+                                  {win.prizeWon}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      <Footer />
+    </main>
+  );
+}
