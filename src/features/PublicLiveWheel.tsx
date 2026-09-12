@@ -22,6 +22,10 @@ import {
   render3DDuckRace,
   draw3DIdleDucks,
   draw3DFinishDucks,
+  playDuckStartHorn,
+  playDuckFinishCelebration,
+  playDuckQuackSound,
+  playDuckPaddleSound,
   type DuckRaceState,
 } from "./duckRaceCanvas3D";
 
@@ -143,7 +147,11 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
       // Celebrate once on landing
       if (spinId && !celebratedEventsRef.current.has(spinId)) {
         celebratedEventsRef.current.add(spinId);
-        playWinFanfare();
+        if (drawMode === "duck_race" || liveSpin?.drawMode === "duck_race") {
+          playDuckFinishCelebration(!soundEnabled);
+        } else {
+          playWinFanfare();
+        }
         startConfetti();
       }
     }
@@ -377,6 +385,17 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
   useEffect(() => {
     if (isLiveSpinning) return;
 
+    if (liveSpin?.shuffledAt && liveSpin.shuffledAt !== lastShuffledAtRef.current) {
+      lastShuffledAtRef.current = liveSpin.shuffledAt;
+      if (drawMode === "duck_race") {
+        playDuckPaddleSound(!soundEnabled);
+        playDuckQuackSound(!soundEnabled, 430, 0.22);
+      } else {
+        playTickSound();
+        rotationRef.current = rotationRef.current + (2 * Math.PI) / Math.max(1, displayEntrants.length);
+      }
+    }
+
     if (drawMode === "duck_race") {
       if (celebratedWinner || liveSpin?.status === "landed") {
         return;
@@ -402,11 +421,6 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
       if (idleDuckFrameRef.current) {
         cancelAnimationFrame(idleDuckFrameRef.current);
         idleDuckFrameRef.current = null;
-      }
-      if (liveSpin?.shuffledAt && liveSpin.shuffledAt !== lastShuffledAtRef.current) {
-        lastShuffledAtRef.current = liveSpin.shuffledAt;
-        playTickSound();
-        rotationRef.current = rotationRef.current + (2 * Math.PI) / Math.max(1, displayEntrants.length);
       }
       drawWheel(rotationRef.current);
     }
@@ -460,6 +474,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
     if (!canvas) return;
 
     if (drawMode === "duck_race") {
+      playDuckStartHorn(!soundEnabled);
       const raceDuration = liveSpin.durationMs || 8000;
       const raceState = init3DDuckRace(
         displayEntrants.map((e) => ({ id: e.id, fullName: e.fullName })),
@@ -492,7 +507,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
           const spinId = liveSpin.id;
           if (spinId && !celebratedEventsRef.current.has(spinId)) {
             celebratedEventsRef.current.add(spinId);
-            playWinFanfare();
+            playDuckFinishCelebration(!soundEnabled);
             startConfetti();
           }
         }

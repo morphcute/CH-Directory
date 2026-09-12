@@ -154,45 +154,166 @@ export function playDuckPaddleSound(isMuted = false): void {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
     const now = ctx.currentTime;
-    osc.frequency.setValueAtTime(140 + Math.random() * 40, now);
-    osc.frequency.exponentialRampToValueAtTime(70, now + 0.08);
 
-    gain.gain.setValueAtTime(0.04, now);
+    // Webbed foot water displacement splash noise burst
+    const bufferSize = Math.floor(ctx.sampleRate * 0.08);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(450 + Math.random() * 100, now);
+    filter.Q.setValueAtTime(2.2, now);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.12, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
-    osc.connect(gain);
+    noise.connect(filter);
+    filter.connect(gain);
     gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.09);
+
+    noise.start(now);
   } catch {}
 }
 
-export function playDuckFinishSound(isMuted = false): void {
+export function playDuckQuackSound(isMuted = false, pitch = 420, volume = 0.32): void {
   if (isMuted) return;
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
-    const notes = [440, 554.37, 659.25, 880];
     const now = ctx.currentTime;
-    notes.forEach((freq, idx) => {
+
+    const singleQuack = (startTime: number, duration: number, startPitch: number, vol: number) => {
+      // Sawtooth oscillator for rich, nasal vocal harmonic spectrum
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(startPitch, startTime);
+      osc.frequency.exponentialRampToValueAtTime(startPitch * 0.68, startTime + duration);
+
+      // Nasal formant filter 1: duck throat resonance (drops from 1050Hz to 660Hz)
+      const filter1 = ctx.createBiquadFilter();
+      filter1.type = "bandpass";
+      filter1.frequency.setValueAtTime(1050, startTime);
+      filter1.frequency.exponentialRampToValueAtTime(660, startTime + duration);
+      filter1.Q.setValueAtTime(4.8, startTime);
+
+      // Tremolo modulation for raspy duck bill texture
+      const modOsc = ctx.createOscillator();
+      modOsc.type = "sine";
+      modOsc.frequency.setValueAtTime(34, startTime);
+
+      const modGain = ctx.createGain();
+      modGain.gain.setValueAtTime(0.3, startTime);
+
+      // Amplitude envelope
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(vol, startTime + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+      osc.connect(filter1);
+      filter1.connect(gain);
+
+      modOsc.connect(modGain);
+      modGain.connect(gain.gain);
+
+      gain.connect(ctx.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+      modOsc.start(startTime);
+      modOsc.stop(startTime + duration);
+    };
+
+    // Authentic double-quack: "QUACK-quack!"
+    singleQuack(now, 0.17, pitch, volume);
+    singleQuack(now + 0.15, 0.13, pitch * 0.92, volume * 0.82);
+  } catch {}
+}
+
+let lastDuckStartHornTime = 0;
+export function playDuckStartHorn(isMuted = false): void {
+  if (isMuted) return;
+  const nowMs = Date.now();
+  if (nowMs - lastDuckStartHornTime < 3000) return;
+  lastDuckStartHornTime = nowMs;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    // Dual-tone starter horn (880Hz + 1100Hz)
+    [880, 1100].forEach((freq) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
-      osc.frequency.value = freq;
-      const start = now + idx * 0.08;
-      gain.gain.setValueAtTime(0.12, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(start);
-      osc.stop(start + 0.45);
+      osc.start(now);
+      osc.stop(now + 0.4);
     });
+
+    // Starting splash & eager starting quacks
+    setTimeout(() => {
+      playDuckQuackSound(isMuted, 450, 0.35);
+      playDuckPaddleSound(isMuted);
+    }, 240);
+    setTimeout(() => {
+      playDuckQuackSound(isMuted, 400, 0.3);
+    }, 480);
   } catch {}
 }
+
+let lastDuckFinishSoundTime = 0;
+export function playDuckFinishCelebration(isMuted = false): void {
+  if (isMuted) return;
+  const nowMs = Date.now();
+  if (nowMs - lastDuckFinishSoundTime < 3000) return;
+  lastDuckFinishSoundTime = nowMs;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    // Cheerful celebratory victory notes (C5, E5, G5, C6)
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+      gain.gain.setValueAtTime(0.22, now + idx * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.1 + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.1);
+      osc.stop(now + idx * 0.1 + 0.36);
+    });
+
+    // Champion victory quacks on finish!
+    setTimeout(() => {
+      playDuckQuackSound(isMuted, 480, 0.36);
+      playDuckPaddleSound(isMuted);
+    }, 420);
+    setTimeout(() => {
+      playDuckQuackSound(isMuted, 530, 0.38);
+    }, 720);
+  } catch {}
+}
+
+export const playDuckFinishSound = playDuckFinishCelebration;
 
 /**
  * Initialize a 3D Duck Race Simulation State
@@ -404,7 +525,13 @@ export function render3DDuckRace(
         maxLife: 15,
         size: 2.5 + Math.random() * 2,
       });
-      if (idx % 2 === 0) playDuckPaddleSound(isMuted);
+      if (idx % 2 === 0) {
+        if (Math.random() < 0.35) {
+          playDuckQuackSound(isMuted, 370 + Math.random() * 80, 0.16);
+        } else {
+          playDuckPaddleSound(isMuted);
+        }
+      }
     } else {
       duck.surge *= 0.94;
     }
@@ -418,6 +545,9 @@ export function render3DDuckRace(
       // Steer laterally to overtake
       const steerDirection = duck.actualY > leaderAhead.actualY ? 0.6 : -0.6;
       duck.actualY += steerDirection;
+      if (Math.random() < 0.04) {
+        playDuckQuackSound(isMuted, 420 + Math.random() * 60, 0.15);
+      }
     } else {
       // Gently return to original assigned lane
       duck.actualY += (duck.laneY - duck.actualY) * 0.05;

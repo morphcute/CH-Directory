@@ -151,6 +151,18 @@ export function Admin() {
   const [newPrizeCount, setNewPrizeCount] = useState<number>(1);
   const [selectedRandomPrize, setSelectedRandomPrize] = useState("");
   const [wheelModalOpen, setWheelModalOpen] = useState(false);
+  const [adminDrawMode, setAdminDrawMode] = useState<"wheel" | "duck_race">("duck_race");
+
+  const handleSetAdminDrawMode = async (mode: "wheel" | "duck_race") => {
+    setAdminDrawMode(mode);
+    try {
+      await fetch("/api/raffle/live-spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_mode", drawMode: mode }),
+      });
+    } catch {}
+  };
   const [raffleQuery, setRaffleQuery] = useState("");
   const [adminRafflePage, setAdminRafflePage] = useState(1);
   const ADMIN_ENTRIES_PER_PAGE = 10;
@@ -243,6 +255,14 @@ export function Admin() {
       if (Array.isArray(res.archives)) {
         setArchivedRaffles(res.archives);
       }
+      void fetch("/api/raffle/live-spin")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.drawMode === "wheel" || data?.drawMode === "duck_race") {
+            setAdminDrawMode(data.drawMode);
+          }
+        })
+        .catch(() => {});
     } catch (err: any) {
       setError(err.message || "Failed to load raffle data");
     } finally {
@@ -3346,16 +3366,116 @@ export function Admin() {
                                         />
                                       )}
 
-                                      {/* Interactive Spin the Wheel live draw */}
+                                      {/* Mode Selector Pill Toggle */}
+                                      <div
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          backgroundColor: "#070c18",
+                                          border: "1px solid #1e293b",
+                                          borderRadius: 8,
+                                          padding: 2,
+                                          gap: 2,
+                                        }}
+                                        title="Choose live draw mode: 3D Duck Race or 3D Wheel"
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetAdminDrawMode("duck_race")}
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 5,
+                                            padding: "5px 10px",
+                                            borderRadius: 6,
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            border: "none",
+                                            transition: "all 0.15s ease",
+                                            background:
+                                              adminDrawMode === "duck_race"
+                                                ? "linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(2, 132, 199, 0.45))"
+                                                : "transparent",
+                                            color: adminDrawMode === "duck_race" ? "#67e8f9" : "#94a3b8",
+                                            boxShadow:
+                                              adminDrawMode === "duck_race"
+                                                ? "0 0 10px rgba(6, 182, 212, 0.35)"
+                                                : "none",
+                                          }}
+                                        >
+                                          <span>🦆</span>
+                                          <span>Duck Race</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSetAdminDrawMode("wheel")}
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 5,
+                                            padding: "5px 10px",
+                                            borderRadius: 6,
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            border: "none",
+                                            transition: "all 0.15s ease",
+                                            background:
+                                              adminDrawMode === "wheel"
+                                                ? "linear-gradient(135deg, rgba(234, 179, 8, 0.3), rgba(245, 158, 11, 0.45))"
+                                                : "transparent",
+                                            color: adminDrawMode === "wheel" ? "#fef08a" : "#94a3b8",
+                                            boxShadow:
+                                              adminDrawMode === "wheel"
+                                                ? "0 0 10px rgba(234, 179, 8, 0.35)"
+                                                : "none",
+                                          }}
+                                        >
+                                          <span>🎡</span>
+                                          <span>Wheel</span>
+                                        </button>
+                                      </div>
+
+                                      {/* 🦆 3D Duck Race Direct Launch */}
                                       <button
                                         type="button"
                                         className="button primary small"
                                         onClick={async () => {
+                                          await handleSetAdminDrawMode("duck_race");
                                           setWheelModalOpen(true);
                                           void loadRaffleAdmin();
                                         }}
                                         disabled={!eligibleEntrants.length}
-                                        title="Open live interactive roulette wheel to pick a winner"
+                                        title="Launch 3D Realistic Duck Race live stream draw"
+                                        style={{
+                                          background:
+                                            "linear-gradient(135deg, #06b6d4 0%, #0284c7 100%)",
+                                          color: "#ffffff",
+                                          fontWeight: 700,
+                                          border: "none",
+                                          boxShadow:
+                                            "0 0 16px rgba(6, 182, 212, 0.4)",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: 6,
+                                        }}
+                                      >
+                                        <span style={{ fontSize: 14 }}>🦆</span>
+                                        <span>3D Duck Race</span>
+                                      </button>
+
+                                      {/* 🎡 3D Spin the Wheel Direct Launch */}
+                                      <button
+                                        type="button"
+                                        className="button primary small"
+                                        onClick={async () => {
+                                          await handleSetAdminDrawMode("wheel");
+                                          setWheelModalOpen(true);
+                                          void loadRaffleAdmin();
+                                        }}
+                                        disabled={!eligibleEntrants.length}
+                                        title="Launch 3D Roulette Wheel live stream draw"
                                         style={{
                                           background:
                                             "linear-gradient(135deg, #eab308 0%, #f59e0b 100%)",
@@ -3364,13 +3484,16 @@ export function Admin() {
                                           border: "none",
                                           boxShadow:
                                             "0 0 16px rgba(234, 179, 8, 0.35)",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: 6,
                                         }}
                                       >
                                         <Trophy
                                           size={14}
                                           style={{ color: "#090d16" }}
                                         />
-                                        <span>Spin the Wheel</span>
+                                        <span>Spin Wheel</span>
                                       </button>
 
                                       <button
@@ -3425,6 +3548,7 @@ export function Admin() {
                                   entries={(raffleData.entries || []) as any}
                                   prizes={raffleForm.prizes}
                                   defaultPrize={selectedRandomPrize}
+                                  initialDrawMode={adminDrawMode}
                                   onRefresh={loadRaffleAdmin}
                                   onAssignWinner={async (entryId, prizeWon) => {
                                     await handleAssignPrize(entryId, prizeWon);
