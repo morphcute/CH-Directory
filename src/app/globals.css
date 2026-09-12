@@ -7128,6 +7128,150 @@ textarea:focus-visible {
   animation: pulseBorderRed 1.5s infinite;
 }
 
+/* Real-time Draw Mode Switcher (Spin Wheel vs Duck Race) */
+.raffle-draw-mode-tabs {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.raffle-draw-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.raffle-draw-mode-tab:hover:not(.active):not(:disabled) {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.raffle-draw-mode-tab.active {
+  background: linear-gradient(135deg, #facc15 0%, #eab308 100%);
+  color: #090d16;
+  box-shadow: 0 2px 10px rgba(250, 204, 21, 0.35);
+}
+
+.raffle-draw-mode-tab.active.duck {
+  background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.4);
+}
+
+.raffle-wheel-shuffle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.raffle-wheel-shuffle-btn:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.raffle-wheel-shuffle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.raffle-wheel-shuffle-btn.is-shuffling svg {
+  animation: spinShuffle 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes spinShuffle {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Duck Race Canvas and Track */
+.raffle-duck-race-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 520px;
+  gap: 8px;
+}
+
+.raffle-duck-race-canvas {
+  width: 100%;
+  max-width: 500px;
+  height: auto;
+  border-radius: 14px;
+  border: 2px solid rgba(56, 189, 248, 0.3);
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.6),
+    0 0 25px rgba(56, 189, 248, 0.15);
+  background: #082f49;
+}
+
+.raffle-duck-race-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 500px;
+  padding: 4px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.raffle-duck-race-leaderboard {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  max-width: 320px;
+}
+
+.raffle-duck-race-leader-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.raffle-duck-race-leader-pill.rank-1 {
+  border-color: #facc15;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.15);
+}
+
+
 .raffle-public-wheel-count {
   display: inline-flex;
   align-items: center;

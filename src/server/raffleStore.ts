@@ -23,21 +23,6 @@ import type {
   RafflePrizeItem,
 } from "@/types";
 
-const DEFAULT_RAFFLE: RaffleData = {
-  id: "default",
-  title: "Community Heroes Grand Raffle",
-  category: "Diamonds Giveaway",
-  description:
-    "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.",
-  cutoffDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-  prizes: [
-    { name: "100 Diamonds", winnerCount: 5 },
-    { name: "Starlight Card", winnerCount: 1 },
-  ],
-  isActive: true,
-  entries: [],
-};
-
 function localRafflePath(): string {
   if (process.env.DATA_DIR) {
     return path.join(process.env.DATA_DIR, "raffle-state.json");
@@ -48,7 +33,7 @@ function localRafflePath(): string {
   return path.join(process.cwd(), "data", "raffle-state.json");
 }
 
-async function readLocalRaffle(): Promise<RaffleData> {
+async function readLocalRaffle(): Promise<RaffleData | null> {
   try {
     const filePath = localRafflePath();
     const content = await readFile(filePath, "utf8");
@@ -57,7 +42,7 @@ async function readLocalRaffle(): Promise<RaffleData> {
       return parsed as RaffleData;
     }
   } catch {}
-  return DEFAULT_RAFFLE;
+  return null;
 }
 
 async function writeLocalRaffle(data: RaffleData): Promise<void> {
@@ -70,7 +55,7 @@ async function writeLocalRaffle(data: RaffleData): Promise<void> {
   }
 }
 
-export async function getRaffleState(raffleId = "default"): Promise<RaffleData> {
+export async function getRaffleState(raffleId = "default"): Promise<RaffleData | null> {
   // 1. Try Neon DB
   try {
     const dbRaffle = await readDbRaffle(raffleId);
@@ -83,19 +68,28 @@ export async function getRaffleState(raffleId = "default"): Promise<RaffleData> 
   }
 
   // 2. Fallback to local file
-  return readLocalRaffle();
+  const local = await readLocalRaffle();
+  if (local) {
+    if (!raffleId || raffleId === "default" || raffleId === "latest") {
+      if (!local.isArchived) return local;
+    } else if (local.id === raffleId) {
+      return local;
+    }
+  }
+  return null;
 }
 
 export async function getActiveRaffles(): Promise<RaffleActiveSummary[]> {
   try {
     const activeRaffles = await readDbActiveRaffles();
-    if (activeRaffles) return activeRaffles;
+    if (activeRaffles && activeRaffles.length > 0) return activeRaffles;
+    if (activeRaffles && activeRaffles.length === 0) return [];
   } catch (err) {
     console.warn("Neon DB read error for active raffles, using local file:", err);
   }
 
   const local = await readLocalRaffle();
-  if (!local.isActive || local.isArchived) return [];
+  if (!local || !local.isActive || local.isArchived) return [];
   return [
     {
       id: local.id,
@@ -150,14 +144,16 @@ export async function updateRaffleSettings(data: {
   // 2. Fallback to local file
   const local = await readLocalRaffle();
   const merged: RaffleData = {
-    ...local,
-    id: targetId || local.id,
+    id: targetId || local?.id || `raffle-${Date.now()}`,
     title: data.title,
-    category: data.category || local.category || "Diamonds Giveaway",
+    category: data.category || local?.category || "Diamonds Giveaway",
     description: data.description,
     cutoffDate: data.cutoffDate,
     prizes: data.prizes,
-    isActive: data.isActive !== undefined ? data.isActive : local.isActive,
+    isActive: data.isActive !== undefined ? data.isActive : (local ? local.isActive : true),
+    isArchived: false,
+    entries: local?.entries || [],
+    createdAt: local?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
   await writeLocalRaffle(merged);
@@ -190,22 +186,24 @@ export async function submitRaffleEntry(
     if (res.success && res.entry) {
       // Sync local fallback
       const local = await readLocalRaffle();
-      const existingIdx = local.entries.findIndex(
-        (e) =>
-          (deviceId && e.deviceId === deviceId) ||
-          e.id === res.entry.id,
-      );
-      if (existingIdx !== -1) {
-        local.entries[existingIdx] = {
-          ...local.entries[existingIdx],
-          fullName: res.entry.fullName,
-          deviceId: res.entry.deviceId || local.entries[existingIdx].deviceId,
-          ipAddress: res.entry.ipAddress || local.entries[existingIdx].ipAddress,
-        };
-      } else {
-        local.entries.push(res.entry);
+      if (local) {
+        const existingIdx = local.entries.findIndex(
+          (e) =>
+            (deviceId && e.deviceId === deviceId) ||
+            e.id === res.entry!.id,
+        );
+        if (existingIdx !== -1) {
+          local.entries[existingIdx] = {
+            ...local.entries[existingIdx],
+            fullName: res.entry.fullName,
+            deviceId: res.entry.deviceId || local.entries[existingIdx].deviceId,
+            ipAddress: res.entry.ipAddress || local.entries[existingIdx].ipAddress,
+          };
+        } else {
+          local.entries.push(res.entry);
+        }
+        void writeLocalRaffle(local);
       }
-      void writeLocalRaffle(local);
       return res;
     }
     if (res.error) return res;
@@ -215,12 +213,12 @@ export async function submitRaffleEntry(
 
   // 2. Fallback logic with local file
   const local = await readLocalRaffle();
+  if (!local || !local.isActive || local.isArchived) {
+    return { success: false, error: "There is currently no active raffle to join." };
+  }
   const trimmed = fullName.trim();
   if (!trimmed) return { success: false, error: "Please enter your full name." };
 
-  if (!local.isActive) {
-    return { success: false, error: "This raffle is currently inactive." };
-  }
   if (local.cutoffDate && new Date().getTime() > new Date(local.cutoffDate).getTime()) {
     return { success: false, error: "The cut-off date for this raffle has passed. Entries are closed." };
   }
@@ -294,11 +292,13 @@ export async function setRaffleWinner(entryId: string, prizeWon: string | null):
 
   // 2. Always update local fallback
   const local = await readLocalRaffle();
-  const entry = local.entries.find((e) => e.id === entryId);
-  if (entry) {
-    entry.prizeWon = prizeWon ? prizeWon.trim() : null;
-    await writeLocalRaffle(local);
-    return true;
+  if (local) {
+    const entry = local.entries.find((e) => e.id === entryId);
+    if (entry) {
+      entry.prizeWon = prizeWon ? prizeWon.trim() : null;
+      await writeLocalRaffle(local);
+      return true;
+    }
   }
   return false;
 }
@@ -313,9 +313,12 @@ export async function removeRaffleEntry(entryId: string): Promise<boolean> {
 
   // 2. Local fallback
   const local = await readLocalRaffle();
-  local.entries = local.entries.filter((e) => e.id !== entryId);
-  await writeLocalRaffle(local);
-  return true;
+  if (local) {
+    local.entries = local.entries.filter((e) => e.id !== entryId);
+    await writeLocalRaffle(local);
+    return true;
+  }
+  return false;
 }
 
 export async function clearAllRaffleEntries(raffleId = "default"): Promise<boolean> {
@@ -328,9 +331,12 @@ export async function clearAllRaffleEntries(raffleId = "default"): Promise<boole
 
   // 2. Local fallback
   const local = await readLocalRaffle();
-  local.entries = [];
-  await writeLocalRaffle(local);
-  return true;
+  if (local) {
+    local.entries = [];
+    await writeLocalRaffle(local);
+    return true;
+  }
+  return false;
 }
 
 function localArchivesPath(): string {
@@ -385,9 +391,15 @@ export async function archiveCurrentRaffle(
     cutoffDate?: string;
     prizes?: (string | RafflePrizeItem)[];
   },
-): Promise<{ success: boolean; newRaffle?: RaffleData; error?: string }> {
+): Promise<{ success: boolean; archive?: RaffleArchiveSummary; newRaffle?: RaffleData; error?: string }> {
   try {
     const current = await getRaffleState(raffleId);
+    if (!current) {
+      return {
+        success: false,
+        error: "Raffle not found.",
+      };
+    }
     const hasAssignedWinner = current.entries.some((entry) =>
       Boolean(entry.prizeWon?.trim()),
     );
@@ -424,48 +436,30 @@ export async function archiveCurrentRaffle(
     const updatedArchives = [archiveItem, ...localArchives.filter((a) => a.id !== current.id)];
     await writeLocalArchives(updatedArchives);
 
-    // 3. Create next active raffle edition
-    const nextTitle = newSettings?.title || "Community Heroes Grand Raffle";
-    const nextCategory = newSettings?.category || current.category || "Diamonds Giveaway";
-    const nextDesc =
-      newSettings?.description ||
-      "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.";
-    const nextCutoff =
-      newSettings?.cutoffDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-    const nextPrizes =
-      newSettings?.prizes && newSettings.prizes.length > 0
-        ? newSettings.prizes
-        : current.prizes && current.prizes.length > 0
-          ? current.prizes
-          : [{ name: "100 Diamonds", winnerCount: 5 }, { name: "Starlight Card", winnerCount: 1 }];
-
-    let newRaffle: RaffleData | null = await createDbNewRaffle({
-      title: nextTitle,
-      category: nextCategory,
-      description: nextDesc,
-      cutoffDate: nextCutoff,
-      prizes: nextPrizes,
-    });
-
-    if (!newRaffle) {
-      // Local fallback creation
-      newRaffle = {
-        id: `raffle-${Date.now()}`,
-        title: nextTitle,
-        category: nextCategory,
-        description: nextDesc,
-        cutoffDate: nextCutoff,
-        prizes: nextPrizes,
-        isActive: true,
-        isArchived: false,
-        entries: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    // Also update local file if it held this raffle
+    const local = await readLocalRaffle();
+    if (local && local.id === current.id) {
+      await writeLocalRaffle({
+        ...local,
+        isActive: false,
+        isArchived: true,
+      });
     }
 
-    await writeLocalRaffle(newRaffle);
-    return { success: true, newRaffle };
+    // 3. Only create a next active raffle edition IF explicitly provided by admin with a title!
+    let newRaffle: RaffleData | null = null;
+    if (newSettings?.title) {
+      newRaffle = await createNewRaffle({
+        title: newSettings.title,
+        category: newSettings.category || current.category || "Diamonds Giveaway",
+        description: newSettings.description || "",
+        cutoffDate: newSettings.cutoffDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        prizes: newSettings.prizes || current.prizes || [],
+        isActive: true,
+      });
+    }
+
+    return { success: true, archive: archiveItem, newRaffle: newRaffle || undefined };
   } catch (err) {
     console.error("Error archiving raffle:", err);
     return { success: false };
@@ -510,7 +504,7 @@ export async function createNewRaffle(data: {
 
 export async function deleteRaffle(
   raffleId?: string,
-): Promise<{ success: boolean; nextRaffle?: RaffleData }> {
+): Promise<{ success: boolean; nextRaffle?: RaffleData | null }> {
   try {
     let targetId = raffleId;
     if (!targetId || targetId === "latest") {
@@ -524,9 +518,15 @@ export async function deleteRaffle(
     const localArchives = await readLocalArchives();
     await writeLocalArchives(localArchives.filter((a) => a.id !== targetId));
 
-    // Get remaining active raffle or create default
+    // Also mark or remove from local state file
+    const local = await readLocalRaffle();
+    if (local && local.id === targetId) {
+      await writeLocalRaffle({ ...local, isActive: false, isArchived: true, entries: [] });
+    }
+
+    // Get remaining active raffle or null
     const next = await getRaffleState("latest");
-    return { success: true, nextRaffle: next };
+    return { success: true, nextRaffle: next || null };
   } catch (err) {
     console.error("Error deleting raffle in store:", err);
     return { success: false };
@@ -553,7 +553,7 @@ export async function restoreArchivedRaffle(
     const localArchives = await readLocalArchives();
     await writeLocalArchives(localArchives.filter((a) => a.id !== archiveId));
     const restored = await getRaffleState(archiveId);
-    return { success: true, restoredRaffle: restored };
+    return { success: true, restoredRaffle: restored || undefined };
   } catch (err) {
     console.error("Error restoring archived raffle:", err);
     return { success: false };

@@ -9,6 +9,7 @@ import {
   clearAllRaffleEntries,
   archiveCurrentRaffle,
   getArchivedRaffles,
+  getActiveRaffles,
   deleteRaffle,
   deleteArchivedRaffle,
 } from "../src/server/raffleStore";
@@ -52,6 +53,7 @@ test("raffle anti-spam: same device edits name without duplicate entries", async
 
   // Verify there is only 1 total entry, and it has the updated name
   const state = await getRaffleState(raffleId);
+  assert.ok(state);
   const deviceEntries = state.entries.filter((e) => e.deviceId === deviceId || e.fullName.includes("Juan"));
   assert.equal(deviceEntries.length, 1);
   assert.equal(deviceEntries[0].fullName, "Juan M. Dela Cruz");
@@ -129,6 +131,7 @@ test("raffle winner assignment: admin can assign and remove prizes for winners",
   assert.equal(assignOk, true);
 
   let state = await getRaffleState(raffleId);
+  assert.ok(state);
   let matched = state.entries.find((e) => e.id === entryId);
   assert.equal(matched?.prizeWon, "Starlight Card");
 
@@ -137,6 +140,7 @@ test("raffle winner assignment: admin can assign and remove prizes for winners",
   assert.equal(removeOk, true);
 
   state = await getRaffleState(raffleId);
+  assert.ok(state);
   matched = state.entries.find((e) => e.id === entryId);
   assert.equal(matched?.prizeWon, null);
 
@@ -160,11 +164,12 @@ test("raffle archive: remains active until a winner is assigned", async () => {
   assert.match(result.error || "", /assign at least one winner/i);
 
   const raffle = await getRaffleState(raffleId);
+  assert.ok(raffle);
   assert.equal(raffle.isArchived, false);
   await deleteRaffle(raffleId);
 });
 
-test("raffle archive: completed raffle is moved to archive with winners and new edition starts", async () => {
+test("raffle archive: completed raffle is moved to archive with winners without auto-creating a new edition", async () => {
   const raffleId = "test-raffle-archive";
   await clearAllRaffleEntries(raffleId);
 
@@ -184,24 +189,20 @@ test("raffle archive: completed raffle is moved to archive with winners and new 
   // Archive this raffle
   const archiveRes = await archiveCurrentRaffle(raffleId);
   assert.equal(archiveRes.success, true);
-  assert.ok(archiveRes.newRaffle);
-  assert.equal(archiveRes.newRaffle.isArchived, false);
+  assert.ok(archiveRes.archive);
+  assert.equal(archiveRes.archive?.title, "Archive Test Edition");
 
   // Check archives list contains the archived raffle and its winner
   const archives = await getArchivedRaffles();
   assert.ok(archives.length > 0);
   const archived = archives.find((a) => a.id === raffleId);
-  if (archived) {
-    assert.equal(archived.title, "Archive Test Edition");
-    assert.equal(archived.winners.length, 1);
-    assert.equal(archived.winners[0].fullName, "Champion Player");
-    assert.equal(archived.winners[0].prizeWon, "Starlight Card");
-  }
+  assert.ok(archived);
+  assert.equal(archived.title, "Archive Test Edition");
+  assert.equal(archived.winners.length, 1);
+  assert.equal(archived.winners[0].fullName, "Champion Player");
+  assert.equal(archived.winners[0].prizeWon, "Starlight Card");
 
-  // Cleanup newly created edition & archived raffle
-  if (archiveRes.newRaffle) {
-    await deleteRaffle(archiveRes.newRaffle.id);
-  }
+  // Cleanup archived raffle
   await deleteArchivedRaffle(raffleId);
 });
 
@@ -234,6 +235,7 @@ test("raffle winner quotas: supports setting 100 Diamonds with multiple winner c
   await setRaffleWinner(e2.entry!.id, "100 Diamonds");
 
   const state = await getRaffleState(raffleId);
+  assert.ok(state);
   const normalized = normalizePrizeItems(state.prizes);
   assert.equal(normalized.length, 1);
   assert.equal(normalized[0].name, "100 Diamonds");
@@ -283,6 +285,7 @@ test("raffle anti-spam: same IP restriction prevents multiple entries across dif
 
   // Verify only 1 entry exists total for that IP
   const state = await getRaffleState(raffleId);
+  assert.ok(state);
   assert.equal(state.entries.length, 1);
   assert.equal(state.entries[0].fullName, "Juan M. Dela Cruz");
 
@@ -361,6 +364,7 @@ test("raffle identity isolation: myEntry only resolves when both deviceId AND IP
   assert.equal(resA.success, true);
 
   const state = await getRaffleState(raffleId);
+  assert.ok(state);
   const entry = state.entries.find((e) => e.deviceId === devA);
   assert.ok(entry, "Alice's entry should exist");
 
@@ -368,7 +372,7 @@ test("raffle identity isolation: myEntry only resolves when both deviceId AND IP
   function resolveMyEntry(reqDevId?: string, reqIp?: string) {
     if (!reqDevId) return null;
     return (
-      state.entries.find(
+      state!.entries.find(
         (e) =>
           e.deviceId === reqDevId &&
           (!e.ipAddress || isSameIpOrSubnet(e.ipAddress, reqIp)),
@@ -394,5 +398,77 @@ test("raffle identity isolation: myEntry only resolves when both deviceId AND IP
 
   await deleteRaffle(raffleId);
 });
+
+test("raffle auto-creation prevention: query for non-existent raffle returns null and does not auto-create", async () => {
+  const nonExistentId = `non-existent-${Date.now()}`;
+  const raffle = await getRaffleState(nonExistentId);
+  assert.equal(raffle, null);
+});
+
+test("raffle live spin: supports drawMode (wheel vs duck_race), realtime shuffle, and reset", () => {
+  // 1. Duck race start broadcast
+  broadcastLiveSpin({
+    id: "spin-duck-test",
+    raffleId: "raffle-duck",
+    status: "spinning",
+    drawMode: "duck_race",
+    prize: "Legend Skin",
+    winnerId: "entry-duck-1",
+    winnerName: "Speedy Duck",
+    winningIndex: 1,
+    startedAt: Date.now(),
+    durationMs: 6000,
+    sliceCount: 3,
+    entrants: [
+      { id: "entry-duck-0", fullName: "Duck Alpha" },
+      { id: "entry-duck-1", fullName: "Speedy Duck" },
+      { id: "entry-duck-2", fullName: "Duck Gamma" },
+    ],
+  });
+
+  let state = getLiveSpinState();
+  assert.ok(state);
+  assert.equal(state.status, "spinning");
+  assert.equal(state.drawMode, "duck_race");
+  assert.equal(state.winnerName, "Speedy Duck");
+  assert.equal(state.prize, "Legend Skin");
+  assert.equal(state.entrants?.length, 3);
+
+  // 2. Realtime shuffle broadcast
+  broadcastLiveSpin({
+    id: "spin-duck-shuffle",
+    raffleId: "raffle-duck",
+    status: "idle",
+    drawMode: "duck_race",
+    prize: "",
+    winnerId: "",
+    winnerName: "",
+    winningIndex: 0,
+    startedAt: Date.now(),
+    durationMs: 0,
+    sliceCount: 3,
+    entrants: [
+      { id: "entry-duck-2", fullName: "Duck Gamma" },
+      { id: "entry-duck-0", fullName: "Duck Alpha" },
+      { id: "entry-duck-1", fullName: "Speedy Duck" },
+    ],
+    shuffledAt: Date.now(),
+  });
+
+  state = getLiveSpinState();
+  assert.ok(state);
+  assert.equal(state.status, "idle");
+  assert.equal(state.drawMode, "duck_race");
+  assert.equal(state.entrants?.[0].fullName, "Duck Gamma");
+  assert.ok(state.shuffledAt);
+
+  // 3. Reset broadcast returns to idle and clears active spin
+  broadcastLiveSpin(null);
+
+  state = getLiveSpinState();
+  assert.equal(state, null);
+});
+
+
 
 

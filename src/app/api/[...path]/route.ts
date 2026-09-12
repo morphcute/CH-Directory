@@ -167,6 +167,47 @@ export async function GET(request: Request, context: Context) {
       const url = new URL(request.url);
       const requestedId = url.searchParams.get("id") || "default";
       const raffle = await getRaffleState(requestedId);
+      const [activeRaffles, archives] = await Promise.all([
+        getActiveRaffles(),
+        getArchivedRaffles(),
+      ]);
+      const appState = await readState();
+      const branding = {
+        bannerUrl:
+          appState.bannerUrl ||
+          appState.bannerSettings?.customUrl ||
+          "/images/mlbb-ch-banner.png",
+        logoUrl:
+          appState.logoUrl ||
+          appState.bannerSettings?.avatarCustomUrl ||
+          "/images/mlbb-ch-avatar.png",
+        title: appState.bannerSettings?.title || "MLBB PH - Community Heroes",
+        facebookPageUrl:
+          appState.bannerSettings?.facebookPageUrl ||
+          "https://www.facebook.com/MLBBPHCommunityHeroes",
+      };
+
+      if (!raffle) {
+        return json({
+          id: null,
+          title: "",
+          category: "Diamonds Giveaway",
+          description: "",
+          cutoffDate: "",
+          prizes: [],
+          isActive: false,
+          isArchived: false,
+          isEnded: true,
+          entriesCount: 0,
+          winners: [],
+          entries: [],
+          myEntry: null,
+          activeRaffles,
+          archives,
+          branding,
+        });
+      }
+
       const cookieHeader = request.headers.get("cookie") || "";
       const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
       const urlParamDev = url.searchParams.get("deviceId");
@@ -187,11 +228,6 @@ export async function GET(request: Request, context: Context) {
       const now = Date.now();
       const cutoffMs = raffle.cutoffDate ? new Date(raffle.cutoffDate).getTime() : Infinity;
       const isEnded = !raffle.isActive || now > cutoffMs;
-      const [activeRaffles, archives] = await Promise.all([
-        getActiveRaffles(),
-        getArchivedRaffles(),
-      ]);
-      const appState = await readState();
 
       const response = json({
         id: raffle.id,
@@ -227,20 +263,7 @@ export async function GET(request: Request, context: Context) {
           : null,
         activeRaffles,
         archives,
-        branding: {
-          bannerUrl:
-            appState.bannerUrl ||
-            appState.bannerSettings?.customUrl ||
-            "/images/mlbb-ch-banner.png",
-          logoUrl:
-            appState.logoUrl ||
-            appState.bannerSettings?.avatarCustomUrl ||
-            "/images/mlbb-ch-avatar.png",
-          title: appState.bannerSettings?.title || "MLBB PH - Community Heroes",
-          facebookPageUrl:
-            appState.bannerSettings?.facebookPageUrl ||
-            "https://www.facebook.com/MLBBPHCommunityHeroes",
-        },
+        branding,
       });
 
       return response;
@@ -581,6 +604,7 @@ export async function POST(request: Request, context: Context) {
           status: "spinning" as const,
           entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : undefined,
+          drawMode: (body.drawMode || "wheel") as "wheel" | "duck_race",
         };
         broadcastLiveSpin(spinState);
         return json({ success: true, liveSpin: spinState });
@@ -598,6 +622,7 @@ export async function POST(request: Request, context: Context) {
             isAwarded: false,
             entrants: Array.isArray(body.entrants) ? body.entrants : current.entrants,
             excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current.excludedIds,
+            drawMode: (body.drawMode || current.drawMode || "wheel") as "wheel" | "duck_race",
           };
           broadcastLiveSpin(landedState);
           return json({ success: true, liveSpin: landedState });
@@ -630,11 +655,34 @@ export async function POST(request: Request, context: Context) {
             isAwarded: true,
             entrants: updatedEntrants,
             excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current.excludedIds,
+            drawMode: (body.drawMode || current.drawMode || "wheel") as "wheel" | "duck_race",
           };
           broadcastLiveSpin(awardedState);
           return json({ success: true, liveSpin: awardedState });
         }
         return json({ success: true, liveSpin: null });
+      }
+      if (body.action === "shuffle") {
+        const current = getLiveSpinState();
+        const shuffledEntrants = Array.isArray(body.entrants) ? body.entrants : current?.entrants;
+        const shuffleState = {
+          id: `shuffle-${Date.now()}`,
+          raffleId: body.raffleId || current?.raffleId || "default",
+          prize: current?.prize || "",
+          winnerId: "",
+          winnerName: "",
+          winningIndex: -1,
+          startedAt: Date.now(),
+          durationMs: 0,
+          sliceCount: Array.isArray(shuffledEntrants) ? shuffledEntrants.length : (current?.sliceCount || 1),
+          status: "idle" as const,
+          entrants: shuffledEntrants,
+          excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
+          drawMode: (body.drawMode || current?.drawMode || "wheel") as "wheel" | "duck_race",
+          shuffledAt: Date.now(),
+        };
+        broadcastLiveSpin(shuffleState);
+        return json({ success: true, liveSpin: shuffleState });
       }
       if (body.action === "repick") {
         const current = getLiveSpinState();
@@ -659,11 +707,12 @@ export async function POST(request: Request, context: Context) {
           status: "idle" as const,
           entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
           excludedIds: nextExcluded,
+          drawMode: (body.drawMode || current?.drawMode || "wheel") as "wheel" | "duck_race",
         };
         broadcastLiveSpin(repickState);
         return json({ success: true, liveSpin: repickState });
       }
-      if (body.action === "clear" || body.action === "end") {
+      if (body.action === "clear" || body.action === "end" || body.action === "reset") {
         broadcastLiveSpin(null);
         return json({ success: true, liveSpin: null });
       }
@@ -865,7 +914,7 @@ export async function POST(request: Request, context: Context) {
         const { deleteRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
         const res = await deleteRaffle(body.raffleId);
         const archives = await getArchivedRaffles();
-        return json({ success: true, raffle: res.nextRaffle, archives });
+        return json({ success: true, raffle: res.nextRaffle || null, archives });
       }
 
       if (body.action === "delete-archive") {
@@ -906,15 +955,22 @@ export async function POST(request: Request, context: Context) {
         return json({ success: true, raffle });
       }
 
-      if (body.action === "archive-and-new") {
-        const { archiveCurrentRaffle, getArchivedRaffles } = await import("@/server/raffleStore");
-        const res = await archiveCurrentRaffle(body.raffleId, {
-          title: body.title,
-          category: body.category,
-          description: body.description,
-          cutoffDate: body.cutoffDate,
-          prizes: body.prizes,
-        });
+      if (body.action === "archive-and-new" || body.action === "archive-raffle") {
+        const { archiveCurrentRaffle, getArchivedRaffles, getRaffleState } = await import(
+          "@/server/raffleStore"
+        );
+        const res = await archiveCurrentRaffle(
+          body.raffleId,
+          body.title
+            ? {
+                title: body.title,
+                category: body.category,
+                description: body.description,
+                cutoffDate: body.cutoffDate,
+                prizes: body.prizes,
+              }
+            : undefined,
+        );
         if (!res.success) {
           return json(
             { error: res.error || "Assign a winner before archiving this raffle." },
@@ -922,7 +978,8 @@ export async function POST(request: Request, context: Context) {
           );
         }
         const archives = await getArchivedRaffles();
-        return json({ success: true, raffle: res.newRaffle, archives });
+        const nextActive = res.newRaffle || (await getRaffleState("latest"));
+        return json({ success: true, raffle: nextActive || null, archives });
       }
 
       if (body.action === "get-archives") {

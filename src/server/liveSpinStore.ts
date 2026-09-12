@@ -14,6 +14,8 @@ export interface LiveSpinState {
   isAwarded?: boolean;
   entrants?: { id: string; fullName: string }[];
   excludedIds?: string[];
+  drawMode?: "wheel" | "duck_race";
+  shuffledAt?: number;
 }
 
 let activeLiveSpin: LiveSpinState | null = null;

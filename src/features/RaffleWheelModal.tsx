@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Trophy, Shuffle, Volume2, VolumeX, CheckCircle, Gift, RefreshCw, Timer, Clock, UserCheck, RotateCcw, Eye } from "lucide-react";
 import { type RafflePrizeItem, normalizePrizeItems } from "@/types";
+import { renderDuckRace } from "./duckRaceCanvas";
 
 interface RaffleWheelEntry {
   id: string;
@@ -43,8 +44,14 @@ export function RaffleWheelModal({
   onRefresh,
 }: RaffleWheelModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const duckCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const [drawMode, setDrawMode] = useState<"wheel" | "duck_race">("wheel");
+  const [isShuffling, setIsShuffling] = useState(false);
+  const [shuffledIds, setShuffledIds] = useState<string[] | null>(null);
+  const [duckLeaders, setDuckLeaders] = useState<{ name: string; rank: number }[]>([]);
 
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filterUnassigned, setFilterUnassigned] = useState(true);
@@ -93,9 +100,27 @@ export function RaffleWheelModal({
 
   // Filter entrants: exclude already awarded winners AND excluded/repicked candidates
   const normalizedPrizes = normalizePrizeItems(prizes);
-  const eligibleEntrants = filterUnassigned
+  const rawEligible = filterUnassigned
     ? entries.filter((e) => !e.prizeWon && !excludedEntryIds.has(e.id))
     : entries.filter((e) => !excludedEntryIds.has(e.id));
+
+  // If shuffledIds exists, preserve real-time shuffled ordering
+  const eligibleEntrants = React.useMemo(() => {
+    if (!shuffledIds) return rawEligible;
+    const map = new Map(rawEligible.map((e) => [e.id, e]));
+    const ordered: RaffleWheelEntry[] = [];
+    for (const id of shuffledIds) {
+      const entrant = map.get(id);
+      if (entrant) {
+        ordered.push(entrant);
+        map.delete(id);
+      }
+    }
+    for (const remaining of map.values()) {
+      ordered.push(remaining);
+    }
+    return ordered;
+  }, [rawEligible, shuffledIds]);
 
   // Initialize selected prize if not set
   useEffect(() => {
@@ -392,7 +417,66 @@ export function RaffleWheelModal({
     confettiFrameRef.current = requestAnimationFrame(render);
   };
 
-  // Trigger spin animation
+  // Real-time shuffle participants order and broadcast
+  const handleShuffle = async () => {
+    if (isSpinning || isShuffling || eligibleEntrants.length === 0) return;
+    setIsShuffling(true);
+    playTickSound();
+
+    const shuffled = [...eligibleEntrants];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    const newIds = shuffled.map((e) => e.id);
+    setShuffledIds(newIds);
+
+    // Audio feedback ticks
+    setTimeout(playTickSound, 100);
+    setTimeout(playTickSound, 220);
+
+    // Broadcast shuffle in real-time to viewers
+    try {
+      await fetch("/api/raffle/live-spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "shuffle",
+          drawMode,
+          entrants: shuffled.map((e) => ({ id: e.id, fullName: e.fullName })),
+          excludedIds: Array.from(excludedEntryIds),
+        }),
+      });
+    } catch {}
+
+    setTimeout(() => setIsShuffling(false), 450);
+  };
+
+  // Idle duck race bobbing animation loop
+  useEffect(() => {
+    if (!isOpen || drawMode !== "duck_race" || isSpinning) return;
+    let animId: number;
+    const loop = (t: number) => {
+      if (duckCanvasRef.current) {
+        renderDuckRace({
+          canvas: duckCanvasRef.current,
+          entrants: eligibleEntrants,
+          winningIndex: winner ? eligibleEntrants.findIndex((e) => e.id === winner.id) : 0,
+          progress: winner ? 1 : 0,
+          isRacing: false,
+          isFinished: Boolean(winner),
+          timeMs: t,
+          onLeaderboardUpdate: setDuckLeaders,
+        });
+      }
+      animId = requestAnimationFrame(loop);
+    };
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [isOpen, drawMode, isSpinning, eligibleEntrants, winner]);
+
+  // Trigger spin / duck race animation
   const spinWheel = (overrideExcluded?: Set<string>) => {
     const activeExcluded = overrideExcluded || excludedEntryIds;
     const currentEligible = filterUnassigned
@@ -421,6 +505,7 @@ export function RaffleWheelModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "start",
+        drawMode,
         prize: selectedPrize,
         winnerId: selectedWinner.id,
         winnerName: selectedWinner.fullName,
@@ -459,9 +544,25 @@ export function RaffleWheelModal({
 
       const currentRotation = startRotation + totalSpinRotation * easedProgress;
       rotationRef.current = currentRotation;
-      drawWheel(currentRotation);
 
-      // Sound tick detection: calculate which slice currently passes the top needle
+      if (drawMode === "duck_race") {
+        if (duckCanvasRef.current) {
+          renderDuckRace({
+            canvas: duckCanvasRef.current,
+            entrants: currentEligible,
+            winningIndex,
+            progress: easedProgress,
+            isRacing: true,
+            isFinished: false,
+            timeMs: now,
+            onLeaderboardUpdate: setDuckLeaders,
+          });
+        }
+      } else {
+        drawWheel(currentRotation);
+      }
+
+      // Sound tick detection
       const normalizedCurrent = (pointerAngle - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
       const activeAngle = normalizedCurrent >= 0 ? normalizedCurrent : normalizedCurrent + 2 * Math.PI;
       const currentPassingSlice = Math.floor(activeAngle / sliceAngle) % sliceCount;
@@ -475,7 +576,22 @@ export function RaffleWheelModal({
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
         rotationRef.current = finalRotation;
-        drawWheel(finalRotation);
+        if (drawMode === "duck_race") {
+          if (duckCanvasRef.current) {
+            renderDuckRace({
+              canvas: duckCanvasRef.current,
+              entrants: currentEligible,
+              winningIndex,
+              progress: 1,
+              isRacing: false,
+              isFinished: true,
+              timeMs: now,
+              onLeaderboardUpdate: setDuckLeaders,
+            });
+          }
+        } else {
+          drawWheel(finalRotation);
+        }
         setIsSpinning(false);
         setWinner(selectedWinner);
         const deadline = Date.now() + claimDurationSeconds * 1000;
@@ -490,6 +606,7 @@ export function RaffleWheelModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "landed",
+            drawMode,
             claimSeconds: claimDurationSeconds,
             claimDeadline: deadline,
           }),
@@ -524,6 +641,7 @@ export function RaffleWheelModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "claim_timer",
+          drawMode,
           claimSeconds: newSecs,
           claimDeadline: newDeadline,
         }),
@@ -544,6 +662,7 @@ export function RaffleWheelModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "claim_timer",
+        drawMode,
         claimSeconds: totalRemaining,
         claimDeadline: newDeadline,
       }),
@@ -571,6 +690,7 @@ export function RaffleWheelModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "repick",
+        drawMode,
         excludedId: repickedWinner?.id,
         excludedIds: Array.from(nextExcluded),
         entrants: remainingEntrants,
@@ -582,21 +702,30 @@ export function RaffleWheelModal({
     }, 200);
   };
 
-  // Draw initial state on mount or change
+  // Draw initial state on mount/open without wiping winner on entry count changes
   useEffect(() => {
     if (isOpen) {
       setWinner(null);
       setClaimDeadline(null);
       setAwardedSuccess(false);
       setTimeout(() => {
-        drawWheel(rotationRef.current);
+        if (drawMode === "wheel") {
+          drawWheel(rotationRef.current);
+        }
       }, 50);
     }
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (confettiFrameRef.current) cancelAnimationFrame(confettiFrameRef.current);
     };
-  }, [isOpen, eligibleEntrants.length]);
+  }, [isOpen]);
+
+  // Redraw wheel when eligible entrants change (without resetting winner or claim state!)
+  useEffect(() => {
+    if (isOpen && drawMode === "wheel" && !isSpinning) {
+      drawWheel(rotationRef.current);
+    }
+  }, [isOpen, drawMode, eligibleEntrants.length, isSpinning]);
 
   // Realtime background sync while wheel modal is open
   useEffect(() => {
@@ -625,6 +754,7 @@ export function RaffleWheelModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "awarded",
+          drawMode,
           winnerId: winner.id,
           winnerName: winner.fullName,
           prize: selectedPrize,
@@ -659,8 +789,47 @@ export function RaffleWheelModal({
           <div className="raffle-wheel-title">
             <Trophy size={20} style={{ color: "#facc15" }} />
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h3>Interactive Live Draw Wheel</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <h3>Interactive Live Draw</h3>
+
+                {/* Draw Mode Switcher (Wheel vs Duck Race) */}
+                <div className="raffle-draw-mode-tabs">
+                  <button
+                    type="button"
+                    className={`raffle-draw-mode-tab ${drawMode === "wheel" ? "active" : ""}`}
+                    onClick={() => {
+                      if (!isSpinning) {
+                        setDrawMode("wheel");
+                        void fetch("/api/raffle/live-spin", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "shuffle", drawMode: "wheel" }),
+                        }).catch(() => {});
+                      }
+                    }}
+                    disabled={isSpinning}
+                  >
+                    <span>🎡 Wheel</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`raffle-draw-mode-tab duck ${drawMode === "duck_race" ? "active" : ""}`}
+                    onClick={() => {
+                      if (!isSpinning) {
+                        setDrawMode("duck_race");
+                        void fetch("/api/raffle/live-spin", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "shuffle", drawMode: "duck_race" }),
+                        }).catch(() => {});
+                      }
+                    }}
+                    disabled={isSpinning}
+                  >
+                    <span>🦆 Duck Race</span>
+                  </button>
+                </div>
+
                 <span className="raffle-wheel-live-badge">
                   <span className="raffle-wheel-live-dot" /> LIVE SYNC
                 </span>
@@ -718,19 +887,45 @@ export function RaffleWheelModal({
 
         {/* Wheel Body */}
         <div className="raffle-wheel-body">
-          {/* Wheel Stage */}
-          <div className="raffle-wheel-stage">
-            {/* Top Pointer Ticker Needle */}
-            <div className="raffle-wheel-pointer" />
+          {/* Stage: Render Wheel or Duck Race */}
+          {drawMode === "duck_race" ? (
+            <div className="raffle-duck-race-stage">
+              <div className="raffle-duck-race-hud">
+                <span>🏁 River Track ({eligibleEntrants.length} Ducks)</span>
+                {duckLeaders.length > 0 && (
+                  <div className="raffle-duck-race-leaderboard">
+                    {duckLeaders.map((lead) => (
+                      <span
+                        key={lead.name}
+                        className={`raffle-duck-race-leader-pill ${lead.rank === 1 ? "rank-1" : ""}`}
+                      >
+                        #{lead.rank} {lead.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <canvas
+                ref={duckCanvasRef}
+                width={500}
+                height={320}
+                className="raffle-duck-race-canvas"
+              />
+            </div>
+          ) : (
+            <div className="raffle-wheel-stage">
+              {/* Top Pointer Ticker Needle */}
+              <div className="raffle-wheel-pointer" />
 
-            {/* Canvas Wheel */}
-            <canvas
-              ref={canvasRef}
-              width={480}
-              height={480}
-              className="raffle-wheel-canvas"
-            />
-          </div>
+              {/* Canvas Wheel */}
+              <canvas
+                ref={canvasRef}
+                width={480}
+                height={480}
+                className="raffle-wheel-canvas"
+              />
+            </div>
+          )}
 
           {/* Controls & Winner Panel */}
           <div className="raffle-wheel-sidebar">
@@ -770,7 +965,7 @@ export function RaffleWheelModal({
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <label className="raffle-wheel-label" style={{ margin: 0 }}>
                   <Timer size={14} style={{ color: "#38bdf8" }} />
-                  <span>Spin Duration</span>
+                  <span>{drawMode === "duck_race" ? "Race Duration" : "Spin Duration"}</span>
                 </label>
                 <span style={{ fontSize: 12, fontWeight: 800, color: "#38bdf8" }}>
                   {spinDurationSeconds}s
@@ -848,16 +1043,38 @@ export function RaffleWheelModal({
               </label>
             </div>
 
-            {/* Spin Button */}
-            <button
-              type="button"
-              className="raffle-wheel-spin-btn"
-              onClick={() => spinWheel()}
-              disabled={isSpinning || eligibleEntrants.length === 0}
-            >
-              <Shuffle size={18} className={isSpinning ? "busy-spinner" : ""} />
-              <span>{isSpinning ? "Spinning Wheel…" : "SPIN THE WHEEL"}</span>
-            </button>
+            {/* Draw Actions: Shuffle & Spin / Duck Race */}
+            <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+              <button
+                type="button"
+                className={`raffle-wheel-shuffle-btn ${isShuffling ? "is-shuffling" : ""}`}
+                onClick={handleShuffle}
+                disabled={isSpinning || isShuffling || eligibleEntrants.length === 0}
+                title="Realtime shuffle participants order on Wheel and Duck Race"
+              >
+                <Shuffle size={15} />
+                <span>{isShuffling ? "Shuffling…" : "Shuffle"}</span>
+              </button>
+
+              <button
+                type="button"
+                className="raffle-wheel-spin-btn"
+                style={{ flex: 1 }}
+                onClick={() => spinWheel()}
+                disabled={isSpinning || eligibleEntrants.length === 0}
+              >
+                <Shuffle size={18} className={isSpinning ? "busy-spinner" : ""} />
+                <span>
+                  {isSpinning
+                    ? drawMode === "duck_race"
+                      ? "Racing Ducks…"
+                      : "Spinning Wheel…"
+                    : drawMode === "duck_race"
+                      ? "START DUCK RACE"
+                      : "SPIN THE WHEEL"}
+                </span>
+              </button>
+            </div>
 
             {/* Candidate Drawn / Attendance Verification Card */}
             {winner && (
@@ -885,7 +1102,14 @@ export function RaffleWheelModal({
                         setWinner(null);
                         setClaimDeadline(null);
                         setAwardedSuccess(false);
-                        drawWheel(rotationRef.current);
+                        if (drawMode === "wheel") {
+                          drawWheel(rotationRef.current);
+                        }
+                        void fetch("/api/raffle/live-spin", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "reset", drawMode }),
+                        }).catch(() => {});
                       }}
                       style={{ width: "100%", justifyContent: "center" }}
                     >

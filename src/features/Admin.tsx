@@ -8,8 +8,10 @@ import {
   ArrowUpRight,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Crown,
   Download,
@@ -135,10 +137,9 @@ export function Admin() {
     prizes: RafflePrizeItem[];
     isActive: boolean;
   }>({
-    title: "Community Heroes Grand Raffle",
+    title: "",
     category: "Diamonds Giveaway",
-    description:
-      "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.",
+    description: "",
     cutoffDate: "",
     prizes: [
       { name: "100 Diamonds", winnerCount: 5 },
@@ -159,6 +160,7 @@ export function Admin() {
   const [archivedRaffles, setArchivedRaffles] = useState<
     RaffleArchiveSummary[]
   >([]);
+  const [expandedAdminArchiveIds, setExpandedAdminArchiveIds] = useState<string[]>([]);
   const [showCreateRaffleModal, setShowCreateRaffleModal] = useState(false);
   const [createRaffleForm, setCreateRaffleForm] = useState<{
     title: string;
@@ -168,10 +170,9 @@ export function Admin() {
     prizes: RafflePrizeItem[];
     isActive: boolean;
   }>({
-    title: "Community Heroes Grand Raffle",
+    title: "",
     category: "Diamonds Giveaway",
-    description:
-      "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.",
+    description: "",
     cutoffDate: "",
     prizes: [
       { name: "100 Diamonds", winnerCount: 5 },
@@ -179,6 +180,12 @@ export function Admin() {
     ],
     isActive: true,
   });
+
+  function toggleAdminArchiveExpand(id: string) {
+    setExpandedAdminArchiveIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  }
   const [createPrizeName, setCreatePrizeName] = useState("");
   const [createPrizeCount, setCreatePrizeCount] = useState<number>(1);
   const [editingArchive, setEditingArchive] =
@@ -210,27 +217,31 @@ export function Admin() {
       const res = await api(
         raffleId ? `/api/raffle?id=${encodeURIComponent(raffleId)}` : "/api/raffle",
       );
-      setRaffleData(res);
+      if (res && res.id) {
+        setRaffleData(res);
+        const normalized = normalizePrizeItems(res.prizes);
+        setRaffleForm({
+          title: res.title || "",
+          category: res.category || "Diamonds Giveaway",
+          description: res.description || "",
+          cutoffDate: res.cutoffDate || "",
+          prizes:
+            normalized.length > 0
+              ? normalized
+              : [{ name: "100 Diamonds", winnerCount: 5 }],
+          isActive: res.isActive !== undefined ? res.isActive : true,
+        });
+        if (normalized.length > 0) {
+          setSelectedRandomPrize(normalized[0].name);
+        }
+      } else {
+        setRaffleData(null);
+      }
       if (Array.isArray(res.activeRaffles)) {
         setActiveRaffles(res.activeRaffles);
       }
       if (Array.isArray(res.archives)) {
         setArchivedRaffles(res.archives);
-      }
-      const normalized = normalizePrizeItems(res.prizes);
-      setRaffleForm({
-        title: res.title || "Community Heroes Grand Raffle",
-        category: res.category || "Diamonds Giveaway",
-        description: res.description || "",
-        cutoffDate: res.cutoffDate || "",
-        prizes:
-          normalized.length > 0
-            ? normalized
-            : [{ name: "100 Diamonds", winnerCount: 5 }],
-        isActive: res.isActive !== undefined ? res.isActive : true,
-      });
-      if (normalized.length > 0) {
-        setSelectedRandomPrize(normalized[0].name);
       }
     } catch (err: any) {
       setError(err.message || "Failed to load raffle data");
@@ -245,8 +256,8 @@ export function Admin() {
       raffleData.entries?.filter((e) => Boolean(e.prizeWon)).length || 0;
     const confirmMsg =
       winnerCount > 0
-        ? `This raffle currently has ${winnerCount} assigned winner(s). Are you sure you want to archive it? All entries and winners will be preserved in the public Past Winners Archive, and a new raffle will begin.`
-        : "Archive this raffle? It will be moved to the Past Winners Archive and a new raffle will begin.";
+        ? `This raffle currently has ${winnerCount} assigned winner(s). Are you sure you want to move it to Past Winners? All entries and winners will be preserved in the public Past Winners Archive.`
+        : "Move this raffle to Past Winners? It will be preserved in the public Past Winners Archive.";
     if (!window.confirm(confirmMsg)) return;
 
     setError("");
@@ -255,16 +266,15 @@ export function Admin() {
       const res = await api(
         "/api/raffle/admin",
         post({
-          action: "archive-and-new",
+          action: "archive-raffle",
           raffleId: raffleData.id || "default",
-          category: raffleForm.category,
         }),
       );
-      if (res.raffle) {
+      if (res.raffle && res.raffle.id) {
         setRaffleData(res.raffle);
         const normalized = normalizePrizeItems(res.raffle.prizes);
         setRaffleForm({
-          title: res.raffle.title || "Community Heroes Grand Raffle",
+          title: res.raffle.title || "",
           category: res.raffle.category || "Diamonds Giveaway",
           description: res.raffle.description || "",
           cutoffDate: res.raffle.cutoffDate || "",
@@ -272,13 +282,16 @@ export function Admin() {
           isActive:
             res.raffle.isActive !== undefined ? res.raffle.isActive : true,
         });
-        if (Array.isArray(res.archives)) {
-          setArchivedRaffles(res.archives);
-        }
-        setMessage(
-          "Raffle has been archived! A fresh raffle is now active for your community.",
-        );
+      } else {
+        setRaffleData(null);
       }
+      if (Array.isArray(res.archives)) {
+        setArchivedRaffles(res.archives);
+      }
+      void loadRaffleAdmin();
+      setMessage(
+        "Raffle has been moved to Past Winners! You can create a new raffle whenever you are ready.",
+      );
     } catch (err: any) {
       setError(err.message || "Failed to archive raffle");
     }
@@ -344,7 +357,7 @@ export function Admin() {
           raffleId: raffleData.id,
         }),
       );
-      if (res.raffle) {
+      if (res.raffle && res.raffle.id) {
         setRaffleData(res.raffle);
         const normalized = normalizePrizeItems(res.raffle.prizes);
         setRaffleForm({
@@ -356,9 +369,12 @@ export function Admin() {
           isActive:
             res.raffle.isActive !== undefined ? res.raffle.isActive : true,
         });
-        if (Array.isArray(res.archives)) setArchivedRaffles(res.archives);
-        setMessage("Raffle deleted. Switched to next raffle edition.");
+      } else {
+        setRaffleData(null);
       }
+      if (Array.isArray(res.archives)) setArchivedRaffles(res.archives);
+      void loadRaffleAdmin();
+      setMessage("Raffle deleted.");
     } catch (err: any) {
       setError(err.message || "Failed to delete raffle");
     }
@@ -2327,65 +2343,108 @@ export function Admin() {
                           </div>
                         ) : (
                           <>
-                            {activeRaffles.length > 0 && (
-                              <div className="admin-raffle-switcher">
-                                <div>
-                                  <span className="eyebrow">ACTIVE RAFFLES</span>
-                                  <strong>Choose a raffle to manage</strong>
-                                </div>
-                                <div className="admin-raffle-switcher-grid">
-                                  {activeRaffles.map((raffle) => (
-                                    <button
-                                      key={raffle.id}
-                                      type="button"
-                                      className={
-                                        raffle.id === raffleData?.id
-                                          ? "selected"
-                                          : ""
-                                      }
-                                      aria-pressed={raffle.id === raffleData?.id}
-                                      onClick={() => void loadRaffleAdmin(raffle.id)}
-                                    >
-                                      <span>{raffle.title}</span>
-                                      <small>
-                                        {raffle.entriesCount} registered
-                                      </small>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Top Raffle CRUD Bar */}
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                flexWrap: "wrap",
-                                gap: 12,
-                                marginBottom: 18,
-                                padding: "12px 16px",
-                                background: "#111724",
-                                border: "1px solid #1e293b",
-                                borderRadius: 10,
-                              }}
-                            >
+                            {!raffleData || !raffleData.id ? (
                               <div
+                                className="ch-empty-state"
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                  flexWrap: "wrap",
+                                  margin: "20px 0",
+                                  padding: "48px 24px",
+                                  background: "#0b1120",
+                                  border: "1px dashed #1e293b",
+                                  borderRadius: 12,
                                 }}
                               >
-                                <strong
-                                  style={{ color: "#ffffff", fontSize: 14 }}
+                                <div className="ch-empty-icon" aria-hidden="true">
+                                  <Gift size={28} />
+                                </div>
+                                <h3>No Active Raffle As of Now</h3>
+                                <p>
+                                  There are currently no active community raffles. You can create a new raffle whenever you are ready!
+                                </p>
+                                <div style={{ marginTop: 18 }}>
+                                  <button
+                                    type="button"
+                                    className="button primary"
+                                    onClick={() => {
+                                      setCreateRaffleForm({
+                                        title: "",
+                                        category: "Diamonds Giveaway",
+                                        description: "",
+                                        cutoffDate: "",
+                                        prizes: [
+                                          { name: "100 Diamonds", winnerCount: 5 },
+                                          { name: "Starlight Card", winnerCount: 1 },
+                                        ],
+                                        isActive: true,
+                                      });
+                                      setShowCreateRaffleModal(true);
+                                    }}
+                                  >
+                                    <Plus size={15} />
+                                    <span>Create New Raffle</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {activeRaffles.length > 1 && (
+                                  <div className="admin-raffle-switcher">
+                                    <div>
+                                      <span className="eyebrow">ACTIVE RAFFLES</span>
+                                      <strong>Choose a raffle to manage</strong>
+                                    </div>
+                                    <div className="admin-raffle-switcher-grid">
+                                      {activeRaffles.map((raffle) => (
+                                        <button
+                                          key={raffle.id}
+                                          type="button"
+                                          className={
+                                            raffle.id === raffleData?.id
+                                              ? "selected"
+                                              : ""
+                                          }
+                                          aria-pressed={raffle.id === raffleData?.id}
+                                          onClick={() => void loadRaffleAdmin(raffle.id)}
+                                        >
+                                          <span>{raffle.title}</span>
+                                          <small>
+                                            {raffle.entriesCount} registered
+                                          </small>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Top Raffle CRUD Bar */}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    flexWrap: "wrap",
+                                    gap: 12,
+                                    marginBottom: 18,
+                                    padding: "12px 16px",
+                                    background: "#111724",
+                                    border: "1px solid #1e293b",
+                                    borderRadius: 10,
+                                  }}
                                 >
-                                  Managing:{" "}
-                                  {raffleData?.title ||
-                                    "Community Heroes Grand Raffle"}
-                                </strong>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 8,
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    <strong
+                                      style={{ color: "#ffffff", fontSize: 14 }}
+                                    >
+                                      Managing:{" "}
+                                      {raffleData.title || "Untitled Raffle"}
+                                    </strong>
                                 <span
                                   style={{
                                     fontSize: 11,
@@ -3077,10 +3136,9 @@ export function Admin() {
                                             color: "#94a3b8",
                                           }}
                                         >
-                                          Ready for the next round? Archive this
-                                          raffle to preserve results in the
-                                          public Past Winners Archive and launch
-                                          a fresh edition.
+                                          Ready to conclude this raffle? Move this
+                                          raffle to Past Winners to preserve results
+                                          in the public Past Winners Archive.
                                         </span>
                                       </div>
                                     </div>
@@ -3091,7 +3149,7 @@ export function Admin() {
                                       style={{ whiteSpace: "nowrap" }}
                                     >
                                       <Archive size={14} />
-                                      <span>Archive & Start New Raffle</span>
+                                      <span>Move to Past Winners</span>
                                     </button>
                                   </div>
                                 )}
@@ -3839,10 +3897,22 @@ export function Admin() {
                                   className="button outline small"
                                   onClick={handleArchiveCurrentRaffle}
                                   style={{ borderColor: "#334155" }}
+                                  disabled={
+                                    !raffleData?.entries?.some((entry) =>
+                                      Boolean(entry.prizeWon),
+                                    )
+                                  }
+                                  title={
+                                    raffleData?.entries?.some((entry) =>
+                                      Boolean(entry.prizeWon),
+                                    )
+                                      ? "Move this raffle to Past Winners"
+                                      : "Assign at least one winner before moving this raffle to Past Winners"
+                                  }
                                 >
                                   <Archive size={13} />
                                   <span>
-                                    Archive Current Raffle & Start New Edition
+                                    Move to Past Winners
                                   </span>
                                 </button>
 
@@ -3863,6 +3933,8 @@ export function Admin() {
                                   )}
                               </div>
                             </div>
+                          </>
+                        )}
 
                             {/* Archived Raffles History */}
                             {archivedRaffles && archivedRaffles.length > 0 && (
@@ -3882,7 +3954,7 @@ export function Admin() {
                                     </h3>
                                     <small>
                                       Past completed raffles preserved in
-                                      database and visible in public archive
+                                      database and visible in public archive. Click any title to list winners.
                                     </small>
                                   </div>
                                 </div>
@@ -3893,170 +3965,252 @@ export function Admin() {
                                     gap: 12,
                                   }}
                                 >
-                                  {archivedRaffles.map((arch, idx) => (
-                                    <div
-                                      key={arch.id || idx}
-                                      style={{
-                                        background: "#0b1120",
-                                        border: "1px solid #1e293b",
-                                        borderRadius: 8,
-                                        padding: "12px 16px",
-                                      }}
-                                    >
+                                  {archivedRaffles.map((arch, idx) => {
+                                    const isExpanded = expandedAdminArchiveIds.includes(arch.id);
+                                    return (
                                       <div
+                                        key={arch.id || idx}
                                         style={{
-                                          display: "flex",
-                                          justifyContent: "space-between",
-                                          alignItems: "center",
-                                          flexWrap: "wrap",
-                                          gap: 8,
+                                          background: "#0b1120",
+                                          border: isExpanded ? "1px solid #38bdf8" : "1px solid #1e293b",
+                                          borderRadius: 8,
+                                          padding: "12px 16px",
+                                          transition: "border-color 0.15s ease",
                                         }}
                                       >
-                                        <div>
-                                          <strong
-                                            style={{
-                                              color: "#ffffff",
-                                              fontSize: 14,
-                                            }}
-                                          >
-                                            {arch.title}
-                                          </strong>
-                                          <div
-                                            style={{
-                                              fontSize: 11.5,
-                                              color: "#94a3b8",
-                                              marginTop: 2,
-                                            }}
-                                          >
-                                            Cut-off:{" "}
-                                            {arch.cutoffDate
-                                              ? new Date(
-                                                  arch.cutoffDate,
-                                                ).toLocaleDateString()
-                                              : "—"}{" "}
-                                            · {arch.entriesCount} participants
-                                          </div>
-                                        </div>
                                         <div
                                           style={{
                                             display: "flex",
+                                            justifyContent: "space-between",
                                             alignItems: "center",
-                                            gap: 8,
                                             flexWrap: "wrap",
+                                            gap: 8,
                                           }}
                                         >
-                                          <span
-                                            style={{
-                                              fontSize: 11.5,
-                                              color: "#facc15",
-                                              fontWeight: 700,
-                                              background:
-                                                "rgba(250, 204, 21, 0.1)",
-                                              padding: "3px 8px",
-                                              borderRadius: 4,
-                                            }}
-                                          >
-                                            {arch.winners?.length || 0} Winner
-                                            {arch.winners?.length !== 1
-                                              ? "s"
-                                              : ""}
-                                          </span>
                                           <button
                                             type="button"
-                                            className="button outline small"
+                                            onClick={() => toggleAdminArchiveExpand(arch.id)}
                                             style={{
-                                              padding: "3px 8px",
-                                              fontSize: 11.5,
-                                            }}
-                                            onClick={() => {
-                                              setEditingArchive(arch);
-                                              setEditingArchiveForm({
-                                                title: arch.title,
-                                                description:
-                                                  arch.description || "",
-                                              });
-                                            }}
-                                            title="Edit archive title & description"
-                                          >
-                                            <Pencil size={11} />
-                                            <span>Edit</span>
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="button outline small"
-                                            style={{
-                                              padding: "3px 8px",
-                                              fontSize: 11.5,
-                                              color: "#38bdf8",
-                                              borderColor: "#0369a1",
-                                            }}
-                                            onClick={() =>
-                                              handleRestoreArchive(arch.id)
-                                            }
-                                            title="Restore this raffle back to active edition"
-                                          >
-                                            <RotateCcw size={11} />
-                                            <span>Restore</span>
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="icon-button"
-                                            style={{
-                                              color: "#ef4444",
-                                              padding: 4,
-                                            }}
-                                            onClick={() =>
-                                              handleDeleteArchive(
-                                                arch.id,
-                                                arch.title,
-                                              )
-                                            }
-                                            title={`Delete archive "${arch.title}"`}
-                                          >
-                                            <Trash2 size={13} />
-                                          </button>
-                                        </div>
-                                      </div>
-                                      {arch.winners &&
-                                        arch.winners.length > 0 && (
-                                          <div
-                                            style={{
-                                              marginTop: 8,
+                                              background: "none",
+                                              border: "none",
+                                              padding: 0,
+                                              textAlign: "left",
+                                              cursor: "pointer",
                                               display: "flex",
-                                              flexWrap: "wrap",
-                                              gap: 6,
+                                              alignItems: "flex-start",
+                                              gap: 8,
                                             }}
+                                            aria-expanded={isExpanded}
+                                            title="Click title to view raffle winners"
                                           >
-                                            {arch.winners.map((w, wIdx) => (
-                                              <span
-                                                key={w.id || wIdx}
+                                            <div style={{ marginTop: 2, color: isExpanded ? "#38bdf8" : "#94a3b8" }}>
+                                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                            </div>
+                                            <div>
+                                              <strong
                                                 style={{
-                                                  fontSize: 11,
-                                                  background: "#1e293b",
-                                                  color: "#e2e8f0",
-                                                  padding: "3px 8px",
-                                                  borderRadius: 4,
-                                                  display: "inline-flex",
-                                                  alignItems: "center",
-                                                  gap: 4,
+                                                  color: isExpanded ? "#38bdf8" : "#ffffff",
+                                                  fontSize: 14,
+                                                  display: "block",
+                                                  lineHeight: 1.3,
                                                 }}
                                               >
-                                                <Trophy
-                                                  size={11}
-                                                  style={{ color: "#facc15" }}
-                                                />
-                                                <strong>{w.fullName}</strong>
-                                                <span
-                                                  style={{ color: "#38bdf8" }}
-                                                >
-                                                  ({w.prizeWon})
+                                                {arch.title}
+                                              </strong>
+                                              <div
+                                                style={{
+                                                  fontSize: 11.5,
+                                                  color: "#94a3b8",
+                                                  marginTop: 2,
+                                                }}
+                                              >
+                                                Cut-off:{" "}
+                                                {arch.cutoffDate
+                                                  ? new Date(
+                                                      arch.cutoffDate,
+                                                    ).toLocaleDateString()
+                                                  : "—"}{" "}
+                                                · {arch.entriesCount} participants ·{" "}
+                                                <span style={{ color: "#38bdf8" }}>
+                                                  {isExpanded ? "Hide winners" : "Click title to list winners"}
                                                 </span>
-                                              </span>
-                                            ))}
+                                              </div>
+                                            </div>
+                                          </button>
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: 8,
+                                              flexWrap: "wrap",
+                                            }}
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={() => toggleAdminArchiveExpand(arch.id)}
+                                              style={{
+                                                fontSize: 11.5,
+                                                color: "#facc15",
+                                                fontWeight: 700,
+                                                background:
+                                                  "rgba(250, 204, 21, 0.1)",
+                                                padding: "3px 8px",
+                                                borderRadius: 4,
+                                                border: "1px solid rgba(250, 204, 21, 0.2)",
+                                                cursor: "pointer",
+                                              }}
+                                            >
+                                              {arch.winners?.length || 0} Winner
+                                              {arch.winners?.length !== 1
+                                                ? "s"
+                                                : ""}{" "}
+                                              ({isExpanded ? "Hide" : "Show"})
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="button outline small"
+                                              style={{
+                                                padding: "3px 8px",
+                                                fontSize: 11.5,
+                                              }}
+                                              onClick={() => {
+                                                setEditingArchive(arch);
+                                                setEditingArchiveForm({
+                                                  title: arch.title,
+                                                  description:
+                                                    arch.description || "",
+                                                });
+                                              }}
+                                              title="Edit archive title & description"
+                                            >
+                                              <Pencil size={11} />
+                                              <span>Edit</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="button outline small"
+                                              style={{
+                                                padding: "3px 8px",
+                                                fontSize: 11.5,
+                                                color: "#38bdf8",
+                                                borderColor: "#0369a1",
+                                              }}
+                                              onClick={() =>
+                                                handleRestoreArchive(arch.id)
+                                              }
+                                              title="Restore this raffle back to active edition"
+                                            >
+                                              <RotateCcw size={11} />
+                                              <span>Restore</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="icon-button"
+                                              style={{
+                                                color: "#ef4444",
+                                                padding: 4,
+                                              }}
+                                              onClick={() =>
+                                                handleDeleteArchive(
+                                                  arch.id,
+                                                  arch.title,
+                                                )
+                                              }
+                                              title={`Delete archive "${arch.title}"`}
+                                            >
+                                              <Trash2 size={13} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                        {isExpanded && (
+                                          <div
+                                            style={{
+                                              marginTop: 12,
+                                              paddingTop: 12,
+                                              borderTop: "1px solid #1e293b",
+                                            }}
+                                          >
+                                            {arch.description && (
+                                              <p
+                                                style={{
+                                                  fontSize: 12,
+                                                  color: "#cbd5e1",
+                                                  margin: "0 0 10px",
+                                                  whiteSpace: "pre-line",
+                                                }}
+                                              >
+                                                {arch.description}
+                                              </p>
+                                            )}
+                                            {arch.winners && arch.winners.length > 0 ? (
+                                              <div
+                                                style={{
+                                                  display: "flex",
+                                                  flexDirection: "column",
+                                                  gap: 6,
+                                                }}
+                                              >
+                                                <strong style={{ fontSize: 11.5, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                                  Raffle Winners ({arch.winners.length}):
+                                                </strong>
+                                                <div
+                                                  style={{
+                                                    display: "flex",
+                                                    flexWrap: "wrap",
+                                                    gap: 6,
+                                                  }}
+                                                >
+                                                  {arch.winners.map((w, wIdx) => (
+                                                    <span
+                                                      key={w.id || wIdx}
+                                                      style={{
+                                                        fontSize: 11.5,
+                                                        background: "#1e293b",
+                                                        color: "#e2e8f0",
+                                                        padding: "4px 10px",
+                                                        borderRadius: 6,
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: 6,
+                                                        border: "1px solid rgba(250, 204, 21, 0.2)",
+                                                      }}
+                                                    >
+                                                      <Trophy
+                                                        size={12}
+                                                        style={{ color: "#facc15" }}
+                                                      />
+                                                      <strong style={{ color: "#ffffff" }}>{w.fullName}</strong>
+                                                      <span
+                                                        style={{
+                                                          color: "#38bdf8",
+                                                          fontWeight: 600,
+                                                          background: "rgba(56, 189, 248, 0.1)",
+                                                          padding: "1px 6px",
+                                                          borderRadius: 4,
+                                                        }}
+                                                      >
+                                                        {w.prizeWon}
+                                                      </span>
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <div
+                                                style={{
+                                                  fontSize: 12,
+                                                  color: "#94a3b8",
+                                                  fontStyle: "italic",
+                                                }}
+                                              >
+                                                No winners were recorded for this archived raffle.
+                                              </div>
+                                            )}
                                           </div>
                                         )}
-                                    </div>
-                                  ))}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}

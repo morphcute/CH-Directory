@@ -208,42 +208,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
     }
 
     if (!raffleRows || raffleRows.length === 0) {
-      const newId = raffleId === "default" || raffleId === "latest" ? "default" : raffleId;
-      const defaultCutoff = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      const defaultPrizes = [
-        { name: "100 Diamonds", winnerCount: 5 },
-        { name: "Starlight Card", winnerCount: 1 },
-      ];
-      await sql`
-        INSERT INTO raffles (id, title, category, description, cutoff_date, prizes, is_active, is_archived)
-        VALUES (
-          ${newId},
-          'Community Heroes Grand Raffle',
-          'Diamonds Giveaway',
-          'Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.',
-          ${defaultCutoff},
-          ${JSON.stringify(defaultPrizes)}::jsonb,
-          true,
-          false
-        )
-        ON CONFLICT (id) DO NOTHING;
-      `;
-      const freshDefault: RaffleData = {
-        id: newId,
-        title: "Community Heroes Grand Raffle",
-        category: "Diamonds Giveaway",
-        description:
-          "Enter your Full Name below to join the official Community Heroes giveaway! Winners will be announced after the cut-off date.",
-        cutoffDate: defaultCutoff,
-        prizes: defaultPrizes,
-        isActive: true,
-        isArchived: false,
-        entries: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      cachedRaffles.set(cacheKey, { data: freshDefault, timestamp: Date.now() });
-      return freshDefault;
+      return null;
     }
 
     const r = raffleRows[0];

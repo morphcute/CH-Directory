@@ -15,6 +15,7 @@ import {
 import { type RafflePrizeItem } from "@/types";
 import type { LiveSpinState } from "@/server/liveSpinStore";
 import { useRafflePresence } from "./useRafflePresence";
+import { renderDuckRace } from "./duckRaceCanvas";
 
 interface PublicLiveWheelProps {
   entries: { id: string; fullName: string; prizeWon?: string | null }[];
@@ -38,10 +39,15 @@ const PALETTE = [
 export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelProps) {
   const { viewerCount, setViewerCount } = useRafflePresence();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const duckCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   const [liveSpin, setLiveSpin] = useState<LiveSpinState | null>(null);
+  const [duckLeaders, setDuckLeaders] = useState<{ name: string; rank: number }[]>([]);
+
+  const drawMode = liveSpin?.drawMode || "wheel";
+  const isLiveSpinning = Boolean(liveSpin && liveSpin.status === "spinning");
 
   const awardedWinners = entries.filter((e) => Boolean(e.prizeWon));
   const excludedIdsSet = new Set(liveSpin?.excludedIds || []);
@@ -422,16 +428,19 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
     };
   }, []);
 
-  // Synchronized wheel spin animation using millisecond physics
+  // Synchronized wheel spin or duck race animation using millisecond physics
   useEffect(() => {
     if (!liveSpin || liveSpin.status !== "spinning") {
-      drawWheel(rotationRef.current);
+      if (drawMode === "wheel") {
+        drawWheel(rotationRef.current);
+      }
       return;
     }
 
-    const sliceCount = Math.max(1, entries.length);
+    const currentEntrants = displayEntrants;
+    const sliceCount = Math.max(1, currentEntrants.length);
     const sliceAngle = (2 * Math.PI) / sliceCount;
-    const winningIndex = liveSpin.winningIndex % sliceCount;
+    const winningIndex = (liveSpin.winningIndex ?? 0) % sliceCount;
 
     const targetSliceCenterOffset = winningIndex * sliceAngle + sliceAngle / 2;
     const pointerAngle = 1.5 * Math.PI; // Top needle (270 deg)
@@ -457,7 +466,23 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
 
       const currentRotation = startRotation + totalSpinRotation * easedProgress;
       rotationRef.current = currentRotation;
-      drawWheel(currentRotation);
+
+      if (drawMode === "duck_race") {
+        if (duckCanvasRef.current) {
+          renderDuckRace({
+            canvas: duckCanvasRef.current,
+            entrants: currentEntrants,
+            winningIndex,
+            progress: easedProgress,
+            isRacing: true,
+            isFinished: false,
+            timeMs: now,
+            onLeaderboardUpdate: setDuckLeaders,
+          });
+        }
+      } else {
+        drawWheel(currentRotation);
+      }
 
       // Sound tick detection
       const normalizedCurrent = (pointerAngle - (currentRotation % (2 * Math.PI))) % (2 * Math.PI);
@@ -473,7 +498,22 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
         rotationRef.current = finalRotation;
-        drawWheel(finalRotation);
+        if (drawMode === "duck_race") {
+          if (duckCanvasRef.current) {
+            renderDuckRace({
+              canvas: duckCanvasRef.current,
+              entrants: currentEntrants,
+              winningIndex,
+              progress: 1,
+              isRacing: false,
+              isFinished: true,
+              timeMs: now,
+              onLeaderboardUpdate: setDuckLeaders,
+            });
+          }
+        } else {
+          drawWheel(finalRotation);
+        }
         setCelebratedWinner({
           name: liveSpin.winnerName,
           prize: liveSpin.prize,
@@ -492,7 +532,45 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [liveSpin?.id, liveSpin?.status, entries.length]);
+  }, [liveSpin?.id, liveSpin?.status, displayEntrants.length, drawMode]);
+
+  // Idle duck race bobbing animation loop for public viewers
+  useEffect(() => {
+    if (drawMode !== "duck_race" || isLiveSpinning) return;
+    let animId: number;
+    const isFinished = liveSpin?.status === "landed";
+    const winningIdx = liveSpin ? (liveSpin.winningIndex ?? 0) % Math.max(1, displayEntrants.length) : 0;
+    const loop = (t: number) => {
+      if (duckCanvasRef.current) {
+        renderDuckRace({
+          canvas: duckCanvasRef.current,
+          entrants: displayEntrants,
+          winningIndex: winningIdx,
+          progress: isFinished ? 1 : 0,
+          isRacing: false,
+          isFinished,
+          timeMs: t,
+          onLeaderboardUpdate: setDuckLeaders,
+        });
+      }
+      animId = requestAnimationFrame(loop);
+    };
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [drawMode, isLiveSpinning, displayEntrants, liveSpin?.status, liveSpin?.winningIndex]);
+
+  // Resting angle lock on landed for wheel mode
+  useEffect(() => {
+    if (drawMode === "wheel" && liveSpin?.status === "landed" && displayEntrants.length > 0) {
+      const sliceCount = displayEntrants.length;
+      const sliceAngle = (2 * Math.PI) / sliceCount;
+      const winningIndex = (liveSpin.winningIndex ?? 0) % sliceCount;
+      const targetSliceCenterOffset = winningIndex * sliceAngle + sliceAngle / 2;
+      const restingAngle = 1.5 * Math.PI - targetSliceCenterOffset;
+      rotationRef.current = restingAngle;
+      drawWheel(restingAngle);
+    }
+  }, [drawMode, liveSpin?.status, liveSpin?.winningIndex, displayEntrants.length]);
 
   // Clean up confetti animation on unmount
   useEffect(() => {
@@ -504,15 +582,16 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
     };
   }, []);
 
-  // Initial draw and redraw on resize/entries change
+  // Initial draw and redraw on entries change
   useEffect(() => {
-    const timer = setTimeout(() => {
-      drawWheel(rotationRef.current);
-    }, 60);
-    return () => clearTimeout(timer);
-  }, [displayEntrants.length, liveSpin?.id, liveSpin?.status]);
+    if (drawMode === "wheel") {
+      const timer = setTimeout(() => {
+        drawWheel(rotationRef.current);
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [displayEntrants.length, liveSpin?.id, liveSpin?.status, drawMode]);
 
-  const isLiveSpinning = Boolean(liveSpin && liveSpin.status === "spinning");
 
   return (
     <div className="raffle-human-card raffle-live-wheel-card" id="public-live-wheel-section">
@@ -524,10 +603,12 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
           <Trophy size={20} style={{ color: "#facc15" }} />
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <h3 style={{ fontSize: 16 }}>Live Draw Roulette Wheel</h3>
+              <h3 style={{ fontSize: 16 }}>
+                {drawMode === "duck_race" ? "🦆 Live Duck Race Stream" : "🎡 Live Draw Roulette Wheel"}
+              </h3>
               <span className={`raffle-wheel-live-badge ${isLiveSpinning ? "active-spin" : ""}`}>
                 <span className="raffle-wheel-live-dot" />
-                {isLiveSpinning ? "LIVE DRAWING" : "READY FOR DRAW"}
+                {isLiveSpinning ? (drawMode === "duck_race" ? "DUCK RACE LIVE" : "LIVE DRAWING") : "READY FOR DRAW"}
               </span>
               <span
                 className="raffle-wheel-viewers-badge"
@@ -561,18 +642,44 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
         </div>
       </div>
 
-      {/* Wheel Body */}
+      {/* Wheel or Duck Race Body */}
       <div className="raffle-wheel-body embedded">
-        {/* Wheel Stage */}
-        <div className="raffle-wheel-stage">
-          <div className="raffle-wheel-pointer" />
-          <canvas
-            ref={canvasRef}
-            width={480}
-            height={480}
-            className="raffle-wheel-canvas"
-          />
-        </div>
+        {/* Stage: Render Wheel or Duck Race Canvas */}
+        {drawMode === "duck_race" ? (
+          <div className="raffle-duck-race-stage">
+            <div className="raffle-duck-race-hud">
+              <span>🏁 Live River Track ({displayEntrants.length} Ducks)</span>
+              {duckLeaders.length > 0 && (
+                <div className="raffle-duck-race-leaderboard">
+                  {duckLeaders.map((lead) => (
+                    <span
+                      key={lead.name}
+                      className={`raffle-duck-race-leader-pill ${lead.rank === 1 ? "rank-1" : ""}`}
+                    >
+                      #{lead.rank} {lead.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <canvas
+              ref={duckCanvasRef}
+              width={500}
+              height={320}
+              className="raffle-duck-race-canvas"
+            />
+          </div>
+        ) : (
+          <div className="raffle-wheel-stage">
+            <div className="raffle-wheel-pointer" />
+            <canvas
+              ref={canvasRef}
+              width={480}
+              height={480}
+              className="raffle-wheel-canvas"
+            />
+          </div>
+        )}
 
         {/* Sidebar Info */}
         <div className="raffle-wheel-sidebar">
@@ -585,20 +692,41 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
             <p style={{ margin: "4px 0 0", fontSize: 13, color: "#cbd5e1", lineHeight: 1.5 }}>
               {isLiveSpinning ? (
                 <span style={{ color: "#facc15", fontWeight: 700 }}>
-                  Organizer is spinning the wheel live for {liveSpin?.prize}!
+                  {drawMode === "duck_race"
+                    ? `Ducks are racing downstream to determine the winner of ${liveSpin?.prize}!`
+                    : `Organizer is spinning the wheel live for ${liveSpin?.prize}!`}
                 </span>
               ) : awardedWinners.length > 0 ? (
                 <span>
-                  <strong style={{ color: "#facc15" }}>{awardedWinners.length} winner(s)</strong> officially awarded. Wheel is active for remaining draws!
+                  <strong style={{ color: "#facc15" }}>{awardedWinners.length} winner(s)</strong> officially awarded. Ready for remaining draws!
                 </span>
               ) : (
-                <span>Wheel is live and will automatically spin when the organizer draws a winner.</span>
+                <span>
+                  {drawMode === "duck_race"
+                    ? "Duck Race is ready. Watch ducks race when the organizer begins the draw."
+                    : "Wheel is live and will automatically spin when the organizer draws a winner."}
+                </span>
               )}
             </p>
           </div>
 
-          {/* Celebrated Candidate / Winner announcement */}
-          {celebratedWinner ? (
+          {/* Current Pick Spotlight Card */}
+          {isLiveSpinning ? (
+            <div className="raffle-wheel-card" style={{ textAlign: "center", padding: "18px 14px", border: "1px solid rgba(250, 204, 21, 0.4)", background: "rgba(15, 23, 42, 0.85)" }}>
+              <div className="raffle-wheel-live-badge active-spin" style={{ marginBottom: 8 }}>
+                <span className="raffle-wheel-live-dot" />
+                {drawMode === "duck_race" ? "DUCK RACE IN PROGRESS" : "SPINNING WHEEL LIVE"}
+              </div>
+              <h4 style={{ margin: "4px 0", color: "#facc15", fontSize: 16, fontWeight: 800 }}>
+                Drawing Winner for {liveSpin?.prize}
+              </h4>
+              <p style={{ margin: 0, fontSize: 12, color: "#94a3b8" }}>
+                {drawMode === "duck_race"
+                  ? "Ducks are swimming downstream to the finish line!"
+                  : "Wheel is spinning at full speed. Landing soon!"}
+              </p>
+            </div>
+          ) : celebratedWinner ? (
             <div className="raffle-wheel-winner-card">
               {liveSpin?.isAwarded ? (
                 <>
@@ -619,7 +747,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
                 <>
                   <div className="raffle-wheel-winner-badge">
                     <UserCheck size={14} />
-                    <span>NAME DRAWN · ATTENDANCE CHECK</span>
+                    <span>CURRENT PICK · ATTENDANCE CHECK</span>
                   </div>
 
                   <h4 className="raffle-wheel-winner-name">{celebratedWinner.name}</h4>
@@ -654,20 +782,6 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
                 </>
               )}
             </div>
-          ) : awardedWinners.length > 0 ? (
-            <div className="raffle-wheel-winner-card">
-              <div className="raffle-wheel-winner-badge awarded" style={{ background: "rgba(34, 197, 94, 0.2)", borderColor: "rgba(34, 197, 94, 0.5)", color: "#4ade80" }}>
-                <CheckCircle size={14} />
-                <span>OFFICIAL WINNER RECORDED</span>
-              </div>
-              <h4 className="raffle-wheel-winner-name">{awardedWinners[awardedWinners.length - 1].fullName}</h4>
-              <p className="raffle-wheel-winner-prize">
-                Won: <strong>{awardedWinners[awardedWinners.length - 1].prizeWon}</strong>
-              </p>
-              <span style={{ fontSize: 11.5, color: "#4ade80", fontWeight: 600 }}>
-                Confirmed in livestream & saved in official database
-              </span>
-            </div>
           ) : (
             <div className="raffle-wheel-card" style={{ textAlign: "center", padding: "20px 14px" }}>
               <Gift size={24} style={{ color: "#facc15", margin: "0 auto 8px" }} />
@@ -675,7 +789,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh }: PublicLiveWheelP
                 Giveaway Prizes Ready
               </strong>
               <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                Watch the live spin here as winners are drawn by the community organizer.
+                Watch the live {drawMode === "duck_race" ? "duck race" : "spin"} here as winners are drawn by the community organizer.
               </span>
             </div>
           )}

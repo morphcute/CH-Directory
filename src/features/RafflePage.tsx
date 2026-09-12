@@ -94,6 +94,13 @@ export function RafflePage({
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [expandedArchiveIds, setExpandedArchiveIds] = useState<string[]>([]);
+
+  function toggleArchiveExpand(id: string) {
+    setExpandedArchiveIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  }
 
   function getClientDeviceId(): string {
     if (typeof window === "undefined") return "";
@@ -285,7 +292,7 @@ export function RafflePage({
   const activeRaffles =
     data?.activeRaffles && data.activeRaffles.length > 0
       ? data.activeRaffles
-      : data?.isActive
+      : data?.id && data.isActive
         ? [
             {
               id: data.id,
@@ -408,13 +415,20 @@ export function RafflePage({
             {/* Informational ribbon */}
             <div className="ch-fb-ribbon">
               {!raffleId ? (
-                <span className="ch-ribbon-views" style={{ color: "#4ade80" }}>
-                  <Gift size={13} />
-                  <span>
-                    {activeRaffles.length} active raffle
-                    {activeRaffles.length === 1 ? "" : "s"}
+                activeRaffles.length > 0 ? (
+                  <span className="ch-ribbon-views" style={{ color: "#4ade80" }}>
+                    <Gift size={13} />
+                    <span>
+                      {activeRaffles.length} active raffle
+                      {activeRaffles.length === 1 ? "" : "s"}
+                    </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="ch-ribbon-views" style={{ color: "var(--muted)" }}>
+                    <LockKeyhole size={13} />
+                    <span>No active raffle</span>
+                  </span>
+                )
               ) : data?.isEnded ? (
                 <span className="ch-ribbon-views" style={{ color: "#f87171" }}>
                   <LockKeyhole size={13} />
@@ -463,61 +477,92 @@ export function RafflePage({
             </div>
           </div>
 
-          {!raffleId && <div className="raffle-lobby" aria-label="Active raffles">
-            <div className="raffle-lobby-heading">
-              <div>
-                <span className="eyebrow">RAFFLE LOBBY</span>
-                <h3>Choose a raffle to enter</h3>
-              </div>
-              <button
-                type="button"
-                className={`button outline small ${activeTab === "archive" ? "active" : ""}`}
-                aria-pressed={activeTab === "archive"}
-                onClick={() => setActiveTab("archive")}
-              >
-                Past Winners
-                <span className="ch-filter-count closed">{archives.length}</span>
-              </button>
-            </div>
-
-            <div className="raffle-title-card-grid">
-              {activeRaffles.map((raffle) => {
-                const cutoffPassed = raffle.cutoffDate
-                  ? Date.now() > new Date(raffle.cutoffDate).getTime()
-                  : false;
-                return (
-                  <Link
-                    key={raffle.id}
-                    href={`/raffle/${raffleTitleSlug(raffle.title)}`}
-                    className="raffle-title-card"
-                    aria-label={`Open ${raffle.title}, ${raffle.entriesCount} registered participants`}
+          {!raffleId && (
+            <div className="raffle-lobby" aria-label="Active raffles">
+              <div className="raffle-lobby-heading">
+                <div>
+                  <span className="eyebrow">RAFFLE LOBBY</span>
+                  <h3>{activeRaffles.length > 0 ? "Choose a raffle to enter" : "Community Raffles"}</h3>
+                </div>
+                {archives.length > 0 && (
+                  <button
+                    type="button"
+                    className={`button outline small ${activeTab === "archive" ? "active" : ""}`}
+                    aria-pressed={activeTab === "archive"}
+                    onClick={() => setActiveTab("archive")}
                   >
-                    <span className="raffle-title-card-topline">
-                      <span className={`raffle-card-state ${cutoffPassed ? "closed" : "open"}`}>
-                        <span aria-hidden="true" />
-                        {cutoffPassed ? "Entries closed" : "Accepting entries"}
-                      </span>
-                      <ArrowLeft className="raffle-card-arrow" size={15} aria-hidden="true" />
-                    </span>
-                    <strong>{raffle.title}</strong>
-                    <span className="raffle-title-card-category">
-                      {raffle.category || "Community Giveaway"}
-                    </span>
-                    <span className="raffle-title-card-meta">
-                      <span>
-                        <Users size={14} aria-hidden="true" />
-                        {raffle.entriesCount} registered
-                      </span>
-                      <span>
-                        <CalendarDays size={14} aria-hidden="true" />
-                        {formatDeadline(raffle.cutoffDate)}
-                      </span>
-                    </span>
-                  </Link>
-                );
-              })}
+                    Past Winners
+                    <span className="ch-filter-count closed">{archives.length}</span>
+                  </button>
+                )}
+              </div>
+
+              {activeRaffles.length > 0 ? (
+                <div className="raffle-title-card-grid">
+                  {activeRaffles.map((raffle) => {
+                    const cutoffPassed = raffle.cutoffDate
+                      ? Date.now() > new Date(raffle.cutoffDate).getTime()
+                      : false;
+                    return (
+                      <Link
+                        key={raffle.id}
+                        href={`/raffle/${raffleTitleSlug(raffle.title)}`}
+                        className="raffle-title-card"
+                        aria-label={`Open ${raffle.title}, ${raffle.entriesCount} registered participants`}
+                      >
+                        <span className="raffle-title-card-topline">
+                          <span className={`raffle-card-state ${cutoffPassed ? "closed" : "open"}`}>
+                            <span aria-hidden="true" />
+                            {cutoffPassed ? "Entries closed" : "Accepting entries"}
+                          </span>
+                          <ArrowLeft className="raffle-card-arrow" size={15} aria-hidden="true" />
+                        </span>
+                        <strong>{raffle.title}</strong>
+                        <span className="raffle-title-card-category">
+                          {raffle.category || "Community Giveaway"}
+                        </span>
+                        <span className="raffle-title-card-meta">
+                          <span>
+                            <Users size={14} aria-hidden="true" />
+                            {raffle.entriesCount} registered
+                          </span>
+                          <span>
+                            <CalendarDays size={14} aria-hidden="true" />
+                            {formatDeadline(raffle.cutoffDate)}
+                          </span>
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="ch-empty-state" style={{ margin: "16px 0" }}>
+                  <div className="ch-empty-icon" aria-hidden="true">
+                    <Gift size={24} />
+                  </div>
+                  <h3>No Active Raffle As of Now</h3>
+                  <p>
+                    There are currently no active community raffles or giveaways.
+                    Check back soon or browse our past winners!
+                  </p>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
+                    {archives.length > 0 && (
+                      <button
+                        type="button"
+                        className="button outline"
+                        onClick={() => setActiveTab("archive")}
+                      >
+                        View Past Winners ({archives.length})
+                      </button>
+                    )}
+                    <Link href="/" className="button outline">
+                      Browse Tournaments
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>}
+          )}
 
           {raffleId && (
             <Link href="/raffle" className="raffle-back-to-lobby">
@@ -553,32 +598,42 @@ export function RafflePage({
             </div>
           ) : activeTab === "latest" ? (
             !raffleId ? (
-              <div className="raffle-lobby-prompt">
-                <Gift size={24} aria-hidden="true" />
-                <div>
-                  <strong>Select a raffle title card above</strong>
-                  <span>
-                    Open a raffle to view its prizes, join form, and registered
-                    participants.
-                  </span>
+              activeRaffles.length > 0 ? (
+                <div className="raffle-lobby-prompt">
+                  <Gift size={24} aria-hidden="true" />
+                  <div>
+                    <strong>Select a raffle title card above</strong>
+                    <span>
+                      Open a raffle to view its prizes, join form, and registered
+                      participants.
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ) : !data ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "40px 16px",
-                  color: "#94a3b8",
-                }}
-              >
-                <p>No active raffle at this moment. Please check back soon!</p>
-                <Link
-                  href="/"
-                  className="button outline small"
-                  style={{ marginTop: 12 }}
-                >
-                  Browse Tournaments
-                </Link>
+              ) : null
+            ) : !data || !data.id ? (
+              <div className="ch-empty-state" style={{ margin: "20px 0" }}>
+                <div className="ch-empty-icon" aria-hidden="true">
+                  <Gift size={24} />
+                </div>
+                <h3>No Active Raffle As of Now</h3>
+                <p>This raffle is currently unavailable or has concluded.</p>
+                <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
+                  <Link href="/raffle" className="button outline">
+                    All Active Raffles
+                  </Link>
+                  {archives.length > 0 && (
+                    <button
+                      type="button"
+                      className="button outline"
+                      onClick={() => setActiveTab("archive")}
+                    >
+                      View Past Winners ({archives.length})
+                    </button>
+                  )}
+                  <Link href="/" className="button outline">
+                    Browse Tournaments
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="raffle-human-container">
@@ -1156,146 +1211,248 @@ export function RafflePage({
                 </div>
               ) : (
                 <div className="raffle-archive-list">
-                  {archives.map((arch, idx) => (
-                    <div
-                      key={arch.id || idx}
-                      className="raffle-human-card archive-card"
-                    >
-                      <div className="raffle-human-card-head">
-                        <div>
+                  {archives.map((arch, idx) => {
+                    const isExpanded = expandedArchiveIds.includes(arch.id || String(idx));
+                    const winnerCount = arch.winners?.length || 0;
+                    return (
+                      <div
+                        key={arch.id || idx}
+                        className="raffle-human-card archive-card"
+                        style={{
+                          transition: "border-color 0.2s ease, background 0.2s ease",
+                        }}
+                      >
+                        {/* Interactive Clickable Header - clicking title toggles winners list */}
+                        <div
+                          className="raffle-human-card-head"
+                          onClick={() => toggleArchiveExpand(arch.id || String(idx))}
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={isExpanded}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              toggleArchiveExpand(arch.id || String(idx));
+                            }
+                          }}
+                          style={{
+                            cursor: "pointer",
+                            userSelect: "none",
+                          }}
+                        >
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                marginBottom: 4,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <span className="raffle-archive-pill">
+                                Concluded Raffle
+                              </span>
+                              <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                                {formatDeadline(arch.cutoffDate)}
+                              </span>
+                              {arch.category && (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    color: "#38bdf8",
+                                    background: "rgba(56, 189, 248, 0.1)",
+                                    padding: "2px 6px",
+                                    borderRadius: 4,
+                                  }}
+                                >
+                                  {arch.category}
+                                </span>
+                              )}
+                            </div>
+                            <h3
+                              style={{
+                                margin: "2px 0 4px",
+                                fontSize: 17,
+                                color: "#ffffff",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <span style={{ textDecoration: "underline", textDecorationColor: "rgba(255,255,255,0.2)" }}>
+                                {arch.title}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  color: isExpanded ? "#38bdf8" : "#94a3b8",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp size={14} />
+                                    <span>Hide Winners</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown size={14} />
+                                    <span>Click title to view winners ({winnerCount})</span>
+                                  </>
+                                )}
+                              </span>
+                            </h3>
+                            {arch.description && (
+                              <p
+                                style={{
+                                  margin: "2px 0 0",
+                                  fontSize: 12.5,
+                                  color: "#94a3b8",
+                                }}
+                              >
+                                {arch.description}
+                              </p>
+                            )}
+                          </div>
                           <div
                             style={{
                               display: "flex",
                               alignItems: "center",
                               gap: 8,
-                              marginBottom: 4,
+                              flexShrink: 0,
                             }}
                           >
-                            <span className="raffle-archive-pill">
-                              Concluded Raffle
+                            <span className="raffle-archive-entrants-badge">
+                              <Users size={13} />
+                              <span>{arch.entriesCount} Entrants</span>
                             </span>
-                            <span style={{ fontSize: 11, color: "#94a3b8" }}>
-                              {formatDeadline(arch.cutoffDate)}
-                            </span>
-                          </div>
-                          <h3
-                            style={{
-                              margin: "2px 0 6px",
-                              fontSize: 17,
-                              color: "#ffffff",
-                            }}
-                          >
-                            {arch.title}
-                          </h3>
-                          {arch.description && (
-                            <p
+                            <span
                               style={{
-                                margin: 0,
-                                fontSize: 12.5,
-                                color: "#94a3b8",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                fontSize: 12,
+                                color: "#facc15",
+                                background: "rgba(250, 204, 21, 0.1)",
+                                border: "1px solid rgba(250, 204, 21, 0.25)",
+                                padding: "4px 10px",
+                                borderRadius: 6,
+                                fontWeight: 700,
                               }}
                             >
-                              {arch.description}
-                            </p>
-                          )}
+                              <Trophy size={13} />
+                              <span>{winnerCount} Winner{winnerCount !== 1 ? "s" : ""}</span>
+                            </span>
+                          </div>
                         </div>
-                        <span className="raffle-archive-entrants-badge">
-                          <Users size={13} />
-                          <span>{arch.entriesCount} Entrants</span>
-                        </span>
-                      </div>
 
-                      {/* Prizes that were offered */}
-                      {arch.prizes && arch.prizes.length > 0 && (
-                        <div className="raffle-archive-prizes-row">
-                          <span
+                        {/* Expandable Winners Showcase */}
+                        {isExpanded && (
+                          <div
                             style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: "var(--muted)",
-                              textTransform: "uppercase",
+                              marginTop: 14,
+                              paddingTop: 14,
+                              borderTop: "1px solid #1e293b",
                             }}
                           >
-                            Prizes:
-                          </span>
-                          {normalizePrizeItems(arch.prizes).map((pz, pIdx) => (
-                            <span
-                              key={pz.id || pIdx}
-                              className="raffle-archive-prize-chip"
-                            >
-                              {pz.name}
-                              {pz.winnerCount > 1 && (
+                            {/* Prizes that were offered */}
+                            {arch.prizes && arch.prizes.length > 0 && (
+                              <div className="raffle-archive-prizes-row" style={{ marginTop: 0, marginBottom: 12 }}>
                                 <span
                                   style={{
-                                    marginLeft: 4,
-                                    opacity: 0.8,
+                                    fontSize: 11,
                                     fontWeight: 700,
+                                    color: "var(--muted)",
+                                    textTransform: "uppercase",
                                   }}
                                 >
-                                  (×{pz.winnerCount})
+                                  Prizes:
                                 </span>
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Winners Showcase for this archived raffle */}
-                      <div className="raffle-archive-winners-section">
-                        <div className="raffle-archive-winners-title">
-                          <Crown size={14} style={{ color: "#facc15" }} />
-                          <span>
-                            Winners Hall of Fame ({arch.winners?.length || 0})
-                          </span>
-                        </div>
-
-                        {!arch.winners || arch.winners.length === 0 ? (
-                          <p
-                            style={{
-                              margin: "6px 0 0",
-                              fontSize: 12.5,
-                              color: "#94a3b8",
-                            }}
-                          >
-                            No winners were recorded for this edition.
-                          </p>
-                        ) : (
-                          <div className="raffle-archive-winners-grid">
-                            {arch.winners.map((win, wIdx) => (
-                              <div
-                                key={win.id || wIdx}
-                                className="raffle-archive-winner-item"
-                              >
-                                <span className="raffle-archive-winner-rank">
-                                  #{wIdx + 1}
-                                </span>
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                  <strong
-                                    style={{
-                                      display: "block",
-                                      fontSize: 13,
-                                      color: "#ffffff",
-                                    }}
-                                  >
-                                    {win.fullName}
-                                  </strong>
+                                {normalizePrizeItems(arch.prizes).map((pz, pIdx) => (
                                   <span
-                                    style={{
-                                      fontSize: 11.5,
-                                      color: "#38bdf8",
-                                      fontWeight: 600,
-                                    }}
+                                    key={pz.id || pIdx}
+                                    className="raffle-archive-prize-chip"
                                   >
-                                    {win.prizeWon}
+                                    {pz.name}
+                                    {pz.winnerCount > 1 && (
+                                      <span
+                                        style={{
+                                          marginLeft: 4,
+                                          opacity: 0.8,
+                                          fontWeight: 700,
+                                        }}
+                                      >
+                                        (×{pz.winnerCount})
+                                      </span>
+                                    )}
                                   </span>
-                                </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
+
+                            <div className="raffle-archive-winners-section" style={{ borderTop: "none", paddingTop: 0 }}>
+                              <div className="raffle-archive-winners-title">
+                                <Crown size={14} style={{ color: "#facc15" }} />
+                                <span>
+                                  Raffle Winners ({winnerCount})
+                                </span>
+                              </div>
+
+                              {!arch.winners || arch.winners.length === 0 ? (
+                                <p
+                                  style={{
+                                    margin: "8px 0 0",
+                                    fontSize: 12.5,
+                                    color: "#94a3b8",
+                                  }}
+                                >
+                                  No winners were recorded for this edition.
+                                </p>
+                              ) : (
+                                <div className="raffle-archive-winners-grid">
+                                  {arch.winners.map((win, wIdx) => (
+                                    <div
+                                      key={win.id || wIdx}
+                                      className="raffle-archive-winner-item"
+                                    >
+                                      <span className="raffle-archive-winner-rank">
+                                        #{wIdx + 1}
+                                      </span>
+                                      <div style={{ minWidth: 0, flex: 1 }}>
+                                        <strong
+                                          style={{
+                                            display: "block",
+                                            fontSize: 13,
+                                            color: "#ffffff",
+                                          }}
+                                        >
+                                          {win.fullName}
+                                        </strong>
+                                        <span
+                                          style={{
+                                            fontSize: 11.5,
+                                            color: "#38bdf8",
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          {win.prizeWon}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
