@@ -15,6 +15,7 @@ export interface LiveSpinState {
   entrants?: { id: string; fullName: string }[];
   excludedIds?: string[];
   shuffledAt?: number;
+  drawMode?: "wheel" | "duck_race";
 }
 
 declare global {

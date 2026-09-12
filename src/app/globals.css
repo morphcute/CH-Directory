@@ -6530,13 +6530,50 @@ textarea:focus-visible {
     0 25px 70px rgba(0, 0, 0, 0.85),
     0 0 45px rgba(250, 204, 21, 0.12);
   border-radius: 18px;
-  max-width: 880px;
+  max-width: 920px;
   width: 95%;
   max-height: 92vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   animation: chScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.raffle-wheel-modal.duck-mode {
+  max-width: 1040px;
+}
+
+.raffle-draw-mode-toggle {
+  display: flex;
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.raffle-draw-mode-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.raffle-draw-mode-btn:hover:not(:disabled) {
+  color: #f8fafc;
+}
+
+.raffle-draw-mode-btn.active {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(234, 179, 8, 0.3));
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #fef08a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .raffle-wheel-confetti-canvas {
@@ -6552,12 +6589,14 @@ textarea:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 14px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(8px);
   position: relative;
   z-index: 10;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .raffle-wheel-title {
@@ -6661,10 +6700,22 @@ textarea:focus-visible {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
 }
 
+.raffle-duck-race-canvas {
+  max-width: 580px;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 2px solid #0284c7;
+  box-shadow: 0 14px 40px rgba(2, 132, 199, 0.25), 0 0 25px rgba(0, 0, 0, 0.8);
+}
+
 @media (max-width: 500px) {
   .raffle-wheel-canvas {
     max-width: 320px;
     max-height: 320px;
+  }
+  .raffle-duck-race-canvas {
+    max-width: 100%;
   }
 }
 
@@ -7065,6 +7116,35 @@ textarea:focus-visible {
   50% {
     box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
   }
+}
+
+/* Live Countdown Ticker */
+.raffle-wheel-countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+}
+
+.raffle-live-countdown-tag {
+  display: inline-block;
+  background: rgba(56, 189, 248, 0.25);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin-left: 8px;
 }
 
 /* Sound prompt interactive pill */

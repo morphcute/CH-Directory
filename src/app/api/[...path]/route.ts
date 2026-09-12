@@ -615,6 +615,7 @@ export async function POST(request: Request, context: Context) {
       const { broadcastLiveSpin, getLiveSpinState } = await import("@/server/liveSpinStore");
       const body = (await request.json()) as any;
       if (body.action === "start") {
+        const drawMode: "wheel" | "duck_race" = body.drawMode === "duck_race" ? "duck_race" : "wheel";
         const spinState = {
           id: `spin-${Date.now()}`,
           raffleId: body.raffleId || "default",
@@ -623,9 +624,10 @@ export async function POST(request: Request, context: Context) {
           winnerName: String(body.winnerName),
           winningIndex: Number(body.winningIndex) || 0,
           startedAt: Number(body.startedAt) || Date.now(),
-          durationMs: Number(body.durationMs) || 5200,
+          durationMs: Number(body.durationMs) || 8000,
           sliceCount: Number(body.sliceCount) || 1,
           status: "spinning" as const,
+          drawMode,
           entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : undefined,
         };
@@ -642,6 +644,7 @@ export async function POST(request: Request, context: Context) {
         const winningIndex = typeof body.winningIndex === "number" ? body.winningIndex : (current?.winningIndex ?? 0);
         const entrants = Array.isArray(body.entrants) ? body.entrants : current?.entrants;
         const excludedIds = Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds;
+        const drawMode: "wheel" | "duck_race" = current?.drawMode || (body.drawMode === "duck_race" ? "duck_race" : "wheel");
 
         const landedState = {
           id: current?.id || `spin-${Date.now()}`,
@@ -654,6 +657,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: current?.durationMs || 5000,
           sliceCount: Array.isArray(entrants) ? entrants.length : (current?.sliceCount || 1),
           status: "landed" as const,
+          drawMode,
           claimSeconds,
           claimDeadline,
           isAwarded: false,
@@ -694,6 +698,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(updatedEntrants) ? updatedEntrants.length : 0,
           status: "idle" as const,
+          drawMode: current?.drawMode,
           isAwarded: true,
           entrants: updatedEntrants,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
@@ -715,6 +720,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(shuffledEntrants) ? shuffledEntrants.length : (current?.sliceCount || 1),
           status: "idle" as const,
+          drawMode: current?.drawMode,
           entrants: shuffledEntrants,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
           shuffledAt: Date.now(),
@@ -743,6 +749,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(body.entrants) ? body.entrants.length : 0,
           status: "idle" as const,
+          drawMode: current?.drawMode,
           entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
           excludedIds: nextExcluded,
         };

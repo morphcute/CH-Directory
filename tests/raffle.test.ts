@@ -465,6 +465,68 @@ test("raffle live spin: supports live spin broadcast, realtime shuffle, and rese
   assert.equal(state, null);
 });
 
+test("raffle 3D duck race & countdown timer: supports duck_race mode, custom duration, and claim countdown", () => {
+  // 1. Duck race start broadcast with custom 10s duration
+  broadcastLiveSpin({
+    id: "race-duck-1",
+    raffleId: "raffle-duck",
+    status: "spinning",
+    drawMode: "duck_race",
+    prize: "500 Diamonds",
+    winnerId: "duck-winner-7",
+    winnerName: "Speedy Quack",
+    winningIndex: 2,
+    startedAt: Date.now(),
+    durationMs: 10000,
+    sliceCount: 4,
+    entrants: [
+      { id: "duck-1", fullName: "Canary Runner" },
+      { id: "duck-2", fullName: "Teal Glider" },
+      { id: "duck-winner-7", fullName: "Speedy Quack" },
+      { id: "duck-4", fullName: "Amethyst Paddle" },
+    ],
+  });
+
+  let state = getLiveSpinState();
+  assert.ok(state);
+  assert.equal(state.status, "spinning");
+  assert.equal(state.drawMode, "duck_race");
+  assert.equal(state.winnerName, "Speedy Quack");
+  assert.equal(state.durationMs, 10000);
+  assert.equal(state.entrants?.length, 4);
+
+  // 2. Duck race landed broadcast with claim timer
+  const deadline = Date.now() + 60000;
+  broadcastLiveSpin({
+    id: "race-duck-1",
+    raffleId: "raffle-duck",
+    status: "landed",
+    drawMode: "duck_race",
+    prize: "500 Diamonds",
+    winnerId: "duck-winner-7",
+    winnerName: "Speedy Quack",
+    winningIndex: 2,
+    startedAt: Date.now() - 10000,
+    durationMs: 10000,
+    sliceCount: 4,
+    claimSeconds: 60,
+    claimDeadline: deadline,
+    isAwarded: false,
+  });
+
+  state = getLiveSpinState();
+  assert.ok(state);
+  assert.equal(state.status, "landed");
+  assert.equal(state.drawMode, "duck_race");
+  assert.equal(state.claimSeconds, 60);
+  assert.equal(state.claimDeadline, deadline);
+
+  // Clear state
+  broadcastLiveSpin(null);
+  assert.equal(getLiveSpinState(), null);
+});
+
+
 
 
 
