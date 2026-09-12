@@ -17,6 +17,8 @@ import {
   broadcastLiveSpin,
   getLiveSpinState,
   subscribeLiveSpin,
+  getActiveDrawMode,
+  setActiveDrawMode,
 } from "../src/server/liveSpinStore";
 import { normalizePrizeItems } from "../src/types";
 
@@ -524,6 +526,35 @@ test("raffle 3D duck race & countdown timer: supports duck_race mode, custom dur
   // Clear state
   broadcastLiveSpin(null);
   assert.equal(getLiveSpinState(), null);
+});
+
+test("raffle active draw mode: retains duck_race mode across idle and reset, notifies subscribers", () => {
+  let notifiedMode: string = "";
+  const unsubscribe = subscribeLiveSpin((_state, mode) => {
+    notifiedMode = mode;
+  });
+
+  // Default is wheel
+  setActiveDrawMode("wheel");
+  assert.equal(getActiveDrawMode(), "wheel");
+
+  // Switch to duck_race
+  setActiveDrawMode("duck_race");
+  assert.equal(getActiveDrawMode(), "duck_race");
+  assert.equal(notifiedMode, "duck_race");
+
+  // Reset live spin state (e.g. idle or reset action)
+  broadcastLiveSpin(null);
+  assert.equal(getLiveSpinState(), null);
+  // drawMode must still be duck_race so public view does not flicker back to wheel!
+  assert.equal(getActiveDrawMode(), "duck_race");
+
+  // Reset back to wheel
+  setActiveDrawMode("wheel");
+  assert.equal(getActiveDrawMode(), "wheel");
+  assert.equal(notifiedMode, "wheel");
+
+  unsubscribe();
 });
 
 

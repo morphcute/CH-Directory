@@ -22,11 +22,32 @@ declare global {
   // eslint-disable-next-line no-var
   var __ch_liveSpinState: LiveSpinState | null | undefined;
   // eslint-disable-next-line no-var
-  var __ch_liveSpinSubscribers: Set<(state: LiveSpinState | null) => void> | undefined;
+  var __ch_activeDrawMode: ("wheel" | "duck_race") | undefined;
+  // eslint-disable-next-line no-var
+  var __ch_liveSpinSubscribers: Set<(state: LiveSpinState | null, mode: "wheel" | "duck_race") => void> | undefined;
 }
 
-const subscribers: Set<(state: LiveSpinState | null) => void> =
+const subscribers: Set<(state: LiveSpinState | null, mode: "wheel" | "duck_race") => void> =
   globalThis.__ch_liveSpinSubscribers ?? (globalThis.__ch_liveSpinSubscribers = new Set());
+
+export function getActiveDrawMode(): "wheel" | "duck_race" {
+  return globalThis.__ch_activeDrawMode || globalThis.__ch_liveSpinState?.drawMode || "wheel";
+}
+
+export function setActiveDrawMode(mode: "wheel" | "duck_race"): "wheel" | "duck_race" {
+  globalThis.__ch_activeDrawMode = mode;
+  if (globalThis.__ch_liveSpinState) {
+    globalThis.__ch_liveSpinState.drawMode = mode;
+  }
+  subscribers.forEach((listener) => {
+    try {
+      listener(globalThis.__ch_liveSpinState || null, mode);
+    } catch {
+      // safe ignore
+    }
+  });
+  return mode;
+}
 
 export function getLiveSpinState(): LiveSpinState | null {
   const active = globalThis.__ch_liveSpinState;
@@ -48,9 +69,13 @@ export function getLiveSpinState(): LiveSpinState | null {
 
 export function broadcastLiveSpin(state: LiveSpinState | null): LiveSpinState | null {
   globalThis.__ch_liveSpinState = state;
+  if (state?.drawMode) {
+    globalThis.__ch_activeDrawMode = state.drawMode;
+  }
+  const currentMode = getActiveDrawMode();
   subscribers.forEach((listener) => {
     try {
-      listener(globalThis.__ch_liveSpinState || null);
+      listener(globalThis.__ch_liveSpinState || null, currentMode);
     } catch {
       // safe ignore
     }
@@ -58,10 +83,11 @@ export function broadcastLiveSpin(state: LiveSpinState | null): LiveSpinState | 
   return globalThis.__ch_liveSpinState || null;
 }
 
-export function subscribeLiveSpin(listener: (state: LiveSpinState | null) => void): () => void {
+export function subscribeLiveSpin(listener: (state: LiveSpinState | null, mode: "wheel" | "duck_race") => void): () => void {
   subscribers.add(listener);
   return () => {
     subscribers.delete(listener);
   };
 }
+
 

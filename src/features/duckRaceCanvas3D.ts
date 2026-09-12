@@ -938,6 +938,126 @@ export function draw3DIdleDucks(
 }
 
 /**
+ * Draw Post-Race Finish / Winner Celebration State
+ * Displays the crowned champion duck across the checkered finish line with victory ribbons
+ */
+export function draw3DFinishDucks(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  winnerName: string,
+  prize?: string
+): void {
+  const now = Date.now();
+  const riverTop = 75;
+  const riverBottom = height - 55;
+
+  ctx.save();
+  ctx.clearRect(0, 0, width, height);
+
+  // River banks and water
+  const topBankGrad = ctx.createLinearGradient(0, 0, 0, riverTop);
+  topBankGrad.addColorStop(0, "#064e3b");
+  topBankGrad.addColorStop(1, "#1e293b");
+  ctx.fillStyle = topBankGrad;
+  ctx.fillRect(0, 0, width, riverTop);
+
+  const waterGrad = ctx.createLinearGradient(0, riverTop, 0, riverBottom);
+  waterGrad.addColorStop(0, "#0369a1");
+  waterGrad.addColorStop(0.5, "#0284c7");
+  waterGrad.addColorStop(1, "#075985");
+  ctx.fillStyle = waterGrad;
+  ctx.fillRect(0, riverTop, width, riverBottom - riverTop);
+
+  // Animated wave lines
+  const waveTime = now * 0.002;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.lineWidth = 1.5;
+  for (let wy = riverTop + 15; wy < riverBottom - 10; wy += 22) {
+    ctx.beginPath();
+    for (let wx = 0; wx <= width; wx += 20) {
+      const dy = Math.sin(wx * 0.02 + waveTime + wy * 0.4) * 2;
+      if (wx === 0) ctx.moveTo(wx, wy + dy);
+      else ctx.lineTo(wx, wy + dy);
+    }
+    ctx.stroke();
+  }
+
+  // Bottom bank
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, riverBottom, width, height - riverBottom);
+
+  // Finish line banner
+  ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+  ctx.fillRect(0, 0, width, 52);
+  ctx.fillStyle = "#facc15";
+  ctx.fillRect(0, 50, width, 2);
+
+  ctx.font = "900 13px system-ui, sans-serif";
+  ctx.fillStyle = "#facc15";
+  ctx.textAlign = "left";
+  ctx.fillText("🏁 3D DUCK DERBY · WINNER DECIDED!", 16, 25);
+  ctx.font = "bold 11px system-ui, sans-serif";
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillText(prize ? `Prize: ${prize}` : "Winner crossed the finish line!", 16, 42);
+
+  // Checkered finish line on center-left
+  const finishX = Math.round(width * 0.48);
+  const sqSize = 14;
+  for (let fy = riverTop; fy < riverBottom; fy += sqSize) {
+    const isEven = Math.floor((fy - riverTop) / sqSize) % 2 === 0;
+    ctx.fillStyle = isEven ? "#ffffff" : "#0f172a";
+    ctx.fillRect(finishX, fy, sqSize, sqSize);
+    ctx.fillStyle = isEven ? "#0f172a" : "#ffffff";
+    ctx.fillRect(finishX + sqSize, fy, sqSize, sqSize);
+  }
+
+  // Golden Winner Duck celebrating past the finish line
+  const midY = (riverTop + riverBottom) / 2;
+  const bobY = midY + Math.sin(now * 0.004) * 4;
+  const championDuck: DuckSim = {
+    id: "winner-duck",
+    name: `👑 ${winnerName}`,
+    isWinner: true,
+    x: finishX + 90,
+    laneY: midY,
+    actualY: bobY,
+    speed: 0,
+    baseSpeed: 1,
+    surge: 0,
+    surgeDuration: 0,
+    wobblePhase: 0,
+    bobFreq: 3.5,
+    color: {
+      body: "#eab308",
+      bodyHighlight: "#fef08a",
+      bodyShadow: "#a16207",
+      head: "#ca8a04",
+      bill: "#ea580c",
+      billShadow: "#9a3412",
+      badgeBg: "rgba(234, 179, 8, 0.95)",
+    },
+    rank: 1,
+    wakes: [],
+    splashes: [],
+  };
+
+  draw3DRealisticDuck(ctx, championDuck, now);
+
+  // Crown and Celebration Sparkles
+  ctx.font = "24px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("👑", championDuck.x, championDuck.actualY - 24);
+
+  // Floating Trophy / Ribbon badge
+  ctx.font = "bold 13px system-ui, sans-serif";
+  ctx.fillStyle = "#facc15";
+  ctx.fillText("1ST PLACE CHAMPION", championDuck.x, championDuck.actualY + 36);
+
+  ctx.restore();
+}
+
+/**
  * Utility for drawing rounded rectangles
  */
 function roundRect(
@@ -960,3 +1080,4 @@ function roundRect(
   ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
 }
+

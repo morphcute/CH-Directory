@@ -25,6 +25,7 @@ import {
   init3DDuckRace,
   render3DDuckRace,
   draw3DIdleDucks,
+  draw3DFinishDucks,
   type DuckRaceState,
 } from "./duckRaceCanvas3D";
 
@@ -60,7 +61,24 @@ export function RaffleWheelModal({
   const [drawMode, setDrawMode] = useState<"wheel" | "duck_race">("wheel");
   const duckRaceStateRef = useRef<DuckRaceState | null>(null);
   const idleDuckFrameRef = useRef<number | null>(null);
+  const raceFrameRef = useRef<number | null>(null);
+  const wheelFrameRef = useRef<number | null>(null);
+  const winnerCelebrationFrameRef = useRef<number | null>(null);
+  const lastCountdownSecRef = useRef<number>(-1);
   const [liveCountdown, setLiveCountdown] = useState<number>(0);
+
+  const handleModeChange = (newMode: "wheel" | "duck_race") => {
+    if (isSpinning || newMode === drawMode) return;
+    setDrawMode(newMode);
+    void fetch("/api/raffle/live-spin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "set_mode",
+        drawMode: newMode,
+      }),
+    }).catch(() => {});
+  };
 
   const [isShuffling, setIsShuffling] = useState(false);
   const [shuffledIds, setShuffledIds] = useState<string[] | null>(null);
@@ -378,10 +396,29 @@ export function RaffleWheelModal({
     currentEligible: RaffleWheelEntry[],
     targetPrize: string
   ) => {
+    if (raceFrameRef.current) {
+      cancelAnimationFrame(raceFrameRef.current);
+      raceFrameRef.current = null;
+    }
+    if (wheelFrameRef.current) {
+      cancelAnimationFrame(wheelFrameRef.current);
+      wheelFrameRef.current = null;
+    }
+    if (idleDuckFrameRef.current) {
+      cancelAnimationFrame(idleDuckFrameRef.current);
+      idleDuckFrameRef.current = null;
+    }
+    if (winnerCelebrationFrameRef.current) {
+      cancelAnimationFrame(winnerCelebrationFrameRef.current);
+      winnerCelebrationFrameRef.current = null;
+    }
+
     const winningIndex = Math.floor(Math.random() * currentEligible.length);
     const selectedWinner = currentEligible[winningIndex];
     const durationMs = Math.max(3, Math.min(30, spinDurationSeconds)) * 1000;
-    setLiveCountdown(Math.ceil(durationMs / 1000));
+    const initialCountdown = Math.ceil(durationMs / 1000);
+    lastCountdownSecRef.current = initialCountdown;
+    setLiveCountdown(initialCountdown);
 
     void fetch("/api/raffle/live-spin", {
       method: "POST",
@@ -402,7 +439,10 @@ export function RaffleWheelModal({
     }).catch(() => {});
 
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      setIsSpinning(false);
+      return;
+    }
     const raceState = init3DDuckRace(
       currentEligible.map((e) => ({ id: e.id, fullName: e.fullName })),
       selectedWinner.id,
@@ -427,11 +467,15 @@ export function RaffleWheelModal({
       );
 
       const remainingSec = Math.max(0, Math.ceil((raceState.startedAt + durationMs - Date.now()) / 1000));
-      setLiveCountdown(remainingSec);
+      if (lastCountdownSecRef.current !== remainingSec) {
+        lastCountdownSecRef.current = remainingSec;
+        setLiveCountdown(remainingSec);
+      }
 
       if (!res.isFinished) {
-        animationFrameRef.current = requestAnimationFrame(animateRace);
+        raceFrameRef.current = requestAnimationFrame(animateRace);
       } else {
+        raceFrameRef.current = null;
         setIsSpinning(false);
         setWinner(selectedWinner);
         const deadline = Date.now() + claimDurationSeconds * 1000;
@@ -459,7 +503,7 @@ export function RaffleWheelModal({
       }
     };
 
-    animationFrameRef.current = requestAnimationFrame(animateRace);
+    raceFrameRef.current = requestAnimationFrame(animateRace);
   };
 
   // Trigger wheel spin or 3D duck race animation
@@ -481,6 +525,23 @@ export function RaffleWheelModal({
       return startDuckRace(activeExcluded, currentEligible, selectedPrize);
     }
 
+    if (wheelFrameRef.current) {
+      cancelAnimationFrame(wheelFrameRef.current);
+      wheelFrameRef.current = null;
+    }
+    if (raceFrameRef.current) {
+      cancelAnimationFrame(raceFrameRef.current);
+      raceFrameRef.current = null;
+    }
+    if (idleDuckFrameRef.current) {
+      cancelAnimationFrame(idleDuckFrameRef.current);
+      idleDuckFrameRef.current = null;
+    }
+    if (winnerCelebrationFrameRef.current) {
+      cancelAnimationFrame(winnerCelebrationFrameRef.current);
+      winnerCelebrationFrameRef.current = null;
+    }
+
     const sliceCount = currentEligible.length;
     const sliceAngle = (2 * Math.PI) / sliceCount;
 
@@ -488,7 +549,9 @@ export function RaffleWheelModal({
     const winningIndex = Math.floor(Math.random() * sliceCount);
     const selectedWinner = currentEligible[winningIndex];
     const spinDuration = Math.max(2, Math.min(30, spinDurationSeconds)) * 1000;
-    setLiveCountdown(Math.ceil(spinDuration / 1000));
+    const initialCountdown = Math.ceil(spinDuration / 1000);
+    lastCountdownSecRef.current = initialCountdown;
+    setLiveCountdown(initialCountdown);
 
     // Broadcast live spin with exact slices to public /raffle viewers in real-time!
     void fetch("/api/raffle/live-spin", {
@@ -534,7 +597,10 @@ export function RaffleWheelModal({
       const easedProgress = easeOutCubic(progress);
 
       const remainingSec = Math.max(0, Math.ceil((spinDuration - elapsed) / 1000));
-      setLiveCountdown(remainingSec);
+      if (lastCountdownSecRef.current !== remainingSec) {
+        lastCountdownSecRef.current = remainingSec;
+        setLiveCountdown(remainingSec);
+      }
 
       const currentRotation = startRotation + totalSpinRotation * easedProgress;
       rotationRef.current = currentRotation;
@@ -555,8 +621,9 @@ export function RaffleWheelModal({
       drawWheel(currentRotation, needleDeflectionRef.current);
 
       if (progress < 1) {
-        animationFrameRef.current = requestAnimationFrame(animate);
+        wheelFrameRef.current = requestAnimationFrame(animate);
       } else {
+        wheelFrameRef.current = null;
         rotationRef.current = finalRotation;
         drawWheel(finalRotation, 0);
         setIsSpinning(false);
@@ -587,7 +654,7 @@ export function RaffleWheelModal({
       }
     };
 
-    animationFrameRef.current = requestAnimationFrame(animate);
+    wheelFrameRef.current = requestAnimationFrame(animate);
   };
 
   // Synchronized countdown interval for claim window
@@ -673,29 +740,52 @@ export function RaffleWheelModal({
     }, 200);
   };
 
-  // Draw initial state & idle animation on mount/open
+  // Reset state and sync mode on initial open only
   useEffect(() => {
     if (!isOpen) return;
-
     setWinner(null);
     setClaimDeadline(null);
     setAwardedSuccess(false);
+
+    // Sync active draw mode from server
+    void fetch("/api/raffle/live-spin")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.drawMode === "duck_race" || data?.drawMode === "wheel") {
+          setDrawMode(data.drawMode);
+        }
+      })
+      .catch(() => {});
+  }, [isOpen]);
+
+  // Draw initial state & idle animation (NO reset of winner!)
+  useEffect(() => {
+    if (!isOpen) return;
 
     if (drawMode === "wheel") {
       if (idleDuckFrameRef.current) {
         cancelAnimationFrame(idleDuckFrameRef.current);
         idleDuckFrameRef.current = null;
       }
-      setTimeout(() => {
+      if (!isSpinning && !winner) {
         drawWheel(rotationRef.current);
-      }, 50);
+      }
       return;
     }
 
-    // Duck Race Idle Bobbing Animation Loop
+    // Duck Race mode:
+    // Only bob at starting gate when NOT spinning and NO winner is awaiting attendance check
+    if (isSpinning || winner) {
+      if (idleDuckFrameRef.current) {
+        cancelAnimationFrame(idleDuckFrameRef.current);
+        idleDuckFrameRef.current = null;
+      }
+      return;
+    }
+
     let active = true;
     const renderIdleDucks = () => {
-      if (!active || isSpinning || !canvasRef.current) return;
+      if (!active || !canvasRef.current) return;
       const ctx = canvasRef.current.getContext("2d");
       if (ctx) {
         draw3DIdleDucks(ctx, canvasRef.current.width, canvasRef.current.height, eligibleEntrants);
@@ -711,17 +801,52 @@ export function RaffleWheelModal({
         cancelAnimationFrame(idleDuckFrameRef.current);
         idleDuckFrameRef.current = null;
       }
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      if (confettiFrameRef.current) cancelAnimationFrame(confettiFrameRef.current);
     };
-  }, [isOpen, drawMode, isSpinning, eligibleEntrants]);
+  }, [isOpen, drawMode, isSpinning, Boolean(winner), eligibleEntrants]);
 
-  // Redraw wheel when eligible entrants change in wheel mode
+  // Duck Race Winner Celebration Animation Loop (shows champion duck while attendance check is ongoing)
   useEffect(() => {
-    if (isOpen && !isSpinning && drawMode === "wheel") {
+    if (!isOpen || !winner || isSpinning || drawMode !== "duck_race") {
+      if (winnerCelebrationFrameRef.current) {
+        cancelAnimationFrame(winnerCelebrationFrameRef.current);
+        winnerCelebrationFrameRef.current = null;
+      }
+      return;
+    }
+
+    let active = true;
+    const renderWinner = () => {
+      if (!active || !canvasRef.current) return;
+      const ctx = canvasRef.current.getContext("2d");
+      if (ctx) {
+        draw3DFinishDucks(
+          ctx,
+          canvasRef.current.width,
+          canvasRef.current.height,
+          winner.fullName,
+          selectedPrize
+        );
+      }
+      winnerCelebrationFrameRef.current = requestAnimationFrame(renderWinner);
+    };
+
+    renderWinner();
+
+    return () => {
+      active = false;
+      if (winnerCelebrationFrameRef.current) {
+        cancelAnimationFrame(winnerCelebrationFrameRef.current);
+        winnerCelebrationFrameRef.current = null;
+      }
+    };
+  }, [isOpen, winner, isSpinning, drawMode, selectedPrize]);
+
+  // Redraw wheel when eligible entrants change in wheel mode (when idle)
+  useEffect(() => {
+    if (isOpen && !isSpinning && !winner && drawMode === "wheel") {
       drawWheel(rotationRef.current);
     }
-  }, [isOpen, eligibleEntrants, isSpinning, drawMode]);
+  }, [isOpen, eligibleEntrants, isSpinning, Boolean(winner), drawMode]);
 
   // Realtime background sync while wheel modal is open
   useEffect(() => {
@@ -820,7 +945,7 @@ export function RaffleWheelModal({
               <button
                 type="button"
                 className={`raffle-draw-mode-btn ${drawMode === "wheel" ? "active" : ""}`}
-                onClick={() => !isSpinning && setDrawMode("wheel")}
+                onClick={() => handleModeChange("wheel")}
                 disabled={isSpinning}
               >
                 🎡 3D Wheel
@@ -828,7 +953,7 @@ export function RaffleWheelModal({
               <button
                 type="button"
                 className={`raffle-draw-mode-btn ${drawMode === "duck_race" ? "active" : ""}`}
-                onClick={() => !isSpinning && setDrawMode("duck_race")}
+                onClick={() => handleModeChange("duck_race")}
                 disabled={isSpinning}
               >
                 🦆 3D Duck Race
@@ -1063,7 +1188,9 @@ export function RaffleWheelModal({
                         setWinner(null);
                         setClaimDeadline(null);
                         setAwardedSuccess(false);
-                        drawWheel(rotationRef.current);
+                        if (drawMode === "wheel") {
+                          drawWheel(rotationRef.current);
+                        }
                         void fetch("/api/raffle/live-spin", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },

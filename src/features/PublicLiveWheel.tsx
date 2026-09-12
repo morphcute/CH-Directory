@@ -21,6 +21,7 @@ import {
   init3DDuckRace,
   render3DDuckRace,
   draw3DIdleDucks,
+  draw3DFinishDucks,
   type DuckRaceState,
 } from "./duckRaceCanvas3D";
 
@@ -41,9 +42,14 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   const [liveSpin, setLiveSpin] = useState<LiveSpinState | null>(null);
+  const [activeDrawMode, setActiveDrawMode] = useState<"wheel" | "duck_race">("wheel");
 
-  const isLiveSpinning = Boolean(liveSpin && liveSpin.status === "spinning");
-  const drawMode = liveSpin?.drawMode || "wheel";
+  const isLiveSpinning = Boolean(
+    liveSpin &&
+    liveSpin.status === "spinning" &&
+    (liveSpin.startedAt ? Date.now() - liveSpin.startedAt < (liveSpin.durationMs || 5000) : true)
+  );
+  const drawMode = activeDrawMode;
 
   const awardedWinners = entries.filter((e) => Boolean(e.prizeWon));
   const excludedIdsSet = new Set(liveSpin?.excludedIds || []);
@@ -107,17 +113,27 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
   // Sync celebrated winner with liveSpin state
   // ONLY display the current unawarded pick undergoing attendance check. Awarded winners stay in Awarded Winners!
   useEffect(() => {
-    if (!liveSpin || liveSpin.status === "idle" || liveSpin.isAwarded || !liveSpin.winnerName) {
+    if (!liveSpin) {
+      return;
+    }
+
+    if (liveSpin.isAwarded || liveSpin.status === "idle") {
       setCelebratedWinner(null);
       return;
     }
 
-    if (liveSpin.status === "spinning") {
+    const now = Date.now();
+    const elapsed = liveSpin.startedAt ? now - liveSpin.startedAt : 0;
+    const duration = liveSpin.durationMs || 5000;
+    const isActivelySpinning = liveSpin.status === "spinning" && elapsed < duration;
+
+    if (isActivelySpinning) {
       setCelebratedWinner(null);
       return;
     }
 
-    if (liveSpin.status === "landed" && !liveSpin.isAwarded) {
+    // Landed or elapsed >= duration:
+    if (liveSpin.winnerName && !liveSpin.isAwarded) {
       setCelebratedWinner({
         name: liveSpin.winnerName,
         prize: liveSpin.prize,
@@ -131,7 +147,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
         startConfetti();
       }
     }
-  }, [liveSpin?.id, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded]);
+  }, [liveSpin?.id, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded, liveSpin?.startedAt, liveSpin?.durationMs]);
 
   // Trigger refresh on award event
   useEffect(() => {
@@ -297,8 +313,20 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
           if (!event.data) return;
           const data = JSON.parse(event.data);
           setLiveSpin(data);
+          if (data?.drawMode) {
+            setActiveDrawMode(data.drawMode);
+          }
         } catch {}
       };
+      eventSource.addEventListener("drawMode", (event: MessageEvent) => {
+        try {
+          if (!event.data) return;
+          const data = JSON.parse(event.data);
+          if (data?.drawMode) {
+            setActiveDrawMode(data.drawMode);
+          }
+        } catch {}
+      });
       eventSource.addEventListener("viewers", (event: MessageEvent) => {
         try {
           if (!event.data) return;
@@ -323,6 +351,11 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
           if (res.ok) {
             const data = await res.json();
             setLiveSpin(data.liveSpin);
+            if (data.drawMode) {
+              setActiveDrawMode(data.drawMode);
+            } else if (data.liveSpin?.drawMode) {
+              setActiveDrawMode(data.liveSpin.drawMode);
+            }
           }
           const vRes = await fetch("/api/raffle/viewers", { cache: "no-store" });
           if (vRes.ok) {
@@ -345,7 +378,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
     if (isLiveSpinning) return;
 
     if (drawMode === "duck_race") {
-      if (liveSpin?.status === "landed") {
+      if (celebratedWinner || liveSpin?.status === "landed") {
         return;
       }
       let active = true;
@@ -377,7 +410,45 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
       }
       drawWheel(rotationRef.current);
     }
-  }, [displayEntrants, liveSpin?.shuffledAt, isLiveSpinning, drawMode, liveSpin?.status]);
+  }, [displayEntrants, liveSpin?.shuffledAt, isLiveSpinning, drawMode, liveSpin?.status, Boolean(celebratedWinner)]);
+
+  // Public Duck Race Winner Celebration Animation Loop
+  const publicWinnerFrameRef = useRef<number | null>(null);
+  useEffect(() => {
+    const winnerName = celebratedWinner?.name || (liveSpin?.status === "landed" && !liveSpin?.isAwarded ? liveSpin.winnerName : null);
+    if (isLiveSpinning || drawMode !== "duck_race" || !winnerName) {
+      if (publicWinnerFrameRef.current) {
+        cancelAnimationFrame(publicWinnerFrameRef.current);
+        publicWinnerFrameRef.current = null;
+      }
+      return;
+    }
+
+    let active = true;
+    const renderWinner = () => {
+      if (!active || !canvasRef.current) return;
+      const ctx = canvasRef.current.getContext("2d");
+      if (ctx) {
+        draw3DFinishDucks(
+          ctx,
+          canvasRef.current.width,
+          canvasRef.current.height,
+          winnerName,
+          celebratedWinner?.prize || liveSpin?.prize
+        );
+      }
+      publicWinnerFrameRef.current = requestAnimationFrame(renderWinner);
+    };
+    renderWinner();
+
+    return () => {
+      active = false;
+      if (publicWinnerFrameRef.current) {
+        cancelAnimationFrame(publicWinnerFrameRef.current);
+        publicWinnerFrameRef.current = null;
+      }
+    };
+  }, [isLiveSpinning, drawMode, celebratedWinner, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded]);
 
   // Synchronized Draw Animation (3D Duck Race or 3D Wheel)
   useEffect(() => {

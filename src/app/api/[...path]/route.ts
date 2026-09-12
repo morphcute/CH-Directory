@@ -96,15 +96,15 @@ export async function GET(request: Request, context: Context) {
       return json(await readState());
     }
     if (route === "raffle/live-spin") {
-      const { getLiveSpinState } = await import("@/server/liveSpinStore");
-      return json({ liveSpin: getLiveSpinState() });
+      const { getLiveSpinState, getActiveDrawMode } = await import("@/server/liveSpinStore");
+      return json({ liveSpin: getLiveSpinState(), drawMode: getActiveDrawMode() });
     }
     if (route === "raffle/viewers") {
       const { getLiveViewerCount, getLiveViewerList } = await import("@/server/liveViewerStore");
       return json({ viewerCount: getLiveViewerCount(), viewers: getLiveViewerList() });
     }
     if (route === "raffle/live-stream") {
-      const { getLiveSpinState, subscribeLiveSpin } = await import("@/server/liveSpinStore");
+      const { getLiveSpinState, subscribeLiveSpin, getActiveDrawMode } = await import("@/server/liveSpinStore");
       const { getLiveViewerCount, getLiveViewerList, subscribeViewerUpdates } = await import("@/server/liveViewerStore");
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
@@ -112,13 +112,20 @@ export async function GET(request: Request, context: Context) {
           const initialData = `data: ${JSON.stringify(getLiveSpinState())}\n\n`;
           controller.enqueue(encoder.encode(initialData));
 
+          const initialMode = `event: drawMode\ndata: ${JSON.stringify({ drawMode: getActiveDrawMode() })}\n\n`;
+          controller.enqueue(encoder.encode(initialMode));
+
           const initialViewers = `event: viewers\ndata: ${JSON.stringify({ viewerCount: getLiveViewerCount(), viewers: getLiveViewerList() })}\n\n`;
           controller.enqueue(encoder.encode(initialViewers));
 
-          const unsubscribeSpin = subscribeLiveSpin((state) => {
+          const unsubscribeSpin = subscribeLiveSpin((state, mode) => {
             try {
               const data = `data: ${JSON.stringify(state)}\n\n`;
               controller.enqueue(encoder.encode(data));
+              if (mode) {
+                const modeEvent = `event: drawMode\ndata: ${JSON.stringify({ drawMode: mode })}\n\n`;
+                controller.enqueue(encoder.encode(modeEvent));
+              }
             } catch {
               // stream closed
             }
@@ -612,8 +619,13 @@ export async function POST(request: Request, context: Context) {
       if (!(await isOrganizer())) {
         return json({ error: "Unauthorized" }, 401);
       }
-      const { broadcastLiveSpin, getLiveSpinState } = await import("@/server/liveSpinStore");
+      const { broadcastLiveSpin, getLiveSpinState, setActiveDrawMode, getActiveDrawMode } = await import("@/server/liveSpinStore");
       const body = (await request.json()) as any;
+      if (body.action === "set_mode") {
+        const drawMode: "wheel" | "duck_race" = body.drawMode === "duck_race" ? "duck_race" : "wheel";
+        setActiveDrawMode(drawMode);
+        return json({ success: true, drawMode, liveSpin: getLiveSpinState() });
+      }
       if (body.action === "start") {
         const drawMode: "wheel" | "duck_race" = body.drawMode === "duck_race" ? "duck_race" : "wheel";
         const spinState = {
@@ -632,7 +644,7 @@ export async function POST(request: Request, context: Context) {
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : undefined,
         };
         broadcastLiveSpin(spinState);
-        return json({ success: true, liveSpin: spinState });
+        return json({ success: true, liveSpin: spinState, drawMode });
       }
       if (body.action === "landed") {
         const current = getLiveSpinState();
@@ -698,7 +710,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(updatedEntrants) ? updatedEntrants.length : 0,
           status: "idle" as const,
-          drawMode: current?.drawMode,
+          drawMode: current?.drawMode || getActiveDrawMode(),
           isAwarded: true,
           entrants: updatedEntrants,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
@@ -720,7 +732,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(shuffledEntrants) ? shuffledEntrants.length : (current?.sliceCount || 1),
           status: "idle" as const,
-          drawMode: current?.drawMode,
+          drawMode: current?.drawMode || getActiveDrawMode(),
           entrants: shuffledEntrants,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
           shuffledAt: Date.now(),
@@ -749,7 +761,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(body.entrants) ? body.entrants.length : 0,
           status: "idle" as const,
-          drawMode: current?.drawMode,
+          drawMode: current?.drawMode || getActiveDrawMode(),
           entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
           excludedIds: nextExcluded,
         };
