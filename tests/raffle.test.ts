@@ -405,52 +405,49 @@ test("raffle auto-creation prevention: query for non-existent raffle returns nul
   assert.equal(raffle, null);
 });
 
-test("raffle live spin: supports drawMode (wheel vs duck_race), realtime shuffle, and reset", () => {
-  // 1. Duck race start broadcast
+test("raffle live spin: supports live spin broadcast, realtime shuffle, and reset", () => {
+  // 1. Wheel spin start broadcast
   broadcastLiveSpin({
-    id: "spin-duck-test",
-    raffleId: "raffle-duck",
+    id: "spin-wheel-test",
+    raffleId: "raffle-wheel",
     status: "spinning",
-    drawMode: "duck_race",
     prize: "Legend Skin",
-    winnerId: "entry-duck-1",
-    winnerName: "Speedy Duck",
+    winnerId: "entry-wheel-1",
+    winnerName: "Alex Hero",
     winningIndex: 1,
     startedAt: Date.now(),
-    durationMs: 6000,
+    durationMs: 5200,
     sliceCount: 3,
     entrants: [
-      { id: "entry-duck-0", fullName: "Duck Alpha" },
-      { id: "entry-duck-1", fullName: "Speedy Duck" },
-      { id: "entry-duck-2", fullName: "Duck Gamma" },
+      { id: "entry-wheel-0", fullName: "Participant Alpha" },
+      { id: "entry-wheel-1", fullName: "Alex Hero" },
+      { id: "entry-wheel-2", fullName: "Participant Gamma" },
     ],
   });
 
   let state = getLiveSpinState();
   assert.ok(state);
   assert.equal(state.status, "spinning");
-  assert.equal(state.drawMode, "duck_race");
-  assert.equal(state.winnerName, "Speedy Duck");
+  assert.equal(state.winnerName, "Alex Hero");
   assert.equal(state.prize, "Legend Skin");
   assert.equal(state.entrants?.length, 3);
 
   // 2. Realtime shuffle broadcast
   broadcastLiveSpin({
-    id: "spin-duck-shuffle",
-    raffleId: "raffle-duck",
+    id: "spin-wheel-shuffle",
+    raffleId: "raffle-wheel",
     status: "idle",
-    drawMode: "duck_race",
     prize: "",
     winnerId: "",
     winnerName: "",
-    winningIndex: 0,
+    winningIndex: -1,
     startedAt: Date.now(),
     durationMs: 0,
     sliceCount: 3,
     entrants: [
-      { id: "entry-duck-2", fullName: "Duck Gamma" },
-      { id: "entry-duck-0", fullName: "Duck Alpha" },
-      { id: "entry-duck-1", fullName: "Speedy Duck" },
+      { id: "entry-wheel-2", fullName: "Participant Gamma" },
+      { id: "entry-wheel-0", fullName: "Participant Alpha" },
+      { id: "entry-wheel-1", fullName: "Alex Hero" },
     ],
     shuffledAt: Date.now(),
   });
@@ -458,8 +455,7 @@ test("raffle live spin: supports drawMode (wheel vs duck_race), realtime shuffle
   state = getLiveSpinState();
   assert.ok(state);
   assert.equal(state.status, "idle");
-  assert.equal(state.drawMode, "duck_race");
-  assert.equal(state.entrants?.[0].fullName, "Duck Gamma");
+  assert.equal(state.entrants?.[0].fullName, "Participant Gamma");
   assert.ok(state.shuffledAt);
 
   // 3. Reset broadcast returns to idle and clears active spin

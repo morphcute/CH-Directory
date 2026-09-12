@@ -7128,50 +7128,7 @@ textarea:focus-visible {
   animation: pulseBorderRed 1.5s infinite;
 }
 
-/* Real-time Draw Mode Switcher (Spin Wheel vs Duck Race) */
-.raffle-draw-mode-tabs {
-  display: inline-flex;
-  align-items: center;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  padding: 3px;
-  gap: 3px;
-}
-
-.raffle-draw-mode-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none;
-}
-
-.raffle-draw-mode-tab:hover:not(.active):not(:disabled) {
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.raffle-draw-mode-tab.active {
-  background: linear-gradient(135deg, #facc15 0%, #eab308 100%);
-  color: #090d16;
-  box-shadow: 0 2px 10px rgba(250, 204, 21, 0.35);
-}
-
-.raffle-draw-mode-tab.active.duck {
-  background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
-  color: #ffffff;
-  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.4);
-}
-
+/* Real-time Shuffle Button */
 .raffle-wheel-shuffle-btn {
   display: inline-flex;
   align-items: center;
@@ -7208,67 +7165,281 @@ textarea:focus-visible {
   100% { transform: rotate(360deg); }
 }
 
-/* Duck Race Canvas and Track */
-.raffle-duck-race-stage {
+/* 3D Realistic Roulette Wheel Stage */
+.raffle-wheel-stage {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  max-width: 520px;
-  gap: 8px;
+  flex-shrink: 0;
+  perspective: 1200px;
 }
 
-.raffle-duck-race-canvas {
+.raffle-wheel-pointer {
+  display: none !important; /* Managed directly on 3D canvas with dynamic flapper recoil */
+}
+
+.raffle-wheel-canvas {
+  max-width: 440px;
+  max-height: 440px;
   width: 100%;
-  max-width: 500px;
   height: auto;
-  border-radius: 14px;
-  border: 2px solid rgba(56, 189, 248, 0.3);
-  box-shadow:
-    0 12px 35px rgba(0, 0, 0, 0.6),
-    0 0 25px rgba(56, 189, 248, 0.15);
-  background: #082f49;
+  border-radius: 50%;
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 25px rgba(250, 204, 21, 0.2));
+  transition: transform 0.3s ease;
 }
 
-.raffle-duck-race-hud {
+.raffle-wheel-canvas:hover {
+  transform: scale(1.015);
+}
+
+/* Interactive Viewers Badge */
+.raffle-wheel-viewers-badge.clickable {
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.raffle-wheel-viewers-badge.clickable:hover {
+  background: rgba(14, 165, 233, 0.28);
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+}
+
+/* Live Viewers Modal */
+.raffle-viewers-modal {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 189, 248, 0.15);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.raffle-viewers-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
-  max-width: 500px;
-  padding: 4px 6px;
-  font-size: 11.5px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.raffle-viewers-icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.raffle-viewers-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+  font-size: 11px;
   font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.raffle-viewers-list {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.raffle-viewer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+
+.raffle-viewer-item:hover {
+  background: rgba(30, 41, 59, 0.85);
+}
+
+.raffle-viewer-avatar {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8fafc;
+  flex-shrink: 0;
+}
+
+.raffle-viewer-online-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  background: #22c55e;
+  border: 2px solid #0f172a;
+  border-radius: 50%;
+}
+
+.raffle-viewer-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.raffle-viewer-name {
+  font-size: 13px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.raffle-viewer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.raffle-viewer-badge.organizer {
+  background: rgba(234, 179, 8, 0.18);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  color: #facc15;
+}
+
+.raffle-viewer-badge.participant {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+}
+
+.raffle-viewer-badge.guest {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   color: #94a3b8;
 }
 
-.raffle-duck-race-leaderboard {
+.raffle-viewer-status {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.raffle-viewers-empty {
+  text-align: center;
+  padding: 30px 16px;
+}
+
+.raffle-viewers-footer {
   display: flex;
   align-items: center;
   gap: 8px;
-  overflow-x: auto;
-  max-width: 320px;
-}
-
-.raffle-duck-race-leader-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  padding: 2px 8px;
-  border-radius: 999px;
+  padding: 10px 16px;
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 11px;
-  color: #e2e8f0;
-  white-space: nowrap;
+  color: #94a3b8;
+  line-height: 1.4;
 }
 
-.raffle-duck-race-leader-pill.rank-1 {
-  border-color: #facc15;
-  color: #facc15;
-  background: rgba(250, 204, 21, 0.15);
+/* Responsive Admin Raffle Page Controls */
+.admin-raffle-random-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.65) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.admin-raffle-random-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.admin-raffle-random-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 840px) {
+  .admin-raffle-random-box {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 14px;
+  }
+  .admin-raffle-random-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+  .admin-raffle-random-actions select,
+  .admin-raffle-random-actions input,
+  .admin-raffle-random-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.admin-raffle-entries-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-raffle-entries-table th,
+.admin-raffle-entries-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+@media (max-width: 640px) {
+  .admin-raffle-entries-table {
+    font-size: 12px;
+  }
+  .admin-raffle-entries-table th,
+  .admin-raffle-entries-table td {
+    padding: 8px 6px;
+  }
 }
 
 
@@ -7982,11 +8153,12 @@ textarea:focus-visible {
 }
 
 .raffle-lobby {
-  margin-bottom: 18px;
-  padding: 16px;
-  border: 1px solid var(--line);
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border: 1px solid rgba(250, 204, 21, 0.16);
   border-radius: 18px;
-  background: var(--surface);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.7) 0%, rgba(9, 13, 22, 0.9) 100%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(250, 204, 21, 0.04);
 }
 
 .raffle-lobby-heading {
@@ -7994,67 +8166,177 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 13px;
+  margin-bottom: 14px;
 }
 
 .raffle-lobby-heading h3 {
   margin-top: 4px;
   color: var(--ink);
-  font-size: 1rem;
-  font-weight: 650;
+  font-size: 1.05rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
+/* Past Winners Pill Button */
+.raffle-past-winners-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.raffle-past-winners-btn:hover {
+  background: rgba(250, 204, 21, 0.14);
+  border-color: #facc15;
+  color: #facc15;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(250, 204, 21, 0.2);
+}
+
+.raffle-past-winners-btn.active {
+  background: #facc15;
+  border-color: #facc15;
+  color: #090d16;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.45);
+}
+
+.raffle-past-winners-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(250, 204, 21, 0.2);
+  color: #facc15;
+}
+
+.raffle-past-winners-btn.active .raffle-past-winners-count {
+  background: #090d16;
+  color: #facc15;
+}
+
+/* Single Active Raffle Banner Header */
+.raffle-single-active-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(9, 13, 22, 0.95) 100%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 20px rgba(250, 204, 21, 0.06);
+  flex-wrap: wrap;
+}
+
+.raffle-single-active-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.raffle-single-active-title {
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+
+.raffle-single-active-category {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.raffle-single-active-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* Multi-raffle Title Card Grid */
 .raffle-title-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
+  gap: 14px;
 }
 
 .raffle-title-card {
-  display: block;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   min-width: 0;
-  padding: 15px;
+  padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: var(--surface-raised);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(25, 27, 25, 0.95) 0%, rgba(16, 17, 16, 0.98) 100%);
   color: var(--ink);
   text-decoration: none;
   text-align: left;
-  transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    transform 160ms ease;
-}
-
-.raffle-card-arrow {
-  transform: rotate(180deg);
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
 
 .raffle-title-card:hover {
-  transform: translateY(-1px);
-  border-color: rgba(237, 250, 121, 0.3);
+  transform: translateY(-2px);
+  border-color: rgba(250, 204, 21, 0.45);
+  box-shadow:
+    0 14px 35px rgba(0, 0, 0, 0.75),
+    0 0 25px rgba(250, 204, 21, 0.15);
 }
 
-.raffle-title-card-topline,
-.raffle-title-card-meta,
-.raffle-title-card-meta > span,
-.raffle-card-state {
-  display: flex;
-  align-items: center;
+.raffle-title-card.selected {
+  border-color: #facc15;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.92) 0%, rgba(15, 23, 42, 0.98) 100%);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.8),
+    0 0 30px rgba(250, 204, 21, 0.22);
 }
 
 .raffle-title-card-topline {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  min-height: 20px;
-  margin-bottom: 11px;
-  color: var(--gold);
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .raffle-card-state {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  color: var(--green);
-  font-size: 0.7rem;
-  font-weight: 650;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 3px 9px;
+  border-radius: 999px;
 }
 
 .raffle-card-state > span {
@@ -8062,51 +8344,152 @@ textarea:focus-visible {
   height: 6px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 3px rgba(144, 214, 170, 0.08);
+  box-shadow: 0 0 6px currentColor;
+  animation: pulseGreenDot 1.6s infinite;
 }
 
 .raffle-card-state.closed {
-  color: var(--muted);
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.raffle-card-state.closed > span {
+  animation: none;
+  background: #f87171;
+  box-shadow: none;
+}
+
+@keyframes pulseGreenDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+.raffle-card-time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.raffle-card-time-chip.urgent {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+  animation: pulseBorderRed 1.5s infinite alternate;
 }
 
 .raffle-title-card > strong {
   display: block;
   overflow: hidden;
-  color: var(--ink);
-  font-size: 0.95rem;
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 800;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-bottom: 3px;
 }
 
 .raffle-title-card-category {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 0.72rem;
+  display: inline-block;
+  color: #38bdf8;
+  font-size: 11.5px;
+  font-weight: 600;
+  margin-bottom: 10px;
 }
 
-.raffle-title-card-meta {
+/* Prize chips on the card */
+.raffle-card-prizes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.raffle-card-prize-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.22);
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.raffle-card-prize-chip.more {
+  color: #94a3b8;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Card Footer with Entrants Count and Enter Button */
+.raffle-title-card-footer {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 14px;
-  padding-top: 11px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.68rem;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.raffle-title-card-meta > span {
-  min-width: 0;
+.raffle-card-entrants {
+  display: inline-flex;
+  align-items: center;
   gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
 }
 
-.raffle-title-card-meta > span:last-child {
-  overflow: hidden;
-  justify-content: flex-end;
-  text-align: right;
-  text-overflow: ellipsis;
+.raffle-enter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #facc15 0%, #eab308 100%);
+  color: #090d16;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(250, 204, 21, 0.3);
   white-space: nowrap;
+}
+
+.raffle-title-card:hover .raffle-enter-btn {
+  transform: translateX(2px);
+  box-shadow: 0 4px 14px rgba(250, 204, 21, 0.5);
+  background: #fde047;
+}
+
+.raffle-enter-btn svg {
+  transition: transform 0.18s ease;
+}
+
+.raffle-title-card:hover .raffle-enter-btn svg {
+  transform: translateX(3px);
+}
+
+.raffle-title-card.selected .raffle-enter-btn {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  color: #4ade80;
+  box-shadow: none;
 }
 
 .raffle-back-to-lobby {
@@ -8117,33 +8500,6 @@ textarea:focus-visible {
   color: var(--gold);
   font-size: 0.78rem;
   font-weight: 650;
-}
-
-.raffle-lobby-prompt {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  padding: 18px;
-  border: 1px dashed rgba(237, 250, 121, 0.18);
-  border-radius: 15px;
-  background: rgba(237, 250, 121, 0.025);
-  color: var(--gold);
-}
-
-.raffle-lobby-prompt strong,
-.raffle-lobby-prompt span {
-  display: block;
-}
-
-.raffle-lobby-prompt strong {
-  color: var(--ink);
-  font-size: 0.88rem;
-}
-
-.raffle-lobby-prompt span {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 0.75rem;
 }
 
 .ch-filter-tab:hover {

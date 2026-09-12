@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowRight,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -74,11 +75,30 @@ interface RaffleResponse {
   branding?: RaffleBranding;
 }
 
+function getTimeRemaining(cutoffDate?: string): { text: string; urgent: boolean } {
+  if (!cutoffDate) return { text: "No deadline", urgent: false };
+  const diff = new Date(cutoffDate).getTime() - Date.now();
+  if (diff <= 0) return { text: "Entries closed", urgent: true };
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (days > 0) {
+    return { text: `${days}d ${hours}h left`, urgent: false };
+  }
+  if (hours > 0) {
+    return { text: `${hours}h ${mins}m left`, urgent: hours < 6 };
+  }
+  return { text: `${mins}m left`, urgent: true };
+}
+
 export function RafflePage({
   initialAppState,
   raffleId,
 }: { initialAppState?: AppState; raffleId?: string } = {}) {
   const [data, setData] = useState<RaffleResponse | null>(null);
+  const [selectedRaffleId, setSelectedRaffleId] = useState<string | null>(raffleId || null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -116,12 +136,13 @@ export function RafflePage({
     }
   }
 
-  async function loadRaffle() {
+  async function loadRaffle(targetId?: string) {
     try {
       const devId = getClientDeviceId();
       const params = new URLSearchParams();
       if (devId) params.set("deviceId", devId);
-      if (raffleId) params.set("id", raffleId);
+      const activeId = targetId || selectedRaffleId || raffleId;
+      if (activeId) params.set("id", activeId);
       const queryString = params.toString();
       const url = queryString ? `/api/raffle?${queryString}` : "/api/raffle";
       const res = await fetch(url, {
@@ -130,6 +151,9 @@ export function RafflePage({
       if (!res.ok) throw new Error("Failed to load raffle data");
       const json: RaffleResponse = await res.json();
       setData(json);
+      if (json.id && !selectedRaffleId) {
+        setSelectedRaffleId(json.id);
+      }
       if (json.myEntry) {
         setEditName(json.myEntry.fullName);
       } else {
@@ -140,6 +164,13 @@ export function RafflePage({
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSelectRaffle(id: string) {
+    if (selectedRaffleId === id && data?.id === id) return;
+    setSelectedRaffleId(id);
+    setLoading(true);
+    void loadRaffle(id);
   }
 
   useEffect(() => {
@@ -597,20 +628,7 @@ export function RafflePage({
               <p>Loading raffle information…</p>
             </div>
           ) : activeTab === "latest" ? (
-            !raffleId ? (
-              activeRaffles.length > 0 ? (
-                <div className="raffle-lobby-prompt">
-                  <Gift size={24} aria-hidden="true" />
-                  <div>
-                    <strong>Select a raffle title card above</strong>
-                    <span>
-                      Open a raffle to view its prizes, join form, and registered
-                      participants.
-                    </span>
-                  </div>
-                </div>
-              ) : null
-            ) : !data || !data.id ? (
+            !data || !data.id ? (
               <div className="ch-empty-state" style={{ margin: "20px 0" }}>
                 <div className="ch-empty-icon" aria-hidden="true">
                   <Gift size={24} />
@@ -715,6 +733,7 @@ export function RafflePage({
                     entries={data.entries || []}
                     prizes={data.prizes || []}
                     onRefresh={loadRaffle}
+                    myEntryName={data.myEntry?.fullName}
                   />
                 )}
 

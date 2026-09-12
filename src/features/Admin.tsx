@@ -2864,73 +2864,7 @@ export function Admin() {
                                   </button>
                                 </div>
 
-                                {/* Preset Buttons with Winner Quotas */}
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    gap: 6,
-                                    flexWrap: "wrap",
-                                    marginTop: 8,
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      fontSize: 11.5,
-                                      color: "#94a3b8",
-                                      alignSelf: "center",
-                                      marginRight: 4,
-                                    }}
-                                  >
-                                    Quick Presets:
-                                  </span>
-                                  {[
-                                    { name: "100 Diamonds", count: 10 },
-                                    { name: "100 Diamonds", count: 5 },
-                                    { name: "250 Diamonds", count: 3 },
-                                    { name: "Starlight Card", count: 1 },
-                                    { name: "Weekly Diamond Pass", count: 5 },
-                                  ].map((preset, idx) => (
-                                    <button
-                                      key={idx}
-                                      type="button"
-                                      className="button outline small"
-                                      style={{
-                                        padding: "3px 8px",
-                                        fontSize: 11,
-                                      }}
-                                      onClick={() =>
-                                        setRaffleForm((prev) => {
-                                          const existingIdx =
-                                            prev.prizes.findIndex(
-                                              (p) =>
-                                                p.name.toLowerCase() ===
-                                                preset.name.toLowerCase(),
-                                            );
-                                          if (existingIdx !== -1) {
-                                            const updated = [...prev.prizes];
-                                            updated[existingIdx] = {
-                                              ...updated[existingIdx],
-                                              winnerCount: preset.count,
-                                            };
-                                            return { ...prev, prizes: updated };
-                                          }
-                                          return {
-                                            ...prev,
-                                            prizes: [
-                                              ...prev.prizes,
-                                              {
-                                                name: preset.name,
-                                                winnerCount: preset.count,
-                                              },
-                                            ],
-                                          };
-                                        })
-                                      }
-                                    >
-                                      + {preset.name} ({preset.count}x)
-                                    </button>
-                                  ))}
-                                </div>
+
 
                                 {/* Current Prizes Tags with Winner Counter Stepper */}
                                 <div
@@ -4648,40 +4582,7 @@ export function Admin() {
                 </button>
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  flexWrap: "wrap",
-                  marginBottom: 10,
-                }}
-              >
-                {[
-                  { name: "100 Diamonds", count: 10 },
-                  { name: "100 Diamonds", count: 5 },
-                  { name: "250 Diamonds", count: 3 },
-                  { name: "Starlight Card", count: 1 },
-                  { name: "Weekly Diamond Pass", count: 5 },
-                ].map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="button outline small"
-                    style={{ padding: "3px 8px", fontSize: 11 }}
-                    onClick={() =>
-                      setCreateRaffleForm((p) => ({
-                        ...p,
-                        prizes: [
-                          ...p.prizes,
-                          { name: preset.name, winnerCount: preset.count },
-                        ],
-                      }))
-                    }
-                  >
-                    + {preset.name} ({preset.count}x)
-                  </button>
-                ))}
-              </div>
+
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {createRaffleForm.prizes.map((p, idx) => (

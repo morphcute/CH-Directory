@@ -100,19 +100,19 @@ export async function GET(request: Request, context: Context) {
       return json({ liveSpin: getLiveSpinState() });
     }
     if (route === "raffle/viewers") {
-      const { getLiveViewerCount } = await import("@/server/liveViewerStore");
-      return json({ viewerCount: getLiveViewerCount() });
+      const { getLiveViewerCount, getLiveViewerList } = await import("@/server/liveViewerStore");
+      return json({ viewerCount: getLiveViewerCount(), viewers: getLiveViewerList() });
     }
     if (route === "raffle/live-stream") {
       const { getLiveSpinState, subscribeLiveSpin } = await import("@/server/liveSpinStore");
-      const { getLiveViewerCount, subscribeViewerCount } = await import("@/server/liveViewerStore");
+      const { getLiveViewerCount, getLiveViewerList, subscribeViewerUpdates } = await import("@/server/liveViewerStore");
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
           const initialData = `data: ${JSON.stringify(getLiveSpinState())}\n\n`;
           controller.enqueue(encoder.encode(initialData));
 
-          const initialViewers = `event: viewers\ndata: ${JSON.stringify({ viewerCount: getLiveViewerCount() })}\n\n`;
+          const initialViewers = `event: viewers\ndata: ${JSON.stringify({ viewerCount: getLiveViewerCount(), viewers: getLiveViewerList() })}\n\n`;
           controller.enqueue(encoder.encode(initialViewers));
 
           const unsubscribeSpin = subscribeLiveSpin((state) => {
@@ -124,9 +124,9 @@ export async function GET(request: Request, context: Context) {
             }
           });
 
-          const unsubscribeViewers = subscribeViewerCount((count) => {
+          const unsubscribeViewers = subscribeViewerUpdates(({ count, viewers }) => {
             try {
-              const data = `event: viewers\ndata: ${JSON.stringify({ viewerCount: count })}\n\n`;
+              const data = `event: viewers\ndata: ${JSON.stringify({ viewerCount: count, viewers })}\n\n`;
               controller.enqueue(encoder.encode(data));
             } catch {
               // stream closed
@@ -378,11 +378,13 @@ export async function POST(request: Request, context: Context) {
   const route = (await context.params).path.join("/");
   try {
     if (route === "raffle/heartbeat") {
-      const { registerViewer, removeViewer } = await import("@/server/liveViewerStore");
+      const { registerViewer, removeViewer, getLiveViewerList } = await import("@/server/liveViewerStore");
       const url = new URL(request.url);
       const queryAction = url.searchParams.get("action");
       let viewerId = url.searchParams.get("viewerId") || "";
       let action = queryAction || "pulse";
+      let entryName = url.searchParams.get("entryName") || "";
+      let deviceId = url.searchParams.get("deviceId") || "";
 
       try {
         const text = await request.text();
@@ -391,6 +393,8 @@ export async function POST(request: Request, context: Context) {
             const body = JSON.parse(text);
             if (body.viewerId) viewerId = String(body.viewerId);
             if (body.action) action = String(body.action);
+            if (body.entryName) entryName = String(body.entryName).trim();
+            if (body.deviceId) deviceId = String(body.deviceId).trim();
           } catch {
             if (!viewerId) viewerId = text.trim();
           }
@@ -402,11 +406,31 @@ export async function POST(request: Request, context: Context) {
 
       if (action === "leave") {
         const viewerCount = removeViewer(viewerId);
-        return json({ success: true, viewerCount });
+        return json({ success: true, viewerCount, viewers: getLiveViewerList() });
       }
 
-      const viewerCount = registerViewer(viewerId, ip, userAgent);
-      return json({ success: true, viewerCount });
+      const organizer = await isOrganizer();
+      if (!organizer && !entryName) {
+        try {
+          const { getRaffleState } = await import("@/server/raffleStore");
+          const raffle = await getRaffleState("latest");
+          if (raffle?.entries && raffle.entries.length > 0) {
+            const matched = raffle.entries.find((e: any) =>
+              (deviceId && e.deviceId === deviceId) ||
+              (ip && (e.ip === ip || e.ip_address === ip))
+            );
+            if (matched?.fullName) {
+              entryName = matched.fullName;
+            }
+          }
+        } catch {}
+      }
+
+      const viewerCount = registerViewer(viewerId, ip, userAgent, {
+        entryName: entryName || undefined,
+        isOrganizer: organizer,
+      });
+      return json({ success: true, viewerCount, viewers: getLiveViewerList() });
     }
     if (route === "page-view") {
       const cookieHeader = request.headers.get("cookie") || "";
@@ -604,30 +628,40 @@ export async function POST(request: Request, context: Context) {
           status: "spinning" as const,
           entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : undefined,
-          drawMode: (body.drawMode || "wheel") as "wheel" | "duck_race",
         };
         broadcastLiveSpin(spinState);
         return json({ success: true, liveSpin: spinState });
       }
       if (body.action === "landed") {
         const current = getLiveSpinState();
-        if (current) {
-          const claimSeconds = Number(body.claimSeconds) || 60;
-          const claimDeadline = Number(body.claimDeadline) || (Date.now() + claimSeconds * 1000);
-          const landedState = {
-            ...current,
-            status: "landed" as const,
-            claimSeconds,
-            claimDeadline,
-            isAwarded: false,
-            entrants: Array.isArray(body.entrants) ? body.entrants : current.entrants,
-            excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current.excludedIds,
-            drawMode: (body.drawMode || current.drawMode || "wheel") as "wheel" | "duck_race",
-          };
-          broadcastLiveSpin(landedState);
-          return json({ success: true, liveSpin: landedState });
-        }
-        return json({ success: true, liveSpin: null });
+        const claimSeconds = Number(body.claimSeconds) || 60;
+        const claimDeadline = Number(body.claimDeadline) || (Date.now() + claimSeconds * 1000);
+        const winnerId = body.winnerId ? String(body.winnerId) : (current?.winnerId || "");
+        const winnerName = body.winnerName ? String(body.winnerName) : (current?.winnerName || "");
+        const prize = body.prize ? String(body.prize) : (current?.prize || "Grand Prize");
+        const winningIndex = typeof body.winningIndex === "number" ? body.winningIndex : (current?.winningIndex ?? 0);
+        const entrants = Array.isArray(body.entrants) ? body.entrants : current?.entrants;
+        const excludedIds = Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds;
+
+        const landedState = {
+          id: current?.id || `spin-${Date.now()}`,
+          raffleId: body.raffleId || current?.raffleId || "default",
+          prize,
+          winnerId,
+          winnerName,
+          winningIndex,
+          startedAt: current?.startedAt || (Date.now() - 5000),
+          durationMs: current?.durationMs || 5000,
+          sliceCount: Array.isArray(entrants) ? entrants.length : (current?.sliceCount || 1),
+          status: "landed" as const,
+          claimSeconds,
+          claimDeadline,
+          isAwarded: false,
+          entrants,
+          excludedIds,
+        };
+        broadcastLiveSpin(landedState);
+        return json({ success: true, liveSpin: landedState });
       }
       if (body.action === "claim_timer") {
         const current = getLiveSpinState();
@@ -646,21 +680,26 @@ export async function POST(request: Request, context: Context) {
       }
       if (body.action === "awarded") {
         const current = getLiveSpinState();
-        if (current) {
-          const updatedEntrants = Array.isArray(body.entrants)
-            ? body.entrants
-            : current.entrants?.filter((e) => e.id !== current.winnerId);
-          const awardedState = {
-            ...current,
-            isAwarded: true,
-            entrants: updatedEntrants,
-            excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current.excludedIds,
-            drawMode: (body.drawMode || current.drawMode || "wheel") as "wheel" | "duck_race",
-          };
-          broadcastLiveSpin(awardedState);
-          return json({ success: true, liveSpin: awardedState });
-        }
-        return json({ success: true, liveSpin: null });
+        const updatedEntrants = Array.isArray(body.entrants)
+          ? body.entrants
+          : current?.entrants?.filter((e) => e.id !== (body.winnerId || current.winnerId));
+        const awardedState = {
+          id: `award-${Date.now()}`,
+          raffleId: body.raffleId || current?.raffleId || "default",
+          prize: body.prize || current?.prize || "",
+          winnerId: "",
+          winnerName: "",
+          winningIndex: -1,
+          startedAt: Date.now(),
+          durationMs: 0,
+          sliceCount: Array.isArray(updatedEntrants) ? updatedEntrants.length : 0,
+          status: "idle" as const,
+          isAwarded: true,
+          entrants: updatedEntrants,
+          excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
+        };
+        broadcastLiveSpin(awardedState);
+        return json({ success: true, liveSpin: awardedState });
       }
       if (body.action === "shuffle") {
         const current = getLiveSpinState();
@@ -678,7 +717,6 @@ export async function POST(request: Request, context: Context) {
           status: "idle" as const,
           entrants: shuffledEntrants,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
-          drawMode: (body.drawMode || current?.drawMode || "wheel") as "wheel" | "duck_race",
           shuffledAt: Date.now(),
         };
         broadcastLiveSpin(shuffleState);
@@ -707,7 +745,6 @@ export async function POST(request: Request, context: Context) {
           status: "idle" as const,
           entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
           excludedIds: nextExcluded,
-          drawMode: (body.drawMode || current?.drawMode || "wheel") as "wheel" | "duck_race",
         };
         broadcastLiveSpin(repickState);
         return json({ success: true, liveSpin: repickState });
@@ -861,13 +898,13 @@ export async function POST(request: Request, context: Context) {
               id: `award-${Date.now()}`,
               raffleId: raffle.id,
               prize: String(body.prizeWon),
-              winnerId: entry.id,
-              winnerName: entry.fullName,
-              winningIndex: 0,
+              winnerId: "",
+              winnerName: "",
+              winningIndex: -1,
               startedAt: Date.now(),
               durationMs: 0,
               sliceCount: remaining.length,
-              status: "landed" as const,
+              status: "idle" as const,
               claimDeadline: null,
               claimSeconds: 0,
               isAwarded: true,

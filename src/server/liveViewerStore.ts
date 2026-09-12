@@ -1,10 +1,28 @@
-interface ViewerSession {
+export interface LiveViewerInfo {
+  id: string;
+  name: string;
+  isParticipant: boolean;
+  isOrganizer: boolean;
+  joinedAt: number;
   lastSeen: number;
+}
+
+interface ViewerSession extends LiveViewerInfo {
   ip: string;
 }
 
-const viewers = new Map<string, ViewerSession>();
-const viewerListeners = new Set<(count: number) => void>();
+declare global {
+  // eslint-disable-next-line no-var
+  var __ch_liveViewers: Map<string, ViewerSession> | undefined;
+  // eslint-disable-next-line no-var
+  var __ch_liveViewerListeners: Set<(data: { count: number; viewers: LiveViewerInfo[] }) => void> | undefined;
+}
+
+const viewers: Map<string, ViewerSession> =
+  globalThis.__ch_liveViewers ?? (globalThis.__ch_liveViewers = new Map());
+
+const viewerListeners: Set<(data: { count: number; viewers: LiveViewerInfo[] }) => void> =
+  globalThis.__ch_liveViewerListeners ?? (globalThis.__ch_liveViewerListeners = new Set());
 
 const VIEWER_TIMEOUT_MS = 25_000; // Drop viewer after 25s without heartbeat
 const MAX_DEVICES_PER_IP = 5; // Anti-bot flood guard: max 5 concurrent devices per IP
@@ -21,10 +39,12 @@ function cleanStaleViewers(now = Date.now()): boolean {
   return changed;
 }
 
-function notifySubscribers(count: number) {
+function notifySubscribers() {
+  const count = viewers.size;
+  const list = getLiveViewerList();
   viewerListeners.forEach((listener) => {
     try {
-      listener(count);
+      listener({ count, viewers: list });
     } catch {
       // safe ignore
     }
@@ -36,7 +56,12 @@ export function isBotUserAgent(userAgent?: string | null): boolean {
   return BOT_REGEX.test(userAgent);
 }
 
-export function registerViewer(viewerId: string, ip: string, userAgent?: string | null): number {
+export function registerViewer(
+  viewerId: string,
+  ip: string,
+  userAgent?: string | null,
+  details?: { entryName?: string; isOrganizer?: boolean }
+): number {
   if (!viewerId || typeof viewerId !== "string") {
     return getLiveViewerCount();
   }
@@ -52,31 +77,55 @@ export function registerViewer(viewerId: string, ip: string, userAgent?: string 
   const cleanId = viewerId.trim().slice(0, 64);
   if (!cleanId) return getLiveViewerCount();
 
-  // If this is a new viewer ID, check per-IP flood limits
-  if (!viewers.has(cleanId)) {
-    let devicesWithSameIp = 0;
-    for (const session of viewers.values()) {
-      if (session.ip === ip) {
-        devicesWithSameIp++;
-      }
+  const isOrganizer = Boolean(details?.isOrganizer);
+  const entryName = details?.entryName?.trim();
+  const isParticipant = Boolean(entryName);
+
+  const existing = viewers.get(cleanId);
+  if (existing) {
+    existing.lastSeen = now;
+    if (isOrganizer) {
+      existing.isOrganizer = true;
+      existing.name = "Organizer (Host)";
+    } else if (entryName) {
+      existing.name = entryName;
+      existing.isParticipant = true;
     }
-    if (devicesWithSameIp >= MAX_DEVICES_PER_IP) {
-      return viewers.size;
-    }
+    if (cleaned) notifySubscribers();
+    return viewers.size;
   }
 
-  const isNew = !viewers.has(cleanId);
+  // Check per-IP flood limits for new viewers
+  let devicesWithSameIp = 0;
+  for (const session of viewers.values()) {
+    if (session.ip === ip) {
+      devicesWithSameIp++;
+    }
+  }
+  if (devicesWithSameIp >= MAX_DEVICES_PER_IP) {
+    return viewers.size;
+  }
+
+  // Determine displayName
+  let displayName = `Spectator #${viewers.size + 1}`;
+  if (isOrganizer) {
+    displayName = "Organizer (Host)";
+  } else if (entryName) {
+    displayName = entryName;
+  }
+
   viewers.set(cleanId, {
+    id: cleanId,
+    name: displayName,
+    isParticipant,
+    isOrganizer,
+    joinedAt: now,
     lastSeen: now,
     ip: ip || "127.0.0.1",
   });
 
-  const count = viewers.size;
-  if (isNew || cleaned) {
-    notifySubscribers(count);
-  }
-
-  return count;
+  notifySubscribers();
+  return viewers.size;
 }
 
 export function removeViewer(viewerId: string): number {
@@ -88,12 +137,11 @@ export function removeViewer(viewerId: string): number {
   const existed = viewers.delete(cleanId);
   const cleaned = cleanStaleViewers();
 
-  const count = viewers.size;
   if (existed || cleaned) {
-    notifySubscribers(count);
+    notifySubscribers();
   }
 
-  return count;
+  return viewers.size;
 }
 
 export function getLiveViewerCount(): number {
@@ -101,10 +149,39 @@ export function getLiveViewerCount(): number {
   return viewers.size;
 }
 
-export function subscribeViewerCount(listener: (count: number) => void): () => void {
+export function getLiveViewerList(): LiveViewerInfo[] {
+  cleanStaleViewers();
+  return Array.from(viewers.values())
+    .map((v) => ({
+      id: v.id,
+      name: v.name,
+      isParticipant: v.isParticipant,
+      isOrganizer: v.isOrganizer,
+      joinedAt: v.joinedAt,
+      lastSeen: v.lastSeen,
+    }))
+    .sort((a, b) => {
+      // Organizers first, then registered participants, then spectators
+      if (a.isOrganizer !== b.isOrganizer) return a.isOrganizer ? -1 : 1;
+      if (a.isParticipant !== b.isParticipant) return a.isParticipant ? -1 : 1;
+      return a.joinedAt - b.joinedAt;
+    });
+}
+
+export function subscribeViewerUpdates(
+  listener: (data: { count: number; viewers: LiveViewerInfo[] }) => void
+): () => void {
   viewerListeners.add(listener);
   return () => {
     viewerListeners.delete(listener);
+  };
+}
+
+export function subscribeViewerCount(listener: (count: number) => void): () => void {
+  const wrapped = (data: { count: number; viewers: LiveViewerInfo[] }) => listener(data.count);
+  viewerListeners.add(wrapped as any);
+  return () => {
+    viewerListeners.delete(wrapped as any);
   };
 }
 

@@ -14,37 +14,47 @@ export interface LiveSpinState {
   isAwarded?: boolean;
   entrants?: { id: string; fullName: string }[];
   excludedIds?: string[];
-  drawMode?: "wheel" | "duck_race";
   shuffledAt?: number;
 }
 
-let activeLiveSpin: LiveSpinState | null = null;
-const subscribers = new Set<(state: LiveSpinState | null) => void>();
+declare global {
+  // eslint-disable-next-line no-var
+  var __ch_liveSpinState: LiveSpinState | null | undefined;
+  // eslint-disable-next-line no-var
+  var __ch_liveSpinSubscribers: Set<(state: LiveSpinState | null) => void> | undefined;
+}
+
+const subscribers: Set<(state: LiveSpinState | null) => void> =
+  globalThis.__ch_liveSpinSubscribers ?? (globalThis.__ch_liveSpinSubscribers = new Set());
 
 export function getLiveSpinState(): LiveSpinState | null {
-  if (activeLiveSpin) {
-    const elapsed = Date.now() - activeLiveSpin.startedAt;
-    const maxActive = activeLiveSpin.claimDeadline
-      ? Math.max(activeLiveSpin.durationMs + 180_000, activeLiveSpin.claimDeadline - activeLiveSpin.startedAt + 60_000)
-      : activeLiveSpin.durationMs + 120_000;
+  const active = globalThis.__ch_liveSpinState;
+  if (active) {
+    const elapsed = Date.now() - active.startedAt;
+    // Awarded or idle state expires quickly (8 seconds) to return to ready state
+    const maxActive = active.isAwarded || active.status === "idle"
+      ? 8_000
+      : active.claimDeadline
+        ? Math.max(active.durationMs + 180_000, active.claimDeadline - active.startedAt + 60_000)
+        : active.durationMs + 120_000;
 
     if (elapsed > maxActive) {
-      activeLiveSpin = null;
+      globalThis.__ch_liveSpinState = null;
     }
   }
-  return activeLiveSpin;
+  return globalThis.__ch_liveSpinState || null;
 }
 
 export function broadcastLiveSpin(state: LiveSpinState | null): LiveSpinState | null {
-  activeLiveSpin = state;
+  globalThis.__ch_liveSpinState = state;
   subscribers.forEach((listener) => {
     try {
-      listener(activeLiveSpin);
+      listener(globalThis.__ch_liveSpinState || null);
     } catch {
       // safe ignore
     }
   });
-  return activeLiveSpin;
+  return globalThis.__ch_liveSpinState || null;
 }
 
 export function subscribeLiveSpin(listener: (state: LiveSpinState | null) => void): () => void {
@@ -53,3 +63,4 @@ export function subscribeLiveSpin(listener: (state: LiveSpinState | null) => voi
     subscribers.delete(listener);
   };
 }
+
