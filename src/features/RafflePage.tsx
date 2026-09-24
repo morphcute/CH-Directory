@@ -727,15 +727,13 @@ export function RafflePage({
                   </div>
                 )}
 
-                {/* AUTOMATIC REAL-TIME LIVE DRAW WHEEL (Shown automatically when event is started) */}
-                {data.isEnded && (
-                  <PublicLiveWheel
-                    entries={data.entries || []}
-                    prizes={data.prizes || []}
-                    onRefresh={loadRaffle}
-                    myEntryName={data.myEntry?.fullName}
-                  />
-                )}
+                {/* REAL-TIME LIVE DRAW WHEEL & DUCK DERBY (Centerpiece live stage always active) */}
+                <PublicLiveWheel
+                  entries={data.entries || []}
+                  prizes={data.prizes || []}
+                  onRefresh={loadRaffle}
+                  myEntryName={data.myEntry?.fullName}
+                />
 
                 {/* Entry Pass Form (Only shown when registration is open) */}
                 {!data.isEnded && (

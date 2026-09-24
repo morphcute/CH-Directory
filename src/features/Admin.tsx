@@ -2437,106 +2437,66 @@ export function Admin() {
                                 )}
 
                                 {/* Top Raffle CRUD Bar */}
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                    flexWrap: "wrap",
-                                    gap: 12,
-                                    marginBottom: 18,
-                                    padding: "12px 16px",
-                                    background: "#111724",
-                                    border: "1px solid #1e293b",
-                                    borderRadius: 10,
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 8,
-                                      flexWrap: "wrap",
-                                    }}
-                                  >
-                                    <strong
-                                      style={{ color: "#ffffff", fontSize: 14 }}
-                                    >
-                                      Managing:{" "}
-                                      {raffleData.title || "Untitled Raffle"}
+                                <div className="admin-raffle-top-bar">
+                                  <div className="admin-raffle-top-bar-left">
+                                    <strong className="admin-raffle-top-bar-title">
+                                      Managing: {raffleData.title || "Untitled Raffle"}
                                     </strong>
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    padding: "2px 8px",
-                                    borderRadius: 4,
-                                    background: raffleForm.isActive
-                                      ? "rgba(34, 197, 94, 0.15)"
-                                      : "rgba(239, 68, 68, 0.15)",
-                                    color: raffleForm.isActive
-                                      ? "#4ade80"
-                                      : "#f87171",
-                                    border: `1px solid ${raffleForm.isActive ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
-                                  }}
-                                >
-                                  {raffleForm.isActive
-                                    ? "Active in raffle lobby"
-                                    : "Inactive / Hidden"}
-                                </span>
-                              </div>
+                                    <span
+                                      className={`admin-raffle-status-pill ${
+                                        raffleForm.isActive ? "active" : "inactive"
+                                      }`}
+                                    >
+                                      {raffleForm.isActive
+                                        ? "Active in raffle lobby"
+                                        : "Inactive / Hidden"}
+                                    </span>
+                                  </div>
 
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                  flexWrap: "wrap",
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="button primary small"
-                                  onClick={() => setShowCreateRaffleModal(true)}
-                                >
-                                  <Plus size={14} />
-                                  <span>Create New Raffle</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="button outline small"
-                                  onClick={handleArchiveCurrentRaffle}
-                                  disabled={
-                                    !raffleData?.entries?.some((entry) =>
-                                      Boolean(entry.prizeWon),
-                                    )
-                                  }
-                                  title={
-                                    raffleData?.entries?.some((entry) =>
-                                      Boolean(entry.prizeWon),
-                                    )
-                                      ? "Move this raffle to Past Winners"
-                                      : "Assign at least one winner before moving this raffle to Past Winners"
-                                  }
-                                >
-                                  <Archive size={14} />
-                                  <span>Move to Past Winners</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="button outline small"
-                                  onClick={handleDeleteCurrentRaffle}
-                                  style={{
-                                    color: "#f87171",
-                                    borderColor: "#7f1d1d",
-                                  }}
-                                  title="Permanently delete this raffle"
-                                >
-                                  <Trash2 size={14} />
-                                  <span>Delete Raffle</span>
-                                </button>
-                              </div>
-                            </div>
+                                  <div className="admin-raffle-top-bar-actions">
+                                    <button
+                                      type="button"
+                                      className="button primary small"
+                                      onClick={() => setShowCreateRaffleModal(true)}
+                                    >
+                                      <Plus size={14} />
+                                      <span>Create New Raffle</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button outline small"
+                                      onClick={handleArchiveCurrentRaffle}
+                                      disabled={
+                                        !raffleData?.entries?.some((entry) =>
+                                          Boolean(entry.prizeWon),
+                                        )
+                                      }
+                                      title={
+                                        raffleData?.entries?.some((entry) =>
+                                          Boolean(entry.prizeWon),
+                                        )
+                                          ? "Move this raffle to Past Winners"
+                                          : "Assign at least one winner before moving this raffle to Past Winners"
+                                      }
+                                    >
+                                      <Archive size={14} />
+                                      <span>Move to Past Winners</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button outline small delete-btn"
+                                      onClick={handleDeleteCurrentRaffle}
+                                      style={{
+                                        color: "#f87171",
+                                        borderColor: "#7f1d1d",
+                                      }}
+                                      title="Permanently delete this raffle"
+                                    >
+                                      <Trash2 size={14} />
+                                      <span>Delete Raffle</span>
+                                    </button>
+                                  </div>
+                                </div>
 
                             {/* Settings & Configuration Grid */}
                             <form
@@ -2620,28 +2580,11 @@ export function Admin() {
                                 </label>
                               </div>
 
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 6,
-                                  flexWrap: "wrap",
-                                  margin: "-6px 0 14px",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    fontSize: 11.5,
-                                    color: "#94a3b8",
-                                    alignSelf: "center",
-                                    marginRight: 4,
-                                  }}
-                                >
-                                  Quick Deadlines:
-                                </span>
+                              <div className="admin-raffle-deadlines-bar">
+                                <span className="admin-raffle-deadlines-label">Quick Deadlines:</span>
                                 <button
                                   type="button"
-                                  className="button outline small"
-                                  style={{ padding: "3px 8px", fontSize: 11 }}
+                                  className="admin-raffle-deadline-chip"
                                   onClick={() => {
                                     const d = new Date(
                                       Date.now() + 3 * 24 * 60 * 60 * 1000,
@@ -2656,8 +2599,7 @@ export function Admin() {
                                 </button>
                                 <button
                                   type="button"
-                                  className="button outline small"
-                                  style={{ padding: "3px 8px", fontSize: 11 }}
+                                  className="admin-raffle-deadline-chip"
                                   onClick={() => {
                                     const d = new Date(
                                       Date.now() + 7 * 24 * 60 * 60 * 1000,
@@ -2672,8 +2614,7 @@ export function Admin() {
                                 </button>
                                 <button
                                   type="button"
-                                  className="button outline small"
-                                  style={{ padding: "3px 8px", fontSize: 11 }}
+                                  className="admin-raffle-deadline-chip"
                                   onClick={() => {
                                     const d = new Date(
                                       Date.now() + 14 * 24 * 60 * 60 * 1000,
@@ -2689,12 +2630,7 @@ export function Admin() {
                                 {raffleForm.cutoffDate && (
                                   <button
                                     type="button"
-                                    className="button outline small"
-                                    style={{
-                                      padding: "3px 8px",
-                                      fontSize: 11,
-                                      color: "#f87171",
-                                    }}
+                                    className="admin-raffle-deadline-chip clear"
                                     onClick={() =>
                                       setRaffleForm((p) => ({
                                         ...p,
@@ -2764,30 +2700,14 @@ export function Admin() {
                                   </span>
                                 </div>
 
-                                <div
-                                  className="admin-raffle-prize-row"
-                                  style={{
-                                    display: "flex",
-                                    gap: 8,
-                                    alignItems: "center",
-                                    flexWrap: "wrap",
-                                  }}
-                                >
+                                <div className="admin-raffle-prize-builder">
                                   <input
                                     value={newPrizeName}
                                     onChange={(e) =>
                                       setNewPrizeName(e.target.value)
                                     }
                                     placeholder="Prize name (e.g. 100 Diamonds, Starlight Card…)"
-                                    style={{
-                                      background: "#0b1120",
-                                      border: "1px solid #24334a",
-                                      borderRadius: 6,
-                                      color: "#ffffff",
-                                      padding: "7px 12px",
-                                      fontSize: 13,
-                                      flex: "1 1 200px",
-                                    }}
+                                    className="admin-raffle-prize-builder-input"
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter") {
                                         e.preventDefault();
@@ -2813,22 +2733,8 @@ export function Admin() {
                                     }}
                                   />
 
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 6,
-                                    }}
-                                  >
-                                    <label
-                                      style={{
-                                        fontSize: 12,
-                                        color: "#94a3b8",
-                                        whiteSpace: "nowrap",
-                                      }}
-                                    >
-                                      Winners:
-                                    </label>
+                                  <div className="admin-raffle-prize-builder-stepper">
+                                    <label>Winners:</label>
                                     <input
                                       type="number"
                                       min={1}
@@ -2842,22 +2748,13 @@ export function Admin() {
                                           ),
                                         )
                                       }
-                                      style={{
-                                        width: 65,
-                                        background: "#0b1120",
-                                        border: "1px solid #24334a",
-                                        borderRadius: 6,
-                                        color: "#ffffff",
-                                        padding: "7px 8px",
-                                        fontSize: 13,
-                                        textAlign: "center",
-                                      }}
+                                      className="admin-raffle-prize-builder-qty"
                                     />
                                   </div>
 
                                   <button
                                     type="button"
-                                    className="button outline small"
+                                    className="button primary small"
                                     onClick={() => {
                                       const val = newPrizeName.trim();
                                       if (val) {
@@ -2884,58 +2781,18 @@ export function Admin() {
                                   </button>
                                 </div>
 
-
-
                                 {/* Current Prizes Tags with Winner Counter Stepper */}
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    gap: 8,
-                                    marginTop: 12,
-                                  }}
-                                >
+                                <div className="admin-raffle-prizes-tags-wrap">
                                   {raffleForm.prizes.map((p, idx) => (
                                     <div
                                       key={p.id || idx}
-                                      style={{
-                                        background: "#0b1120",
-                                        border: "1px solid #1e293b",
-                                        borderRadius: 8,
-                                        padding: "6px 10px",
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: 8,
-                                      }}
+                                      className="admin-raffle-prize-tag-card"
                                     >
-                                      <span
-                                        style={{
-                                          color: "#ffffff",
-                                          fontSize: 12.5,
-                                          fontWeight: 600,
-                                        }}
-                                      >
+                                      <span className="admin-raffle-prize-tag-name">
                                         {p.name}
                                       </span>
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          gap: 4,
-                                          background: "rgba(56,189,248,0.12)",
-                                          border:
-                                            "1px solid rgba(56,189,248,0.25)",
-                                          borderRadius: 4,
-                                          padding: "1px 6px",
-                                        }}
-                                      >
-                                        <span
-                                          style={{
-                                            fontSize: 11,
-                                            color: "#38bdf8",
-                                            fontWeight: 700,
-                                          }}
-                                        >
+                                      <div className="admin-raffle-prize-tag-stepper">
+                                        <span className="admin-raffle-prize-tag-label">
                                           Winners:
                                         </span>
                                         <input
@@ -2957,16 +2814,7 @@ export function Admin() {
                                               return { ...prev, prizes: copy };
                                             });
                                           }}
-                                          style={{
-                                            width: 44,
-                                            background: "transparent",
-                                            border: "none",
-                                            color: "#38bdf8",
-                                            fontSize: 12,
-                                            fontWeight: 700,
-                                            textAlign: "center",
-                                            padding: 0,
-                                          }}
+                                          className="admin-raffle-prize-tag-input"
                                         />
                                       </div>
                                       <button
@@ -2980,15 +2828,7 @@ export function Admin() {
                                             ),
                                           }))
                                         }
-                                        style={{
-                                          background: "none",
-                                          border: "none",
-                                          color: "#94a3b8",
-                                          cursor: "pointer",
-                                          fontSize: 15,
-                                          padding: "0 2px",
-                                          lineHeight: 1,
-                                        }}
+                                        className="admin-raffle-prize-tag-remove"
                                       >
                                         ×
                                       </button>
@@ -3045,51 +2885,20 @@ export function Admin() {
                                 raffleData.entries.some((e) =>
                                   Boolean(e.prizeWon),
                                 ) && (
-                                  <div
-                                    style={{
-                                      background: "rgba(250, 204, 21, 0.08)",
-                                      border:
-                                        "1px solid rgba(250, 204, 21, 0.3)",
-                                      borderRadius: 8,
-                                      padding: "14px 16px",
-                                      marginBottom: 16,
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "space-between",
-                                      flexWrap: "wrap",
-                                      gap: 12,
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 10,
-                                      }}
-                                    >
+                                  <div className="admin-raffle-assigned-alert">
+                                    <div className="admin-raffle-assigned-alert-left">
                                       <Trophy
-                                        size={20}
+                                        size={22}
                                         style={{
                                           color: "#facc15",
                                           flexShrink: 0,
                                         }}
                                       />
                                       <div>
-                                        <strong
-                                          style={{
-                                            display: "block",
-                                            color: "#ffffff",
-                                            fontSize: 13.5,
-                                          }}
-                                        >
+                                        <strong>
                                           Raffle has assigned winners!
                                         </strong>
-                                        <span
-                                          style={{
-                                            fontSize: 12,
-                                            color: "#94a3b8",
-                                          }}
-                                        >
+                                        <span>
                                           Ready to conclude this raffle? Move this
                                           raffle to Past Winners to preserve results
                                           in the public Past Winners Archive.
@@ -3100,7 +2909,6 @@ export function Admin() {
                                       type="button"
                                       className="button primary small"
                                       onClick={handleArchiveCurrentRaffle}
-                                      style={{ whiteSpace: "nowrap" }}
                                     >
                                       <Archive size={14} />
                                       <span>Move to Past Winners</span>

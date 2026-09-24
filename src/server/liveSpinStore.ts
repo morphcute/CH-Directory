@@ -64,13 +64,13 @@ const subscribers: Set<(state: LiveSpinState | null, mode: "wheel" | "duck_race"
   globalThis.__ch_liveSpinSubscribers ?? (globalThis.__ch_liveSpinSubscribers = new Set());
 
 export function getActiveDrawMode(): "wheel" | "duck_race" {
-  if (globalThis.__ch_activeDrawMode) return globalThis.__ch_activeDrawMode;
-  if (globalThis.__ch_liveSpinState?.drawMode) return globalThis.__ch_liveSpinState.drawMode;
   const persisted = readPersistedLiveSpin();
   if (persisted?.mode) {
     globalThis.__ch_activeDrawMode = persisted.mode;
     return persisted.mode;
   }
+  if (globalThis.__ch_activeDrawMode) return globalThis.__ch_activeDrawMode;
+  if (globalThis.__ch_liveSpinState?.drawMode) return globalThis.__ch_liveSpinState.drawMode;
   return "wheel";
 }
 
@@ -91,37 +91,42 @@ export function setActiveDrawMode(mode: "wheel" | "duck_race"): "wheel" | "duck_
 }
 
 export function getLiveSpinState(): LiveSpinState | null {
-  let active = globalThis.__ch_liveSpinState;
-  if (active === undefined) {
-    const persisted = readPersistedLiveSpin();
-    if (persisted && persisted.state) {
-      active = persisted.state;
-      globalThis.__ch_liveSpinState = active;
-      if (persisted.mode) {
-        globalThis.__ch_activeDrawMode = persisted.mode;
-      }
-    } else {
-      active = null;
-      globalThis.__ch_liveSpinState = null;
+  // Always inspect persisted state from disk to guarantee synchronization
+  // across all Next.js worker threads and serverless lambdas
+  const persisted = readPersistedLiveSpin();
+  let candidate: LiveSpinState | null = null;
+
+  if (persisted && persisted.state) {
+    candidate = persisted.state;
+    if (persisted.mode) {
+      globalThis.__ch_activeDrawMode = persisted.mode;
     }
+  } else if (globalThis.__ch_liveSpinState) {
+    candidate = globalThis.__ch_liveSpinState;
   }
 
-  if (active) {
-    const elapsed = Date.now() - active.startedAt;
+  if (candidate) {
+    const elapsed = Date.now() - candidate.startedAt;
     // Awarded or idle state expires after 10 seconds to return to ready state
-    // Landed state awaiting attendance check stays valid for up to 30 minutes unless cleared/awarded/repict
-    const maxActive = active.isAwarded || active.status === "idle"
-      ? 10_000
-      : active.status === "landed"
-        ? 30 * 60 * 1000 // 30 minutes for attendance verification
-        : active.durationMs + 60_000;
+    // Landed state awaiting attendance check stays valid for up to 30 minutes unless cleared/awarded/repicked
+    const maxActive =
+      candidate.isAwarded || candidate.status === "idle"
+        ? 10_000
+        : candidate.status === "landed"
+          ? 30 * 60 * 1000 // 30 minutes for attendance verification
+          : (candidate.durationMs || 8000) + 60_000;
 
     if (elapsed > maxActive) {
       globalThis.__ch_liveSpinState = null;
       writePersistedLiveSpin(null, getActiveDrawMode());
+      return null;
     }
+    globalThis.__ch_liveSpinState = candidate;
+    return candidate;
   }
-  return globalThis.__ch_liveSpinState || null;
+
+  globalThis.__ch_liveSpinState = null;
+  return null;
 }
 
 export function broadcastLiveSpin(state: LiveSpinState | null): LiveSpinState | null {

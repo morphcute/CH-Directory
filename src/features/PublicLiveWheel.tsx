@@ -91,11 +91,12 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
     if (!liveSpin || liveSpin.isAwarded || liveSpin.status !== "landed" || !liveSpin.winnerName) {
       return null;
     }
-    // Check if entrant is already awarded in entries list
+    // Check if this specific entrant entry has already been awarded
     const isAlreadyAwarded = entries.some(
       (e) =>
-        (e.id === liveSpin.winnerId ||
-          e.fullName.trim().toLowerCase() === liveSpin.winnerName.trim().toLowerCase()) &&
+        (liveSpin.winnerId
+          ? e.id === liveSpin.winnerId
+          : e.fullName.trim().toLowerCase() === liveSpin.winnerName.trim().toLowerCase()) &&
         Boolean(e.prizeWon)
     );
     if (isAlreadyAwarded) return null;
@@ -287,6 +288,32 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
     confettiFrameRef.current = requestAnimationFrame(render);
   };
 
+  // Resilient live spin state updater that prevents transient network/worker nulls from destroying the active claim countdown
+  const handleLiveSpinUpdate = React.useCallback((data: LiveSpinState | null) => {
+    if (!data) {
+      setLiveSpin((prev) => {
+        // If an active landed candidate is currently in attendance verification and deadline hasn't elapsed, keep it!
+        if (
+          prev &&
+          prev.status === "landed" &&
+          !prev.isAwarded &&
+          prev.winnerName &&
+          prev.claimDeadline &&
+          prev.claimDeadline > Date.now()
+        ) {
+          return prev;
+        }
+        return null;
+      });
+      return;
+    }
+
+    setLiveSpin(data);
+    if (data.drawMode) {
+      setActiveDrawMode(data.drawMode);
+    }
+  }, []);
+
   // Real-time synchronization via SSE and fallback polling
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -296,10 +323,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
         try {
           if (!event.data) return;
           const data = JSON.parse(event.data);
-          setLiveSpin(data);
-          if (data?.drawMode) {
-            setActiveDrawMode(data.drawMode);
-          }
+          handleLiveSpinUpdate(data);
         } catch {}
       };
       eventSource.addEventListener("drawMode", (event: MessageEvent) => {
@@ -334,7 +358,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
           const res = await fetch("/api/raffle/live-spin", { cache: "no-store" });
           if (res.ok) {
             const data = await res.json();
-            setLiveSpin(data.liveSpin);
+            handleLiveSpinUpdate(data.liveSpin ?? null);
             if (data.drawMode) {
               setActiveDrawMode(data.drawMode);
             } else if (data.liveSpin?.drawMode) {
@@ -355,7 +379,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
       if (eventSource) eventSource.close();
       clearInterval(interval);
     };
-  }, []);
+  }, [handleLiveSpinUpdate]);
 
   // Real-time Stage Redraw on Participant changes or Real-time Shuffle
   useEffect(() => {

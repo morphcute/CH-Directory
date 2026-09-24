@@ -8985,161 +8985,654 @@ textarea:focus-visible {
   color: var(--gold);
 }
 
-/* Raffle surfaces */
+/* ==========================================================================
+   PUBLIC & ADMIN RAFFLE VIP ESPORTS DESIGN SYSTEM
+   ========================================================================== */
+
 .raffle-human-container {
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
-.raffle-human-card,
-.raffle-prizes-bar,
-.raffle-live-wheel-card,
-.raffle-archive-winner-item {
-  border: 1px solid var(--line) !important;
-  border-radius: 18px;
-  background: var(--surface) !important;
-  box-shadow: none !important;
-}
-
+/* Luxury Obsidian Esports Card */
 .raffle-human-card {
-  padding: 20px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(8, 13, 24, 0.98) 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+  border-radius: 22px !important;
+  padding: 24px !important;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(56, 189, 248, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  position: relative;
+  overflow: hidden;
 }
 
+.raffle-human-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.6), rgba(250, 204, 21, 0.5), transparent);
+  pointer-events: none;
+}
+
+.raffle-human-card.winners-box {
+  background: linear-gradient(180deg, rgba(26, 21, 10, 0.95) 0%, rgba(13, 11, 6, 0.98) 100%) !important;
+  border: 1px solid rgba(250, 204, 21, 0.4) !important;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.65),
+    0 0 35px rgba(250, 204, 21, 0.12),
+    inset 0 1px 0 rgba(250, 204, 21, 0.25) !important;
+}
+
+.raffle-human-card.winners-box::before {
+  background: linear-gradient(90deg, transparent, #facc15, #f59e0b, transparent);
+}
+
+.raffle-human-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.raffle-human-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #f8fafc !important;
+  letter-spacing: -0.2px;
+}
+
+/* Luxury 1-Line Giveaway Prizes Showcase Bar */
 .raffle-prizes-bar {
-  min-height: 62px;
-  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(11, 18, 32, 0.97) 100%) !important;
+  border: 1px solid rgba(250, 204, 21, 0.32) !important;
+  border-radius: 18px !important;
+  padding: 14px 20px !important;
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.55),
+    0 0 25px rgba(250, 204, 21, 0.08),
+    inset 0 1px 0 rgba(250, 204, 21, 0.2) !important;
+  min-height: 60px;
+  position: relative;
+  overflow: hidden;
 }
 
-.raffle-human-card-title,
-.raffle-prizes-bar-title,
-.raffle-prize-chip-name,
-.raffle-human-registered-name,
-.raffle-human-winner-info strong,
-.raffle-archive-winner-item strong {
-  color: var(--ink) !important;
+.raffle-prizes-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #facc15, #38bdf8, transparent);
+  pointer-events: none;
 }
 
-.raffle-prizes-bar-icon,
-.raffle-prize-chip.theme-starlight,
-.raffle-winner-tag,
-.raffle-row-prize-won {
-  border-color: rgba(237, 250, 121, 0.22);
-  background: rgba(237, 250, 121, 0.07);
-  color: var(--gold);
+.raffle-prizes-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
 }
 
-.raffle-prize-chip,
-.raffle-prize-chip.theme-diamond,
-.raffle-prize-chip.theme-generic,
-.raffle-human-prize-pill,
-.raffle-archive-prize-chip,
-.raffle-page-btn,
-.raffle-page-num-btn {
-  border-color: var(--line);
-  background: var(--surface-raised);
-  color: var(--ink);
+.raffle-prizes-bar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff !important;
+  white-space: nowrap;
+  letter-spacing: -0.2px;
 }
 
-.raffle-prize-chip.theme-diamond .raffle-prize-chip-icon,
-.raffle-prize-chip.theme-diamond .raffle-prize-chip-qty,
-.raffle-human-winner-prize,
-.raffle-accordion-chevron {
-  color: var(--green);
+.raffle-prizes-bar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.25) 0%, rgba(245, 158, 11, 0.15) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  color: #facc15;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.3);
+  flex-shrink: 0;
+}
+
+.raffle-prizes-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* VIP Prize Tier Chips */
+.raffle-prize-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.raffle-prize-chip:hover {
+  transform: translateY(-1.5px);
+}
+
+.raffle-prize-chip.theme-diamond {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18) 0%, rgba(2, 132, 199, 0.28) 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.48) !important;
+  color: #f0f9ff !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.22) !important;
+}
+
+.raffle-prize-chip.theme-diamond .raffle-prize-chip-icon {
+  color: #38bdf8 !important;
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.6));
 }
 
 .raffle-prize-chip.theme-diamond .raffle-prize-chip-qty {
-  border-color: rgba(144, 214, 170, 0.22);
-  background: rgba(144, 214, 170, 0.09);
+  background: rgba(56, 189, 248, 0.22) !important;
+  color: #67e8f9 !important;
+  border: 1px solid rgba(56, 189, 248, 0.4) !important;
 }
 
-.raffle-prize-chip.theme-starlight .raffle-prize-chip-qty,
+.raffle-prize-chip.theme-starlight {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.2) 0%, rgba(217, 119, 6, 0.28) 100%) !important;
+  border: 1px solid rgba(250, 204, 21, 0.52) !important;
+  color: #fefce8 !important;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.25) !important;
+}
+
+.raffle-prize-chip.theme-starlight .raffle-prize-chip-icon {
+  color: #facc15 !important;
+  filter: drop-shadow(0 0 5px rgba(250, 204, 21, 0.7));
+}
+
+.raffle-prize-chip.theme-starlight .raffle-prize-chip-qty {
+  background: rgba(250, 204, 21, 0.22) !important;
+  color: #fef08a !important;
+  border: 1px solid rgba(250, 204, 21, 0.45) !important;
+}
+
+.raffle-prize-chip.theme-generic {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.14) 0%, rgba(71, 85, 105, 0.22) 100%) !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  color: #f8fafc !important;
+}
+
+.raffle-prize-chip.theme-generic .raffle-prize-chip-icon {
+  color: #94a3b8 !important;
+}
+
 .raffle-prize-chip.theme-generic .raffle-prize-chip-qty {
-  border-color: rgba(237, 250, 121, 0.2);
-  background: rgba(237, 250, 121, 0.08);
-  color: var(--gold);
+  background: rgba(148, 163, 184, 0.2) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
 }
 
-.raffle-human-input-group label,
-.form-field {
-  color: #d8dbd2;
-  font-size: 0.82rem;
+.raffle-prize-chip-name {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
 }
 
-.raffle-human-registered-view,
-.raffle-human-registered-badge,
-.raffle-my-row {
-  border-color: rgba(144, 214, 170, 0.28) !important;
-  background: rgba(144, 214, 170, 0.065) !important;
-}
-
-.raffle-human-check,
-.raffle-human-registered-tag,
-.raffle-you-badge {
-  border-color: rgba(144, 214, 170, 0.24);
-  background: rgba(144, 214, 170, 0.12);
-  color: var(--green);
-}
-
-.raffle-human-edit-btn,
-.raffle-accordion-chevron {
-  border-color: var(--line);
-  background: var(--surface-raised);
-  color: var(--muted);
-}
-
-.raffle-human-edit-btn:hover,
-.raffle-participants-accordion-toggle:hover .raffle-accordion-chevron {
-  border-color: rgba(237, 250, 121, 0.25);
-  background: rgba(237, 250, 121, 0.06);
-  color: var(--gold);
-}
-
-.raffle-human-card .ch-list {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.015);
-}
-
-.raffle-human-card .ch-row {
-  min-height: 62px;
-  padding: 11px 14px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: none;
-  gap: 16px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-}
-
-.raffle-human-card .ch-row:last-child {
-  border-bottom: 0;
-}
-
-.raffle-human-card .ch-row:hover {
-  border-color: var(--line);
-  background: rgba(255, 255, 255, 0.025);
-  transform: none;
-}
-
-.raffle-human-card .ch-row .ch-identity {
-  grid-area: auto;
+.raffle-prize-chip-qty {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 1.5px 7px;
+  border-radius: 6px;
+  letter-spacing: -0.2px;
 }
 
-.raffle-page-num-btn.active {
-  border-color: var(--gold);
-  background: var(--gold);
-  color: #181d0a;
-  box-shadow: none;
+/* VIP Centerpiece Hero Live Draw Wheel & Duck Derby Stage */
+.raffle-live-wheel-card {
+  position: relative !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  background: linear-gradient(180deg, #0b1120 0%, #060913 100%) !important;
+  border: 1px solid rgba(250, 204, 21, 0.35) !important;
+  border-radius: 24px !important;
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, 0.7),
+    0 0 40px rgba(250, 204, 21, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  margin-bottom: 24px !important;
 }
 
-.raffle-participants-dropdown-content,
-.raffle-archive-winners-section,
-.raffle-pagination-footer {
-  border-color: var(--line);
+.raffle-live-wheel-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #38bdf8, #facc15, #eab308, #38bdf8);
+  background-size: 200% 100%;
+  animation: borderGlowSweep 4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes borderGlowSweep {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
+.raffle-wheel-header.embedded {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 16, 29, 0.9) 100%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 16px 22px !important;
+  border-radius: 24px 24px 0 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.raffle-wheel-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+
+.raffle-wheel-live-badge.active-spin {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(220, 38, 38, 0.15) 100%);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
+  animation: liveBadgeStrobe 1.5s infinite ease-in-out;
+}
+
+@keyframes liveBadgeStrobe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+.raffle-wheel-viewers-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #67e8f9;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.raffle-wheel-viewers-badge:hover {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+}
+
+.raffle-wheel-countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.25) 0%, rgba(245, 158, 11, 0.15) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.5);
+  color: #facc15;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.3);
+}
+
+/* Spotlight Attendance Check & Winner Claim Card */
+.raffle-wheel-winner-card {
+  background: linear-gradient(180deg, rgba(26, 21, 10, 0.95) 0%, rgba(13, 11, 6, 0.98) 100%) !important;
+  border: 1px solid rgba(250, 204, 21, 0.5) !important;
+  border-radius: 18px !important;
+  padding: 20px 18px !important;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(250, 204, 21, 0.2),
+    inset 0 1px 0 rgba(250, 204, 21, 0.3) !important;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.raffle-wheel-winner-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #facc15, #f59e0b, transparent);
+}
+
+.raffle-wheel-winner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(250, 204, 21, 0.18);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #facc15;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.raffle-wheel-winner-name {
+  margin: 6px 0 !important;
+  font-size: 24px !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  text-shadow: 0 0 20px rgba(250, 204, 21, 0.4);
+  letter-spacing: -0.3px;
+  word-break: break-word;
+}
+
+.raffle-wheel-winner-prize {
+  margin: 0 0 14px !important;
+  font-size: 13.5px !important;
+  color: #cbd5e1 !important;
+}
+
+.raffle-wheel-winner-prize strong {
+  color: #facc15 !important;
+  font-weight: 800;
+}
+
+/* Synchronized Digital Claim Clock */
+.raffle-wheel-claim-box {
+  background: rgba(10, 15, 29, 0.9) !important;
+  border: 1px solid rgba(250, 204, 21, 0.35) !important;
+  border-radius: 14px !important;
+  padding: 12px 14px !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45) !important;
+  transition: all 0.2s ease;
+}
+
+.raffle-wheel-claim-box.urgent {
+  background: rgba(30, 10, 15, 0.95) !important;
+  border-color: rgba(248, 113, 113, 0.6) !important;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.35) !important;
+  animation: urgentClaimPulse 1.2s infinite ease-in-out;
+}
+
+@keyframes urgentClaimPulse {
+  0%, 100% { border-color: rgba(248, 113, 113, 0.6); box-shadow: 0 0 20px rgba(239, 68, 68, 0.25); }
+  50% { border-color: rgba(248, 113, 113, 0.95); box-shadow: 0 0 35px rgba(239, 68, 68, 0.55); }
+}
+
+.raffle-wheel-claim-val {
+  font-family: var(--font-mono, monospace);
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  color: #facc15 !important;
+  letter-spacing: 0.5px;
+}
+
+.raffle-wheel-claim-box.urgent .raffle-wheel-claim-val {
+  color: #f87171 !important;
+  text-shadow: 0 0 12px rgba(248, 113, 113, 0.6);
+}
+
+/* Confirmed Awarded Winners Showcase */
+.raffle-wheel-awarded-summary-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(9, 14, 26, 0.95) 100%) !important;
+  border: 1px solid rgba(250, 204, 21, 0.22) !important;
+  border-radius: 16px !important;
+  padding: 14px 16px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+.raffle-wheel-awarded-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.raffle-wheel-awarded-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.raffle-wheel-awarded-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(10, 15, 29, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.raffle-wheel-awarded-rank {
+  font-size: 11px;
+  font-weight: 800;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.15);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.raffle-wheel-awarded-name {
+  font-size: 13px;
+  color: #f8fafc;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.raffle-wheel-awarded-prize {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* VIP Registration Pass & Registered View */
+.raffle-human-registered-view {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.14) 0%, rgba(15, 23, 42, 0.95) 100%) !important;
+  border: 1px solid rgba(34, 197, 94, 0.45) !important;
+  border-radius: 16px !important;
+  padding: 16px 18px !important;
+  box-shadow: 0 0 25px rgba(34, 197, 94, 0.18) !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.raffle-human-registered-name {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+}
+
+.raffle-human-registered-tag {
+  background: rgba(34, 197, 94, 0.2) !important;
+  border: 1px solid rgba(34, 197, 94, 0.4) !important;
+  color: #4ade80 !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+}
+
+.raffle-human-registered-badge {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%) !important;
+  border: 1px solid rgba(34, 197, 94, 0.4) !important;
+  border-radius: 12px !important;
+  padding: 10px 16px !important;
+  color: #f8fafc !important;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.15) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.raffle-human-registered-badge strong {
+  color: #4ade80 !important;
+}
+
+.raffle-human-input-group input {
+  background: rgba(10, 15, 29, 0.9) !important;
+  border: 1px solid rgba(56, 189, 248, 0.3) !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  padding: 12px 16px !important;
+  font-size: 14.5px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.raffle-human-input-group input:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35) !important;
+  outline: none !important;
+}
+
+.raffle-human-submit-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  border: none !important;
+  border-radius: 12px !important;
+  padding: 12px 24px !important;
+  box-shadow: 0 0 20px rgba(2, 132, 199, 0.4) !important;
+  cursor: pointer;
+  transition: all 0.2s ease !important;
+}
+
+.raffle-human-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 28px rgba(56, 189, 248, 0.6) !important;
+}
+
+/* Interactive Raffle Lobby Cards */
+.raffle-title-card {
+  background: linear-gradient(145deg, rgba(17, 24, 39, 0.95) 0%, rgba(10, 15, 29, 0.98) 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.22) !important;
+  border-radius: 18px !important;
+  padding: 20px 22px !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.raffle-title-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.6), transparent);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.raffle-title-card:hover {
+  transform: translateY(-4px) !important;
+  border-color: rgba(56, 189, 248, 0.6) !important;
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.6),
+    0 0 25px rgba(56, 189, 248, 0.25) !important;
+}
+
+.raffle-title-card:hover::before {
+  opacity: 1;
+}
+
+.raffle-title-card strong {
+  font-size: 17px !important;
+  font-weight: 800 !important;
+  color: #f8fafc !important;
+  letter-spacing: -0.2px;
+}
+
+.raffle-title-card-category {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  align-self: flex-start;
+}
+
+.raffle-card-state.open {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border: 1px solid rgba(34, 197, 94, 0.35) !important;
+  color: #4ade80 !important;
+}
+
+.raffle-card-state.closed {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  color: #fca5a5 !important;
 }
 
 /* Organizer workspace */
@@ -10529,4 +11022,271 @@ textarea:focus-visible {
   .ch-row {
     padding: 18px;
   }
+}
+
+/* ==========================================================================
+   ADMIN RAFFLE TOP BAR, DEADLINES, & PRIZE BUILDER STYLES
+   ========================================================================== */
+
+.admin-raffle-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(9, 14, 26, 0.98) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 16px;
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.admin-raffle-top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-raffle-top-bar-title {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+
+.admin-raffle-status-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 6px;
+  letter-spacing: 0.3px;
+}
+
+.admin-raffle-status-pill.active {
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.38);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.18);
+}
+
+.admin-raffle-status-pill.inactive {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.38);
+}
+
+.admin-raffle-top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-raffle-deadlines-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: -4px 0 16px;
+}
+
+.admin-raffle-deadlines-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-right: 4px;
+}
+
+.admin-raffle-deadline-chip {
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #38bdf8;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-raffle-deadline-chip:hover {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.admin-raffle-deadline-chip.clear {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.admin-raffle-deadline-chip.clear:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #f87171;
+  color: #ffffff;
+}
+
+.admin-raffle-prize-builder {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.admin-raffle-prize-builder-input {
+  background: rgba(10, 15, 29, 0.9) !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+  border-radius: 10px !important;
+  color: #ffffff !important;
+  padding: 8px 14px !important;
+  font-size: 13.5px !important;
+  flex: 1 1 240px;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-prize-builder-input:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3) !important;
+  outline: none;
+}
+
+.admin-raffle-prize-builder-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 15, 29, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 10px;
+  padding: 6px 12px;
+}
+
+.admin-raffle-prize-builder-stepper label {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-raffle-prize-builder-qty {
+  width: 50px;
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  outline: none;
+}
+
+.admin-raffle-prizes-tags-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.admin-raffle-prize-tag-card {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(10, 15, 29, 0.95) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 10px;
+  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-prize-tag-card:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.2);
+}
+
+.admin-raffle-prize-tag-name {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-raffle-prize-tag-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.admin-raffle-prize-tag-label {
+  font-size: 11px;
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.admin-raffle-prize-tag-input {
+  width: 44px;
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  font-size: 12.5px;
+  font-weight: 800;
+  text-align: center;
+  padding: 0;
+  outline: none;
+}
+
+.admin-raffle-prize-tag-remove {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.admin-raffle-prize-tag-remove:hover {
+  color: #f87171;
+}
+
+.admin-raffle-assigned-alert {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  box-shadow: 0 0 25px rgba(250, 204, 21, 0.12);
+}
+
+.admin-raffle-assigned-alert-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-raffle-assigned-alert-left strong {
+  display: block;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.admin-raffle-assigned-alert-left span {
+  font-size: 12px;
+  color: #94a3b8;
 }
