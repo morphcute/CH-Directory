@@ -66,12 +66,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
         : entries;
 
   const [soundEnabled, setSoundEnabled] = useState(false); // muted by default for browser compliance
-  const [celebratedWinner, setCelebratedWinner] = useState<{
-    name: string;
-    prize: string;
-  } | null>(null);
-  const [claimRemaining, setClaimRemaining] = useState<number | null>(null);
-  const [spinCountdown, setSpinCountdown] = useState<number>(0);
+  const [now, setNow] = useState<number>(Date.now());
 
   const rotationRef = useRef<number>(0);
   const lastTickSliceRef = useRef<number>(-1);
@@ -84,84 +79,65 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
   const isFanfarePlayingRef = useRef<boolean>(false);
   const lastShuffledAtRef = useRef<number>(0);
 
-  // Live countdown timer during spin / duck race
+  // Clock tick every 200ms to guarantee ultra-smooth and glitch-free real-time countdowns
   useEffect(() => {
-    if (!isLiveSpinning || !liveSpin?.startedAt || !liveSpin?.durationMs) {
-      setSpinCountdown(0);
-      return;
+    const timer = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Reactive Current Pick / Attendance Check (active landed candidate awaiting stream confirmation)
+  // Guaranteed to NEVER show past awarded winners or ghost picks
+  const currentPick = React.useMemo(() => {
+    if (!liveSpin || liveSpin.isAwarded || liveSpin.status !== "landed" || !liveSpin.winnerName) {
+      return null;
     }
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((liveSpin.startedAt + liveSpin.durationMs - Date.now()) / 1000));
-      setSpinCountdown(remaining);
+    // Check if entrant is already awarded in entries list
+    const isAlreadyAwarded = entries.some(
+      (e) =>
+        (e.id === liveSpin.winnerId ||
+          e.fullName.trim().toLowerCase() === liveSpin.winnerName.trim().toLowerCase()) &&
+        Boolean(e.prizeWon)
+    );
+    if (isAlreadyAwarded) return null;
+
+    return {
+      id: liveSpin.winnerId,
+      name: liveSpin.winnerName,
+      prize: liveSpin.prize || "Giveaway Prize",
     };
-    tick();
-    const interval = setInterval(tick, 200);
-    return () => clearInterval(interval);
-  }, [isLiveSpinning, liveSpin?.startedAt, liveSpin?.durationMs]);
+  }, [liveSpin, entries]);
 
-  // Synchronized claim countdown calculation
+  // Synchronized Claim Countdown in seconds (always a consistent number while pick is active)
+  const claimRemaining = React.useMemo(() => {
+    if (!currentPick || !liveSpin?.claimDeadline) {
+      return null;
+    }
+    return Math.max(0, Math.ceil((liveSpin.claimDeadline - now) / 1000));
+  }, [currentPick, liveSpin?.claimDeadline, now]);
+
+  // Spin Countdown in seconds during active drawing animation
+  const spinCountdown = React.useMemo(() => {
+    if (!isLiveSpinning || !liveSpin?.startedAt || !liveSpin?.durationMs) return 0;
+    return Math.max(0, Math.ceil((liveSpin.startedAt + liveSpin.durationMs - now) / 1000));
+  }, [isLiveSpinning, liveSpin?.startedAt, liveSpin?.durationMs, now]);
+
+  // Trigger celebration fanfare and confetti once per winning spin landing
   useEffect(() => {
-    if (!liveSpin?.claimDeadline || liveSpin.isAwarded) {
-      setClaimRemaining(null);
-      return;
-    }
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((liveSpin.claimDeadline! - Date.now()) / 1000));
-      setClaimRemaining(remaining);
-    };
-    tick();
-    const interval = setInterval(tick, 250);
-    return () => clearInterval(interval);
-  }, [liveSpin?.claimDeadline, liveSpin?.isAwarded]);
-
-  // Sync celebrated winner with liveSpin state
-  // ONLY display the current unawarded pick undergoing attendance check. Awarded winners stay in Awarded Winners!
-  useEffect(() => {
-    if (!liveSpin) {
-      return;
-    }
-
-    if (liveSpin.isAwarded || liveSpin.status === "idle") {
-      setCelebratedWinner(null);
-      return;
-    }
-
-    const now = Date.now();
-    const elapsed = liveSpin.startedAt ? now - liveSpin.startedAt : 0;
-    const duration = liveSpin.durationMs || 5000;
-    const isActivelySpinning = liveSpin.status === "spinning" && elapsed < duration;
-
-    if (isActivelySpinning) {
-      setCelebratedWinner(null);
-      return;
-    }
-
-    // Landed or elapsed >= duration:
-    if (liveSpin.winnerName && !liveSpin.isAwarded) {
-      setCelebratedWinner({
-        name: liveSpin.winnerName,
-        prize: liveSpin.prize,
-      });
-
-      const spinId = liveSpin.id;
-      // Celebrate once on landing
-      if (spinId && !celebratedEventsRef.current.has(spinId)) {
-        celebratedEventsRef.current.add(spinId);
-        if (drawMode === "duck_race" || liveSpin?.drawMode === "duck_race") {
-          playDuckFinishCelebration(!soundEnabled);
-        } else {
-          playWinFanfare();
-        }
-        startConfetti();
+    if (currentPick && liveSpin?.id && !celebratedEventsRef.current.has(liveSpin.id)) {
+      celebratedEventsRef.current.add(liveSpin.id);
+      if (drawMode === "duck_race") {
+        playDuckFinishCelebration(!soundEnabled);
+      } else {
+        playWinFanfare();
       }
+      startConfetti();
     }
-  }, [liveSpin?.id, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded, liveSpin?.startedAt, liveSpin?.durationMs]);
+  }, [currentPick, liveSpin?.id, drawMode, soundEnabled]);
 
   // Trigger refresh on award event
   useEffect(() => {
     if (liveSpin?.isAwarded && !refreshedAwardsRef.current.has(liveSpin.id)) {
       refreshedAwardsRef.current.add(liveSpin.id);
-      setCelebratedWinner(null);
       onRefresh?.();
     }
   }, [liveSpin?.id, liveSpin?.isAwarded, onRefresh]);
@@ -397,7 +373,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
     }
 
     if (drawMode === "duck_race") {
-      if (celebratedWinner || liveSpin?.status === "landed") {
+      if (currentPick || liveSpin?.status === "landed") {
         return;
       }
       let active = true;
@@ -424,12 +400,12 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
       }
       drawWheel(rotationRef.current);
     }
-  }, [displayEntrants, liveSpin?.shuffledAt, isLiveSpinning, drawMode, liveSpin?.status, Boolean(celebratedWinner)]);
+  }, [displayEntrants, liveSpin?.shuffledAt, isLiveSpinning, drawMode, liveSpin?.status, Boolean(currentPick)]);
 
   // Public Duck Race Winner Celebration Animation Loop
   const publicWinnerFrameRef = useRef<number | null>(null);
   useEffect(() => {
-    const winnerName = celebratedWinner?.name || (liveSpin?.status === "landed" && !liveSpin?.isAwarded ? liveSpin.winnerName : null);
+    const winnerName = currentPick?.name || (liveSpin?.status === "landed" && !liveSpin?.isAwarded ? liveSpin.winnerName : null);
     if (isLiveSpinning || drawMode !== "duck_race" || !winnerName) {
       if (publicWinnerFrameRef.current) {
         cancelAnimationFrame(publicWinnerFrameRef.current);
@@ -448,7 +424,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
           canvasRef.current.width,
           canvasRef.current.height,
           winnerName,
-          celebratedWinner?.prize || liveSpin?.prize
+          currentPick?.prize || liveSpin?.prize
         );
       }
       publicWinnerFrameRef.current = requestAnimationFrame(renderWinner);
@@ -462,7 +438,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
         publicWinnerFrameRef.current = null;
       }
     };
-  }, [isLiveSpinning, drawMode, celebratedWinner, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded]);
+  }, [isLiveSpinning, drawMode, currentPick, liveSpin?.status, liveSpin?.winnerName, liveSpin?.prize, liveSpin?.isAwarded]);
 
   // Synchronized Draw Animation (3D Duck Race or 3D Wheel)
   useEffect(() => {
@@ -498,12 +474,6 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
         if (!res.isFinished) {
           animationFrameRef.current = requestAnimationFrame(animateRace);
         } else {
-          if (liveSpin.winnerName && !liveSpin.isAwarded) {
-            setCelebratedWinner({
-              name: liveSpin.winnerName,
-              prize: liveSpin.prize,
-            });
-          }
           const spinId = liveSpin.id;
           if (spinId && !celebratedEventsRef.current.has(spinId)) {
             celebratedEventsRef.current.add(spinId);
@@ -571,13 +541,6 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
         rotationRef.current = finalRotation;
         drawWheel(finalRotation, 0);
 
-        // Set the current pick only after the wheel finishes landing
-        if (liveSpin.winnerName && !liveSpin.isAwarded) {
-          setCelebratedWinner({
-            name: liveSpin.winnerName,
-            prize: liveSpin.prize,
-          });
-        }
         const spinId = liveSpin.id;
         if (spinId && !celebratedEventsRef.current.has(spinId)) {
           celebratedEventsRef.current.add(spinId);
@@ -676,7 +639,6 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
       {/* Wheel / Duck Race Body */}
       <div className="raffle-wheel-body embedded">
         <div className="raffle-wheel-stage">
-          {drawMode === "wheel" && <div className="raffle-wheel-pointer" />}
           <canvas
             ref={canvasRef}
             width={drawMode === "duck_race" ? 640 : 480}
@@ -729,16 +691,16 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
                   : "Wheel is spinning at full speed. Landing soon!"}
               </p>
             </div>
-          ) : celebratedWinner ? (
+          ) : currentPick ? (
             <div className="raffle-wheel-winner-card">
               <div className="raffle-wheel-winner-badge">
                 <UserCheck size={14} />
                 <span>CURRENT PICK · ATTENDANCE CHECK</span>
               </div>
 
-              <h4 className="raffle-wheel-winner-name">{celebratedWinner.name}</h4>
+              <h4 className="raffle-wheel-winner-name">{currentPick.name}</h4>
               <p className="raffle-wheel-winner-prize">
-                Prize: <strong>{celebratedWinner.prize}</strong>
+                Prize: <strong>{currentPick.prize}</strong>
               </p>
 
               {/* Synchronized Claim Countdown Window */}
@@ -751,11 +713,9 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
                     </span>
                   </div>
                   <span className="raffle-wheel-claim-val">
-                    {claimRemaining !== null ? (
-                      `${Math.floor(claimRemaining / 60).toString().padStart(2, "0")}:${(claimRemaining % 60).toString().padStart(2, "0")}`
-                    ) : (
-                      "--:--"
-                    )}
+                    {claimRemaining !== null
+                      ? `${Math.floor(claimRemaining / 60).toString().padStart(2, "0")}:${(claimRemaining % 60).toString().padStart(2, "0")}`
+                      : "00:00"}
                   </span>
                 </div>
 

@@ -930,6 +930,18 @@ export async function POST(request: Request, context: Context) {
               entrants: remaining,
             });
           }
+        } else if (raffle) {
+          const { getLiveSpinState, broadcastLiveSpin } = await import("@/server/liveSpinStore");
+          const current = getLiveSpinState();
+          const remaining = (raffle.entries || [])
+            .filter((e: any) => !e.prizeWon)
+            .map((e: any) => ({ id: e.id, fullName: e.fullName }));
+          if (current) {
+            broadcastLiveSpin({
+              ...current,
+              entrants: remaining,
+            });
+          }
         }
         return json({ success: true, raffle });
       }

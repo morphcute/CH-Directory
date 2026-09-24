@@ -6524,15 +6524,16 @@ textarea:focus-visible {
    ========================================================================== */
 .raffle-wheel-modal {
   position: relative;
-  background: #090d16;
-  border: 1px solid rgba(250, 204, 21, 0.28);
+  background: linear-gradient(180deg, #090e1a 0%, #060a14 100%);
+  border: 1px solid rgba(250, 204, 21, 0.35);
   box-shadow:
-    0 25px 70px rgba(0, 0, 0, 0.85),
-    0 0 45px rgba(250, 204, 21, 0.12);
-  border-radius: 18px;
-  max-width: 920px;
+    0 25px 70px rgba(0, 0, 0, 0.9),
+    0 0 50px rgba(250, 204, 21, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  max-width: 960px;
   width: 95%;
-  max-height: 92vh;
+  max-height: 88vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -6540,7 +6541,12 @@ textarea:focus-visible {
 }
 
 .raffle-wheel-modal.duck-mode {
-  max-width: 1040px;
+  max-width: 1060px;
+  border-color: rgba(6, 182, 212, 0.45);
+  box-shadow:
+    0 25px 70px rgba(0, 0, 0, 0.9),
+    0 0 50px rgba(6, 182, 212, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .raffle-draw-mode-toggle {
@@ -6699,27 +6705,30 @@ textarea:focus-visible {
 }
 
 .raffle-wheel-canvas {
-  max-width: 440px;
-  max-height: 440px;
+  max-width: min(420px, 48vh);
+  max-height: min(420px, 48vh);
   width: 100%;
   height: auto;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7), 0 0 25px rgba(250, 204, 21, 0.12);
 }
 
 .raffle-duck-race-canvas {
-  max-width: 580px;
+  max-width: min(540px, 52vw);
+  max-height: 46vh;
   width: 100%;
   height: auto;
+  aspect-ratio: 640 / 420;
   border-radius: 14px;
   border: 2px solid #0284c7;
-  box-shadow: 0 14px 40px rgba(2, 132, 199, 0.25), 0 0 25px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 14px 40px rgba(2, 132, 199, 0.35), 0 0 30px rgba(0, 0, 0, 0.85);
 }
 
 @media (max-width: 500px) {
   .raffle-wheel-canvas {
-    max-width: 320px;
-    max-height: 320px;
+    max-width: 290px;
+    max-height: 290px;
   }
   .raffle-duck-race-canvas {
     max-width: 100%;
@@ -9231,8 +9240,6 @@ textarea:focus-visible {
 
 .admin-stats > div,
 .admin-panel,
-.admin-table-wrap,
-.admin-raffle-card,
 .branding-card,
 .ch-bulk-bar {
   border-color: var(--line);
@@ -9354,21 +9361,18 @@ textarea:focus-visible {
   font-size: 0.74rem;
 }
 
-.admin-table th,
-.admin-raffle-entries-table th {
+.admin-table th {
   border-bottom-color: var(--line);
   background: var(--surface-raised);
   color: var(--muted);
 }
 
-.admin-table td,
-.admin-raffle-entries-table td {
+.admin-table td {
   border-bottom-color: var(--line);
   color: #d8dbd2;
 }
 
-.admin-table strong,
-.admin-raffle-card-header h3 {
+.admin-table strong {
   color: var(--ink);
 }
 
@@ -9401,8 +9405,7 @@ textarea:focus-visible {
   color: var(--gold) !important;
 }
 
-.admin-save-bar,
-.admin-raffle-random-box {
+.admin-save-bar {
   border-color: rgba(237, 250, 121, 0.22);
   border-radius: 15px;
   background: #20231f;
@@ -9482,47 +9485,671 @@ textarea:focus-visible {
   color: var(--gold);
 }
 
-/* Live wheel keeps semantic state colors but uses the shared surface system. */
-.raffle-wheel-modal,
-.raffle-wheel-card,
-.raffle-wheel-header,
-.raffle-wheel-header.embedded,
-.raffle-wheel-body.embedded {
-  border-color: var(--line) !important;
-  background: #151714 !important;
-  box-shadow: none !important;
+/* ==========================================================================
+   ADMIN RAFFLE VIP ESPORTS DESIGN SYSTEM
+   ========================================================================== */
+.admin-raffle-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(9, 14, 26, 0.97) 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.18) !important;
+  border-radius: 18px !important;
+  padding: 22px !important;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.65),
+    0 0 30px rgba(56, 189, 248, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  position: relative;
+  overflow: hidden;
 }
 
-.raffle-wheel-title h3,
-.raffle-wheel-winner-name,
-.raffle-wheel-awarded-winner-name {
-  color: var(--ink);
+.admin-raffle-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.6), rgba(250, 204, 21, 0.5), transparent);
+  pointer-events: none;
 }
 
-.raffle-wheel-spin-btn {
-  background: var(--gold);
-  color: #181d0a;
+.admin-raffle-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-raffle-card-icon-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.admin-raffle-card-icon-badge.trophy {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.2) 0%, rgba(245, 158, 11, 0.1) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #facc15;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.25);
+}
+
+.admin-raffle-card-icon-badge.archive {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(2, 132, 199, 0.1) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.25);
+}
+
+.admin-raffle-card-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: #f8fafc !important;
+  letter-spacing: -0.2px;
+}
+
+.admin-raffle-card-header small {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+/* Toolbar search field & CSV button */
+.admin-raffle-search-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 15, 29, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 10px;
+  padding: 6px 12px;
+  color: #cbd5e1;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-search-field:focus-within {
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+  color: #ffffff;
+}
+
+.admin-raffle-search-field input {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  outline: none;
+  font-size: 12.5px;
+  min-width: 160px;
+}
+
+.admin-raffle-search-field input::placeholder {
+  color: #64748b;
+}
+
+.admin-raffle-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.25) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-raffle-export-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+}
+
+.admin-raffle-export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Manual Entry Form Bar */
+.admin-raffle-manual-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.75) 0%, rgba(10, 15, 29, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.admin-raffle-manual-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.admin-raffle-manual-input {
+  background: rgba(10, 15, 29, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 8px;
+  color: #ffffff;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  min-width: 230px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-manual-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.admin-raffle-manual-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(2, 132, 199, 0.35) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-raffle-manual-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.4);
+}
+
+.admin-raffle-manual-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pick Random Winner Command Center */
+.admin-raffle-random-box {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 14px !important;
+  padding: 16px 20px !important;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(20, 29, 47, 0.8) 100%) !important;
+  border: 1px solid rgba(250, 204, 21, 0.3) !important;
+  border-radius: 14px !important;
+  margin-bottom: 20px !important;
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(250, 204, 21, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.admin-raffle-random-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-raffle-random-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Participants Table Wrap */
+.admin-table-wrap {
+  width: 100% !important;
+  overflow-x: auto !important;
+  background: linear-gradient(180deg, rgba(13, 19, 33, 0.95) 0%, rgba(8, 12, 22, 0.98) 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.15) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.65),
+    0 0 25px rgba(56, 189, 248, 0.03),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  margin-top: 10px !important;
+  margin-bottom: 16px !important;
+}
+
+.admin-raffle-entries-table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  font-size: 13px !important;
+  text-align: left !important;
+}
+
+.admin-raffle-entries-table thead tr {
+  background: rgba(15, 23, 42, 0.98) !important;
+}
+
+.admin-raffle-entries-table thead th {
+  padding: 14px 18px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.9px !important;
+  color: #94a3b8 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  white-space: nowrap !important;
+}
+
+.admin-raffle-entries-table tbody tr {
+  transition: all 0.15s ease !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+  background: transparent;
+}
+
+.admin-raffle-entries-table tbody tr:hover {
+  background: rgba(56, 189, 248, 0.06) !important;
+}
+
+.admin-raffle-entries-table tbody tr.winner-row {
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.08) 0%, rgba(15, 23, 42, 0.2) 100%) !important;
+  box-shadow: inset 3px 0 0 #facc15 !important;
+}
+
+.admin-raffle-entries-table tbody tr.winner-row:hover {
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.12) 0%, rgba(56, 189, 248, 0.08) 100%) !important;
+}
+
+.admin-raffle-entries-table tbody td {
+  padding: 13px 18px !important;
+  vertical-align: middle !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Index Rank Pill */
+.admin-raffle-index-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  color: #64748b;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(100, 116, 139, 0.1);
+  display: inline-block;
+}
+
+.admin-raffle-entries-table tbody tr.winner-row .admin-raffle-index-pill {
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.15);
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.2);
+}
+
+.admin-raffle-entrant-name {
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+}
+
+/* Winner glowing badge */
+.admin-raffle-winner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.25) 0%, rgba(245, 158, 11, 0.15) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  color: #fde047;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.3);
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-left: 8px;
+}
+
+.admin-raffle-date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+/* Prize Container & Chips */
+.admin-raffle-prize-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-raffle-prize-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(6, 182, 212, 0.08) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+  font-weight: 700;
+  font-size: 12.5px;
+  border-radius: 8px;
+  padding: 5px 12px;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+}
+
+.admin-raffle-clear-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.7);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+}
+
+.admin-raffle-assign-select {
+  background: rgba(10, 15, 29, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-assign-select:hover,
+.admin-raffle-assign-select:focus {
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.28);
+}
+
+.admin-raffle-del-btn {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-del-btn:hover {
+  color: #ffffff;
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+  transform: scale(1.05);
+}
+
+/* Bottom Action Buttons: Move to Past Winners & Reset */
+.admin-raffle-bottom-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.admin-raffle-archive-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(2, 132, 199, 0.3) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.2);
+  transition: all 0.2s ease;
+}
+
+.admin-raffle-archive-action-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+  color: #ffffff;
+  box-shadow: 0 0 22px rgba(6, 182, 212, 0.5);
+  transform: translateY(-1px);
+}
+
+.admin-raffle-archive-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #64748b;
   box-shadow: none;
 }
 
-.raffle-wheel-spin-btn:hover:not(:disabled) {
-  background: var(--gold-hover);
-  box-shadow: none;
+.admin-raffle-reset-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.raffle-wheel-timer-chip,
-.raffle-wheel-adjust-chip,
-.raffle-wheel-tool-btn {
-  border-color: var(--line);
-  background: var(--surface-raised);
-  color: var(--muted);
+.admin-raffle-reset-action-btn:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.7);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+  transform: translateY(-1px);
 }
 
-.raffle-wheel-timer-chip.active,
-.raffle-wheel-adjust-chip.active {
-  border-color: var(--gold);
-  background: rgba(237, 250, 121, 0.09);
-  color: var(--gold);
+/* Archived Raffles History Section */
+.admin-raffle-archive-item {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 15, 29, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 14px 18px;
+  transition: all 0.2s ease;
+}
+
+.admin-raffle-archive-item:hover,
+.admin-raffle-archive-item.expanded {
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.12);
+}
+
+.admin-raffle-archive-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #facc15;
+  font-weight: 800;
+  background: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  padding: 4px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-archive-badge:hover {
+  background: rgba(250, 204, 21, 0.25);
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.3);
+}
+
+.admin-raffle-archive-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-archive-edit-btn:hover {
+  background: rgba(148, 163, 184, 0.2);
+  color: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.admin-raffle-archive-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-archive-restore-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+
+.admin-raffle-archive-del-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.06);
+  color: #f87171;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.admin-raffle-archive-del-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+}
+
+/* Interactive Wheel & Duck Race Modal Controls */
+.raffle-wheel-header-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(10, 15, 29, 0.85);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 9px;
+  padding: 4px 10px;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.1);
+}
+
+.raffle-wheel-header-select {
+  background: transparent;
+  border: none;
+  color: #fef08a;
+  font-size: 12px;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+
+.raffle-wheel-header-select option {
+  background: #0b1120;
+  color: #ffffff;
+}
+
+.raffle-wheel-header-duration {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(10, 15, 29, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 9px;
+  padding: 3px 8px;
+}
+
+.raffle-wheel-timer-presets.compact .raffle-wheel-timer-chip {
+  padding: 3px 7px;
+  font-size: 11px;
+  min-width: 32px;
+}
+
+.raffle-wheel-shuffle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.raffle-wheel-shuffle-btn:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.25);
+  color: #ffffff;
+  border-color: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.3);
+}
+
+.raffle-wheel-shuffle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.raffle-wheel-shuffle-btn.is-shuffling {
+  animation: pulseBlueDot 0.8s infinite;
 }
 
 /* Error, empty and legal pages */

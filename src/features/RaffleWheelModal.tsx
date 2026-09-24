@@ -978,6 +978,24 @@ export function RaffleWheelModal({
           </div>
 
           <div className="raffle-wheel-header-actions">
+            {/* Prize Selector in Header */}
+            <div className="raffle-wheel-header-field" title="Select prize being drawn">
+              <Gift size={14} style={{ color: "#facc15" }} />
+              <select
+                value={selectedPrize}
+                onChange={(e) => setSelectedPrize(e.target.value)}
+                disabled={isSpinning}
+                className="raffle-wheel-header-select"
+              >
+                {normalizedPrizes.map((pz, idx) => (
+                  <option key={idx} value={pz.name}>
+                    {pz.name} (x{pz.winnerCount})
+                  </option>
+                ))}
+                <option value="Custom Prize">Custom Prize…</option>
+              </select>
+            </div>
+
             {/* Draw Mode Switcher */}
             <div className="raffle-draw-mode-toggle">
               <button
@@ -996,6 +1014,24 @@ export function RaffleWheelModal({
               >
                 🦆 3D Duck Race
               </button>
+            </div>
+
+            {/* Spin / Race Duration Presets in Header */}
+            <div className="raffle-wheel-header-duration">
+              <Timer size={13} style={{ color: "#38bdf8" }} />
+              <div className="raffle-wheel-timer-presets compact">
+                {[5, 8, 10, 15, 20].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    className={`raffle-wheel-timer-chip ${spinDurationSeconds === sec ? "active" : ""}`}
+                    onClick={() => setSpinDurationSeconds(sec)}
+                    disabled={isSpinning}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
             </div>
 
             <button
@@ -1039,10 +1075,7 @@ export function RaffleWheelModal({
         <div className="raffle-wheel-body">
           {/* Stage */}
           <div className="raffle-wheel-stage">
-            {/* Top Pointer Ticker Needle for Wheel */}
-            {drawMode === "wheel" && <div className="raffle-wheel-pointer" />}
-
-            {/* Canvas Wheel or Duck Race */}
+            {/* Canvas Wheel or Duck Race (3D needle is cleanly rendered inside the canvas) */}
             <canvas
               ref={canvasRef}
               width={drawMode === "duck_race" ? 640 : 480}
@@ -1053,152 +1086,68 @@ export function RaffleWheelModal({
 
           {/* Controls & Winner Panel */}
           <div className="raffle-wheel-sidebar">
-            {/* Prize Selector */}
-            <div className="raffle-wheel-card">
-              <label className="raffle-wheel-label">
-                <Gift size={14} style={{ color: "#facc15" }} />
-                <span>Prize Being Drawn</span>
-              </label>
-              <select
-                value={selectedPrize}
-                onChange={(e) => setSelectedPrize(e.target.value)}
-                disabled={isSpinning}
-                className="raffle-wheel-select"
-              >
-                {normalizedPrizes.map((pz, idx) => (
-                  <option key={idx} value={pz.name}>
-                    {pz.name} (x{pz.winnerCount})
-                  </option>
-                ))}
-                <option value="Custom Prize">Custom Prize…</option>
-              </select>
+            {/* When drawing is idle or in progress and no winner awaiting attendance */}
+            {!winner && (
+              <div className="raffle-wheel-card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Gift size={15} style={{ color: "#facc15" }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#ffffff" }}>
+                      Drawing: <strong style={{ color: "#facc15" }}>{selectedPrize}</strong>
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 11, color: "#38bdf8", fontWeight: 700, background: "rgba(56, 189, 248, 0.12)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(56, 189, 248, 0.25)" }}>
+                    {eligibleEntrants.length} in draw
+                  </span>
+                </div>
 
-              {selectedPrize === "Custom Prize" && (
-                <input
-                  type="text"
-                  placeholder="Enter prize name"
-                  onChange={(e) => setSelectedPrize(e.target.value)}
-                  className="raffle-wheel-input"
-                  style={{ marginTop: 8 }}
-                />
-              )}
-            </div>
+                {/* Exclude past winners toggle */}
+                <div className="raffle-wheel-filter-row">
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={filterUnassigned}
+                      disabled={isSpinning}
+                      onChange={(e) => setFilterUnassigned(e.target.checked)}
+                    />
+                    <span>Exclude past winners ({entries.filter((e) => Boolean(e.prizeWon)).length} already won)</span>
+                  </label>
+                </div>
 
-            {/* Customize Spin / Race Timer / Duration */}
-            <div className="raffle-wheel-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <label className="raffle-wheel-label" style={{ margin: 0 }}>
-                  <Timer size={14} style={{ color: "#38bdf8" }} />
-                  <span>{drawMode === "duck_race" ? "Race Duration" : "Spin Duration"}</span>
-                </label>
-                <span style={{ fontSize: 12, fontWeight: 800, color: "#38bdf8" }}>
-                  {spinDurationSeconds}s
-                </span>
-              </div>
-
-              <div className="raffle-wheel-timer-presets">
-                {[5, 8, 10, 15, 20].map((sec) => (
+                {/* Draw Actions: Shuffle & Spin / Duck Race */}
+                <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginTop: 2 }}>
                   <button
-                    key={sec}
                     type="button"
-                    className={`raffle-wheel-timer-chip ${spinDurationSeconds === sec ? "active" : ""}`}
-                    onClick={() => setSpinDurationSeconds(sec)}
-                    disabled={isSpinning}
+                    className={`raffle-wheel-shuffle-btn ${isShuffling ? "is-shuffling" : ""}`}
+                    onClick={handleShuffle}
+                    disabled={isSpinning || isShuffling || eligibleEntrants.length === 0}
+                    title="Realtime shuffle participants order on the wheel"
                   >
-                    {sec}s
+                    <Shuffle size={15} />
+                    <span>{isShuffling ? "Shuffling…" : "Shuffle"}</span>
                   </button>
-                ))}
-              </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-                <input
-                  type="range"
-                  min={4}
-                  max={30}
-                  step={1}
-                  value={spinDurationSeconds}
-                  onChange={(e) => setSpinDurationSeconds(Number(e.target.value))}
-                  disabled={isSpinning}
-                  style={{ flex: 1, accentColor: "#38bdf8", cursor: "pointer" }}
-                />
-                <span style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>
-                  {spinDurationSeconds <= 6 ? "Fast" : spinDurationSeconds <= 12 ? "Balanced" : "Dramatic"}
-                </span>
-              </div>
-            </div>
-
-            {/* Customize Claim Timer Window */}
-            <div className="raffle-wheel-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <label className="raffle-wheel-label" style={{ margin: 0 }}>
-                  <Clock size={14} style={{ color: "#facc15" }} />
-                  <span>Claim Countdown Window</span>
-                </label>
-                <span style={{ fontSize: 12, fontWeight: 800, color: "#facc15" }}>
-                  {claimDurationSeconds}s
-                </span>
-              </div>
-
-              <div className="raffle-wheel-timer-presets">
-                {[15, 30, 60, 90, 120].map((sec) => (
                   <button
-                    key={sec}
                     type="button"
-                    className={`raffle-wheel-timer-chip ${claimDurationSeconds === sec ? "active" : ""}`}
-                    onClick={() => updateClaimTimer(sec)}
-                    disabled={isSpinning}
+                    className={`raffle-wheel-spin-btn ${drawMode === "duck_race" ? "duck-race" : ""}`}
+                    style={{ flex: 1 }}
+                    onClick={() => spinWheel()}
+                    disabled={isSpinning || eligibleEntrants.length === 0}
                   >
-                    {sec}s
+                    <Sparkles size={18} className={isSpinning ? "busy-spinner" : ""} />
+                    <span>
+                      {drawMode === "duck_race"
+                        ? isSpinning
+                          ? `🦆 Racing... (${liveCountdown}s)`
+                          : `🦆 Start 3D Duck Race (${spinDurationSeconds}s)`
+                        : isSpinning
+                          ? `🎡 Spinning... (${liveCountdown}s)`
+                          : `🎡 Spin 3D Wheel (${spinDurationSeconds}s)`}
+                    </span>
                   </button>
-                ))}
+                </div>
               </div>
-            </div>
-
-            {/* Filter Toggle */}
-            <div className="raffle-wheel-filter-row">
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
-                <input
-                  type="checkbox"
-                  checked={filterUnassigned}
-                  disabled={isSpinning}
-                  onChange={(e) => setFilterUnassigned(e.target.checked)}
-                />
-                <span>Exclude past winners ({entries.filter((e) => Boolean(e.prizeWon)).length} already won)</span>
-              </label>
-            </div>
-
-            {/* Draw Actions: Shuffle & Spin / Duck Race */}
-            <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-              <button
-                type="button"
-                className={`raffle-wheel-shuffle-btn ${isShuffling ? "is-shuffling" : ""}`}
-                onClick={handleShuffle}
-                disabled={isSpinning || isShuffling || eligibleEntrants.length === 0}
-                title="Realtime shuffle participants order on the wheel"
-              >
-                <Shuffle size={15} />
-                <span>{isShuffling ? "Shuffling…" : "Shuffle"}</span>
-              </button>
-
-              <button
-                type="button"
-                className={`raffle-wheel-spin-btn ${drawMode === "duck_race" ? "duck-race" : ""}`}
-                style={{ flex: 1 }}
-                onClick={() => spinWheel()}
-                disabled={isSpinning || eligibleEntrants.length === 0}
-              >
-                <Sparkles size={18} className={isSpinning ? "busy-spinner" : ""} />
-                <span>
-                  {drawMode === "duck_race"
-                    ? isSpinning
-                      ? `🦆 Racing... (${liveCountdown}s)`
-                      : `🦆 Start 3D Duck Race (${spinDurationSeconds}s)`
-                    : isSpinning
-                      ? `🎡 Spinning... (${liveCountdown}s)`
-                      : `🎡 Spin 3D Wheel (${spinDurationSeconds}s)`}
-                </span>
-              </button>
-            </div>
+            )}
 
             {/* Candidate Drawn / Attendance Verification Card */}
             {winner && (
