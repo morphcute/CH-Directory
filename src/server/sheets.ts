@@ -168,7 +168,8 @@ export async function getSpreadsheetTabs(value: string, token?: string) {
   let autoDetected = analysis.autoDetectedTab?.name || null;
 
   // Filter out guide tabs from being auto-detected if other tabs exist
-  const isGuideTab = (name: string) => /guide|instruction|rules|template|readme|uniformed/i.test(name);
+  const isGuideTab = (name: string) =>
+    /guide|instruction|rules|template|readme|uniformed|copy of/i.test(name);
   if (tabs.length > 0 && (!autoDetected || isGuideTab(autoDetected))) {
     const nonGuideTabs = tabs.filter((t) => !isGuideTab(t));
     if (nonGuideTabs.length > 0) {
@@ -342,19 +343,32 @@ export async function inspectPlayer(
   if (link) {
     try {
       const res = await safeFetch(link);
-      const html = (await res.text()).toLowerCase();
+      const rawText = await res.text();
+      const html = rawText.toLowerCase();
+      // Strip script tags to avoid false positives from Google Form internal schema strings
+      const visibleHtml = html.replace(
+        /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+        "",
+      );
       updated.resolvedFormUrl = res.url;
-      if (
-        html.includes("no longer accepting responses") ||
-        html.includes("hindi na tumatanggap ng mga tugon")
-      )
+      const isClosedUrl = res.url.toLowerCase().includes("/closedform");
+      const isClosedText =
+        visibleHtml.includes("no longer accepting responses") ||
+        visibleHtml.includes("hindi na tumatanggap ng mga tugon");
+      const hasFormTag = /<form\b/.test(html);
+
+      if (isClosedUrl || isClosedText) {
         updated.formStatus = "closed";
-      else if (
+      } else if (
         res.url.includes("docs.google.com/forms/") &&
-        /<form\b/.test(html)
-      )
+        hasFormTag
+      ) {
         updated.formStatus = "open";
-      else errors.push("Confirm registration status with the organizer.");
+      } else if (hasFormTag) {
+        updated.formStatus = "open";
+      } else {
+        errors.push("Confirm registration status with the organizer.");
+      }
     } catch (error) {
       errors.push((error as Error).message);
     }

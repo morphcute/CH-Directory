@@ -84,6 +84,9 @@ export function parseTabDate(
   year: number;
 } | null {
   if (!tabName) return null;
+  if (/copy of|guide|instruction|rules|template|readme|uniformed/i.test(tabName)) {
+    return null;
+  }
 
   // Try matching Month Name + Day + Year: e.g. "September 5, 2026" or "Sept 5 2026"
   for (let i = 0; i < 12; i++) {
@@ -125,7 +128,9 @@ export function parseTabDate(
 }
 
 /**
- * Detects tabs and marks the one matching the target or current month
+ * Detects tabs and marks the best tournament tab.
+ * Automatically detects upcoming tournaments (such as next month's tournament
+ * when the current month tournament has ended or next month tab is present in the sheet).
  */
 export function analyzeTabs(
   tabNames: string[],
@@ -133,6 +138,9 @@ export function analyzeTabs(
 ): { tabs: SheetTab[]; autoDetectedTab: SheetTab | null } {
   const currentMonthIndex = targetDate.getMonth();
   const currentYear = targetDate.getFullYear();
+
+  const isGuideTab = (name: string) =>
+    /guide|instruction|rules|template|readme|uniformed|copy of/i.test(name);
 
   const tabs: SheetTab[] = tabNames.map((name) => {
     const parsed = parseTabDate(name);
@@ -155,17 +163,66 @@ export function analyzeTabs(
     };
   });
 
-  // Find auto-detected tab: first priority is matching current month and year
-  let autoDetected = tabs.find((t) => t.isCurrentMonth) || null;
+  // Calculate tournament candidates for smart date detection
+  const nowMs = targetDate.getTime();
+  // 24 hours grace period for tournament date in PHT (UTC+8)
+  const gracePeriodMs = 24 * 60 * 60 * 1000;
 
-  // If not exact year, just match current month
-  if (!autoDetected) {
-    autoDetected = tabs.find((t) => t.monthIndex === currentMonthIndex) || null;
+  interface TournamentCandidate {
+    tab: SheetTab;
+    tournamentDate: Date;
+    sortKey: number;
+    isUpcoming: boolean;
   }
 
-  // If still none, pick the latest tab
-  if (!autoDetected && tabs.length > 0) {
-    autoDetected = tabs[tabs.length - 1];
+  const candidates: TournamentCandidate[] = [];
+
+  for (const t of tabs) {
+    if (isGuideTab(t.name)) continue;
+    const parsed = parseTabDate(t.name);
+    if (!parsed) continue;
+
+    const year = parsed.year;
+    const monthIndex = parsed.monthIndex;
+    const day =
+      parsed.day !== undefined
+        ? parsed.day
+        : new Date(year, monthIndex + 1, 0).getDate();
+    const tournamentDate = new Date(year, monthIndex, day, 23, 59, 59);
+    const sortKey = year * 10000 + (monthIndex + 1) * 100 + day;
+    const isUpcoming = tournamentDate.getTime() >= nowMs - gracePeriodMs;
+
+    candidates.push({
+      tab: t,
+      tournamentDate,
+      sortKey,
+      isUpcoming,
+    });
+  }
+
+  // Sort candidates chronologically ascending (Jan -> Feb -> ... -> Oct)
+  candidates.sort((a, b) => a.sortKey - b.sortKey);
+
+  let autoDetected: SheetTab | null = null;
+
+  // 1. Look for upcoming or ongoing tournament tab
+  const upcoming = candidates.filter((c) => c.isUpcoming);
+  if (upcoming.length > 0) {
+    // If next month tournament tab is already in the sheet (or upcoming tournament),
+    // pick the earliest upcoming tournament tab
+    autoDetected = upcoming[0].tab;
+  } else if (candidates.length > 0) {
+    // 2. If all tournament dates in the sheet are in the past, pick the latest chronological tournament
+    autoDetected = candidates[candidates.length - 1].tab;
+  } else {
+    // 3. Fallback: non-guide tabs or last element
+    const nonGuide = tabs.filter((t) => !isGuideTab(t.name));
+    autoDetected =
+      nonGuide.length > 0
+        ? nonGuide[0]
+        : tabs.length > 0
+          ? tabs[tabs.length - 1]
+          : null;
   }
 
   return { tabs, autoDetectedTab: autoDetected };
@@ -354,6 +411,13 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
 
   const startIndex = headerIndex >= 0 ? headerIndex + 1 : 0;
 
+  // Check if any row has an explicit active marker ("1", "active", "yes", "true") in Column A
+  const hasAnyExplicitActive = rows.slice(startIndex).some((r) => {
+    if (!r) return false;
+    const aVal = parseCellContent(r[colActiveIdx]).text.trim().toLowerCase();
+    return aVal === "1" || aVal === "active" || aVal === "yes" || aVal === "true";
+  });
+
   for (let i = startIndex; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.length === 0) continue;
@@ -423,12 +487,18 @@ export function transformRowsToPlayers(rows: any[][]): CHPlayer[] {
       continue;
     if (colA === "46" || (colA === "48" && !colC && !nickname)) continue;
 
-    // Check if active (1 in Col A)
-    const isActive =
-      colA === "1" ||
-      colA.toLowerCase() === "active" ||
-      colA.toLowerCase() === "yes" ||
-      colA.toLowerCase() === "true";
+    // Check if active:
+    // If sheet has explicit markers (e.g. 1 in Col A), use Col A.
+    // In preparation sheets without 1s in Col A yet, require BOTH registration form link AND tournament response sheet
+    // so the directory can accept registrations and track registered teams/slots in real-time.
+    const hasForm = Boolean(regLink || postingLink);
+    const hasResponse = Boolean(responseLink);
+    const isActive = hasAnyExplicitActive
+      ? colA === "1" ||
+        colA.toLowerCase() === "active" ||
+        colA.toLowerCase() === "yes" ||
+        colA.toLowerCase() === "true"
+      : Boolean(hasForm && hasResponse);
 
     const isCalabarzon = isCalabarzonArea(area);
     if (!nickname) {

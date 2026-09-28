@@ -469,20 +469,16 @@ export function Portal({ initialState }: { initialState: AppState }) {
                       </div>
                     </div>
                     <button
+                      type="button"
                       className={`button ${allowed ? "primary" : "outline"} ch-register`}
-                      disabled={!allowed || busy !== null}
+                      disabled={!allowed}
                       onClick={(e) => {
                         e.stopPropagation();
-                        register(p.id);
+                        setSelectedPlayer(p);
                       }}
                       aria-label={`${allowed ? "Register with" : full ? "Full slots for" : "Registration unavailable for"} ${p.chNickname}`}
                     >
-                      {busy === p.id ? (
-                        <>
-                          <LoaderCircle size={15} className="busy-spinner" />
-                          Checking…
-                        </>
-                      ) : allowed ? (
+                      {allowed ? (
                         <>
                           Register <ArrowUpRight size={16} />
                         </>

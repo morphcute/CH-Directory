@@ -13,7 +13,14 @@ export function listedPlayers(state: AppState): CHPlayer[] {
     orderMap.set(nick.toLowerCase().trim(), idx);
   });
 
-  return [...active].sort((a, b) => {
+  // Only return players that are explicitly in selectedNicknames
+  const selectedActive = active.filter((p) => {
+    const nick = (p.chNickname || "").toLowerCase().trim();
+    const id = (p.id || "").toLowerCase().trim();
+    return orderMap.has(nick) || orderMap.has(id);
+  });
+
+  return selectedActive.sort((a, b) => {
     const aNick = (a.chNickname || "").toLowerCase().trim();
     const bNick = (b.chNickname || "").toLowerCase().trim();
     const aId = (a.id || "").toLowerCase().trim();

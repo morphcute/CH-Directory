@@ -93,6 +93,7 @@ export async function GET(request: Request, context: Context) {
         adminEmail: ADMIN_EMAIL,
       });
     if (route === "app-state") {
+      void checkAndTriggerHourlySync();
       return json(await readState());
     }
     if (route === "raffle/live-spin") {

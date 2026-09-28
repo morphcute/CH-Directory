@@ -4,6 +4,7 @@ import {
   fetchTeamsFromResponseSheet,
   sheetRows,
   extractPRLCutoffFromSheet,
+  getSpreadsheetTabs,
 } from "@/server/sheets";
 import type { CHPlayer } from "@/types";
 
@@ -47,23 +48,71 @@ export async function syncSpreadsheetBackground(): Promise<{
     const { getValidGoogleAccessToken } = await import("./googleToken");
     const token = (await getValidGoogleAccessToken()) || state.googleAccessToken;
 
-    // 1. If a master spreadsheet is configured, pull the full lineup from the sheet tab!
+    // 1. If a master spreadsheet is configured, refresh tabs and detect next month's tournament!
+    let activeTabToUse = state.activeTabName;
+    let freshTabsList = state.rawTabsList || [];
+    let isNewTournamentMonth = false;
+
+    if (state.spreadsheetUrl) {
+      try {
+        const detected = await getSpreadsheetTabs(state.spreadsheetUrl, token);
+        if (Array.isArray(detected.tabs) && detected.tabs.length > 0) {
+          freshTabsList = detected.tabs;
+          if (detected.autoDetectedTab) {
+            // Check if active tab is changing to a new tournament month
+            if (
+              !state.activeTabName ||
+              detected.autoDetectedTab.trim().toLowerCase() !==
+                state.activeTabName.trim().toLowerCase()
+            ) {
+              isNewTournamentMonth = true;
+              activeTabToUse = detected.autoDetectedTab;
+              console.log(
+                `[Sync] New tournament tab detected: "${activeTabToUse}" (previous was: "${state.activeTabName}")`,
+              );
+            }
+          }
+        }
+      } catch (tabErr) {
+        console.warn("Could not check tabs from master spreadsheet:", tabErr);
+      }
+    }
+
+    // 2. Pull the lineup from the active tournament sheet tab
     if (state.spreadsheetUrl) {
       try {
         const { transformRowsToPlayers } = await import("@/utils/sheetDetector");
         const rows = await sheetRows(
           state.spreadsheetUrl,
-          state.activeTabName || undefined,
+          activeTabToUse || undefined,
           token,
         );
 
         if (Array.isArray(rows) && rows.length > 0) {
           const sheetPlayers = transformRowsToPlayers(rows);
           if (sheetPlayers.length > 0) {
-            if (basePlayers.length === 0) {
-              basePlayers = sheetPlayers;
+            if (isNewTournamentMonth || basePlayers.length === 0) {
+              // When moving to a NEW tournament month:
+              // Start fresh with the new month's lineup and links from the new sheet!
+              // Retain custom avatars and remarks from previously existing heroes
+              const avatarMap = new Map<string, string>();
+              const remarksMap = new Map<string, string>();
+              for (const ep of basePlayers) {
+                const key = ep.chNickname.toLowerCase().trim();
+                if (ep.avatarUrl) avatarMap.set(key, ep.avatarUrl);
+                if (ep.remarks) remarksMap.set(key, ep.remarks);
+              }
+
+              basePlayers = sheetPlayers.map((sp) => {
+                const key = sp.chNickname.toLowerCase().trim();
+                return {
+                  ...sp,
+                  avatarUrl: avatarMap.get(key) || sp.avatarUrl,
+                  remarks: remarksMap.get(key) || sp.remarks,
+                };
+              });
             } else {
-              // Merge sheet players with existing state (preserving manual overrides)
+              // Same tournament month: merge preserving manual overrides & existing registered teams
               const merged: CHPlayer[] = [];
               const seenNicks = new Set<string>();
 
@@ -91,7 +140,7 @@ export async function syncSpreadsheetBackground(): Promise<{
                   merged.push({
                     ...sp,
                     id: existing.id,
-                    active: existing.active !== undefined ? existing.active : sp.active,
+                    active: sp.active !== undefined ? sp.active : existing.active,
                     teamsRegistered: count,
                     registeredTeams: regTeams,
                     avatarUrl: existing.avatarUrl || sp.avatarUrl,
@@ -131,7 +180,7 @@ export async function syncSpreadsheetBackground(): Promise<{
 
     const updatedPlayers: CHPlayer[] = [];
 
-    // 2. Inspect active players with tournament response sheets in parallel chunks of 10
+    // 3. Inspect active players with tournament response sheets in parallel chunks of 10
     for (let i = 0; i < basePlayers.length; i += 10) {
       const chunk = basePlayers.slice(i, i + 10);
       const results = await Promise.all(
@@ -163,13 +212,13 @@ export async function syncSpreadsheetBackground(): Promise<{
       updatedPlayers.push(...results);
     }
 
-    // 3. Dynamically extract Player Roster Lineup (PRL) cut-off from master spreadsheet
+    // 4. Dynamically extract Player Roster Lineup (PRL) cut-off from master spreadsheet
     let dynamicPrlCutoff: string | undefined = undefined;
     if (state.spreadsheetUrl) {
       try {
         dynamicPrlCutoff = await extractPRLCutoffFromSheet(
           state.spreadsheetUrl,
-          state.rawTabsList,
+          freshTabsList.length > 0 ? freshTabsList : state.rawTabsList,
           token,
         );
       } catch (prlErr) {
@@ -178,37 +227,29 @@ export async function syncSpreadsheetBackground(): Promise<{
     }
     const finalPrlCutoff = dynamicPrlCutoff || state.prlCutoff;
 
+    const finalSelectedNicknames =
+      Array.isArray(state.selectedNicknames) && state.selectedNicknames.length > 0
+        ? state.selectedNicknames
+        : updatedPlayers.filter((p) => p.active).map((p) => p.chNickname);
+
+    const selectedSet = new Set(
+      finalSelectedNicknames.map((n) => n.toLowerCase().trim()),
+    );
+
+    // Only heroes selected by the admin appear as active in the public directory
     const finalPlayers = updatedPlayers.map((p) => ({
       ...p,
+      active: selectedSet.has(p.chNickname.toLowerCase().trim()),
       prlCutoff: finalPrlCutoff || p.prlCutoff,
     }));
 
     const now = Date.now();
-    // Preserve existing selection order if present
-    const existingOrder = state.selectedNicknames || [];
-    const activePlayers = finalPlayers.filter((p) => p.active);
-    const activeNickSet = new Set(
-      activePlayers.map((p) => p.chNickname.toLowerCase().trim()),
-    );
-
-    // Keep previously selected nicknames that remain active
-    const preservedOrder = existingOrder.filter((nick) =>
-      activeNickSet.has(nick.toLowerCase().trim()),
-    );
-    const preservedSet = new Set(
-      preservedOrder.map((n) => n.toLowerCase().trim()),
-    );
-
-    // Append newly active players not in preservedOrder
-    const newActiveNicks = activePlayers
-      .map((p) => p.chNickname)
-      .filter((nick) => !preservedSet.has(nick.toLowerCase().trim()));
-
-    const finalSelectedNicknames = [...preservedOrder, ...newActiveNicks];
 
     await saveState({
       players: finalPlayers,
       selectedNicknames: finalSelectedNicknames,
+      activeTabName: activeTabToUse,
+      rawTabsList: freshTabsList,
       lastHourlySync: now,
       prlCutoff: finalPrlCutoff,
     });
@@ -217,7 +258,7 @@ export async function syncSpreadsheetBackground(): Promise<{
       synced: true,
       count: finalPlayers.length,
       lastHourlySync: now,
-      message: `Successfully synced ${finalPlayers.length} Community Heroes`,
+      message: `Successfully synced ${finalPlayers.length} Community Heroes (${activeTabToUse || "default"})`,
     };
   } catch (error) {
     console.error("Background spreadsheet sync error:", error);
@@ -233,16 +274,24 @@ export async function syncSpreadsheetBackground(): Promise<{
 }
 
 /**
- * Checks if more than 1 hour (3600 seconds) has elapsed since the last sync.
+ * Checks if sync interval has elapsed since the last sync.
  * If so, triggers a background sync without blocking the current request.
+ * Automatically checks frequently (every 2 minutes) during active tournament preparation
+ * so that newly added registration links and response sheets appear almost in real time!
  */
 export async function checkAndTriggerHourlySync(): Promise<void> {
   try {
     const state = await readState();
     const lastSync = state.lastHourlySync || 0;
-    const oneHourMs = 60 * 60 * 1000;
+    const { isTabDatePassed } = await import("@/lib/tournaments");
+    const isPast = isTabDatePassed(state.activeTabName);
 
-    if (Date.now() - lastSync > oneHourMs && !syncInProgress) {
+    // Fast 2-minute interval (120,000 ms) during preparation or active registration,
+    // so any hero adding a Form Link or Response Sheet goes live almost immediately!
+    // Normal cadence is 15 minutes when all slots are full or idle.
+    const syncIntervalMs = 2 * 60 * 1000;
+
+    if (Date.now() - lastSync > syncIntervalMs && !syncInProgress) {
       // Fire-and-forget background sync
       void syncSpreadsheetBackground();
     }
@@ -252,19 +301,19 @@ export async function checkAndTriggerHourlySync(): Promise<void> {
 }
 
 /**
- * Starts the server-side recurring 1-hour interval for automatic sync.
+ * Starts the server-side recurring ticker for automatic sync.
  */
 export function ensureSyncSchedulerRunning(): void {
   if (intervalStarted) return;
   intervalStarted = true;
 
-  // Run initial sync check after 30 seconds from server boot
+  // Run initial sync check after 5 seconds from server boot
   setTimeout(() => {
     void checkAndTriggerHourlySync();
-  }, 30_000);
+  }, 5_000);
 
-  // Set recurring 1-hour interval (3,600,000 ms)
+  // Set recurring check every 2 minutes for fast updates
   setInterval(() => {
-    void syncSpreadsheetBackground();
-  }, 60 * 60 * 1000);
+    void checkAndTriggerHourlySync();
+  }, 2 * 60 * 1000);
 }
