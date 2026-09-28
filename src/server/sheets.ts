@@ -98,6 +98,28 @@ export async function getSpreadsheetTabs(value: string, token?: string) {
             .map((s: any) => s.properties?.title)
             .filter((t: any) => typeof t === "string" && t.trim().length > 0);
         }
+      } else if (res.status === 401) {
+        console.warn("[Google Sheets API] 401 Unauthorized in getSpreadsheetTabs. Refreshing token and retrying...");
+        const fresh = await getValidGoogleAccessToken(true);
+        if (fresh) {
+          const retryBearer = fresh.startsWith("Bearer ") ? fresh : `Bearer ${fresh}`;
+          const retryRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${id}?fields=sheets.properties(sheetId,title)`,
+            {
+              headers: { Authorization: retryBearer },
+              signal: AbortSignal.timeout(12000),
+              cache: "no-store",
+            },
+          );
+          if (retryRes.ok) {
+            const retryJson = await retryRes.json();
+            if (Array.isArray(retryJson.sheets)) {
+              tabs = retryJson.sheets
+                .map((s: any) => s.properties?.title)
+                .filter((t: any) => typeof t === "string" && t.trim().length > 0);
+            }
+          }
+        }
       } else {
         const errJson = await res.json().catch(() => ({}));
         const errMsg = errJson?.error?.message || "";
@@ -247,7 +269,7 @@ export async function sheetRows(value: string, tab?: string, token?: string) {
     }
 
     // 2. Standard values endpoint fallback
-    const res = await fetch(
+    let res = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(range)}`,
       {
         headers: { Authorization: bearer },
@@ -255,6 +277,21 @@ export async function sheetRows(value: string, tab?: string, token?: string) {
         cache: "no-store",
       },
     );
+    if (res.status === 401) {
+      console.warn("[Google Sheets API] 401 Unauthorized in sheetRows. Refreshing token and retrying...");
+      const freshToken = await getValidGoogleAccessToken(true);
+      if (freshToken) {
+        const retryBearer = freshToken.startsWith("Bearer ") ? freshToken : `Bearer ${freshToken}`;
+        res = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(range)}`,
+          {
+            headers: { Authorization: retryBearer },
+            signal: AbortSignal.timeout(12000),
+            cache: "no-store",
+          },
+        );
+      }
+    }
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       const errMsg = errJson?.error?.message || "";

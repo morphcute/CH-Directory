@@ -8,8 +8,39 @@ import {
 } from "@/server/sheets";
 import type { CHPlayer } from "@/types";
 
+export interface SyncProgress {
+  inProgress: boolean;
+  stage:
+    | "idle"
+    | "detecting_tabs"
+    | "fetching_sheet"
+    | "inspecting_heroes"
+    | "saving"
+    | "complete"
+    | "error";
+  current: number;
+  total: number;
+  currentHeroName?: string;
+  message: string;
+  startedAt?: number;
+  completedAt?: number;
+  lastHourlySync?: number;
+}
+
 let syncInProgress = false;
 let intervalStarted = false;
+
+let syncProgress: SyncProgress = {
+  inProgress: false,
+  stage: "idle",
+  current: 0,
+  total: 0,
+  message: "Idle",
+};
+
+export function getSyncProgress(): SyncProgress {
+  return { ...syncProgress };
+}
 
 /**
  * Automatically syncs response sheets and team rosters for all listed Community Heroes.
@@ -27,16 +58,33 @@ export async function syncSpreadsheetBackground(): Promise<{
       synced: false,
       count: current.players.length,
       lastHourlySync: current.lastHourlySync || 0,
-      message: "Sync already in progress",
+      message: `Sync in progress (${syncProgress.current}/${syncProgress.total || current.players.length})`,
     };
   }
 
   syncInProgress = true;
+  syncProgress = {
+    inProgress: true,
+    stage: "detecting_tabs",
+    current: 0,
+    total: 0,
+    message: "Connecting to master spreadsheet...",
+    startedAt: Date.now(),
+  };
+
   try {
     const state = await readState();
     let basePlayers = [...(state.players || [])];
 
     if (basePlayers.length === 0 && !state.spreadsheetUrl) {
+      syncProgress = {
+        inProgress: false,
+        stage: "complete",
+        current: 0,
+        total: 0,
+        message: "No players in directory and no spreadsheet configured",
+        completedAt: Date.now(),
+      };
       return {
         synced: false,
         count: 0,
@@ -80,6 +128,8 @@ export async function syncSpreadsheetBackground(): Promise<{
 
     // 2. Pull the lineup from the active tournament sheet tab
     if (state.spreadsheetUrl) {
+      syncProgress.stage = "fetching_sheet";
+      syncProgress.message = "Reading tournament roster from master sheet...";
       try {
         const { transformRowsToPlayers } = await import("@/utils/sheetDetector");
         const rows = await sheetRows(
@@ -170,6 +220,14 @@ export async function syncSpreadsheetBackground(): Promise<{
     }
 
     if (basePlayers.length === 0) {
+      syncProgress = {
+        inProgress: false,
+        stage: "complete",
+        current: 0,
+        total: 0,
+        message: "No players found in spreadsheet or directory",
+        completedAt: Date.now(),
+      };
       return {
         synced: false,
         count: 0,
@@ -180,13 +238,19 @@ export async function syncSpreadsheetBackground(): Promise<{
 
     const updatedPlayers: CHPlayer[] = [];
 
+    syncProgress.stage = "inspecting_heroes";
+    syncProgress.total = basePlayers.length;
+    syncProgress.current = 0;
+    syncProgress.message = `Inspecting Community Heroes (0/${basePlayers.length})...`;
+
+    let completedCount = 0;
     // 3. Inspect active players with tournament response sheets in parallel chunks of 10
     for (let i = 0; i < basePlayers.length; i += 10) {
       const chunk = basePlayers.slice(i, i + 10);
       const results = await Promise.all(
         chunk.map(async (player) => {
-          if (!player.active) return player;
           try {
+            if (!player.active) return player;
             // Inspect capacity and response sheet counts (and extracts registeredTeams)
             const inspected = await inspectPlayer(player, token);
 
@@ -206,6 +270,11 @@ export async function syncSpreadsheetBackground(): Promise<{
             return inspected;
           } catch {
             return player;
+          } finally {
+            completedCount++;
+            syncProgress.current = completedCount;
+            syncProgress.currentHeroName = player.chNickname || player.fullName;
+            syncProgress.message = `Inspecting Community Heroes (${completedCount}/${basePlayers.length})...`;
           }
         }),
       );
@@ -243,6 +312,9 @@ export async function syncSpreadsheetBackground(): Promise<{
       prlCutoff: finalPrlCutoff || p.prlCutoff,
     }));
 
+    syncProgress.stage = "saving";
+    syncProgress.message = "Saving updated tournament directory...";
+
     const now = Date.now();
 
     await saveState({
@@ -254,6 +326,16 @@ export async function syncSpreadsheetBackground(): Promise<{
       prlCutoff: finalPrlCutoff,
     });
 
+    syncProgress = {
+      inProgress: false,
+      stage: "complete",
+      current: finalPlayers.length,
+      total: finalPlayers.length,
+      message: `Successfully synced ${finalPlayers.length} Community Heroes (${activeTabToUse || "default"})`,
+      completedAt: now,
+      lastHourlySync: now,
+    };
+
     return {
       synced: true,
       count: finalPlayers.length,
@@ -262,6 +344,14 @@ export async function syncSpreadsheetBackground(): Promise<{
     };
   } catch (error) {
     console.error("Background spreadsheet sync error:", error);
+    syncProgress = {
+      inProgress: false,
+      stage: "error",
+      current: syncProgress.current,
+      total: syncProgress.total,
+      message: (error as Error).message || "Sync failed",
+      completedAt: Date.now(),
+    };
     return {
       synced: false,
       count: 0,
@@ -270,6 +360,9 @@ export async function syncSpreadsheetBackground(): Promise<{
     };
   } finally {
     syncInProgress = false;
+    if (syncProgress.stage !== "error") {
+      syncProgress.inProgress = false;
+    }
   }
 }
 
@@ -283,17 +376,13 @@ export async function checkAndTriggerHourlySync(): Promise<void> {
   try {
     const state = await readState();
     const lastSync = state.lastHourlySync || 0;
-    const { isTabDatePassed } = await import("@/lib/tournaments");
-    const isPast = isTabDatePassed(state.activeTabName);
+    const isEmpty = !Array.isArray(state.players) || state.players.length === 0;
 
-    // Fast 2-minute interval (120,000 ms) during preparation or active registration,
-    // so any hero adding a Form Link or Response Sheet goes live almost immediately!
-    // Normal cadence is 15 minutes when all slots are full or idle.
-    const syncIntervalMs = 2 * 60 * 1000;
+    // 30-minute interval (1,800,000 ms) to keep sheets updated while protecting database hours
+    const syncIntervalMs = 30 * 60 * 1000; // 30 minutes (1,800,000 ms)
 
-    if (Date.now() - lastSync > syncIntervalMs && !syncInProgress) {
-      // Fire-and-forget background sync
-      void syncSpreadsheetBackground();
+    if ((isEmpty || Date.now() - lastSync > syncIntervalMs) && !syncInProgress) {
+      await syncSpreadsheetBackground();
     }
   } catch {
     // Ignore error
@@ -305,15 +394,27 @@ export async function checkAndTriggerHourlySync(): Promise<void> {
  */
 export function ensureSyncSchedulerRunning(): void {
   if (intervalStarted) return;
+  if (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NODE_ENV === "test"
+  ) {
+    return;
+  }
   intervalStarted = true;
 
-  // Run initial sync check after 5 seconds from server boot
-  setTimeout(() => {
+  // Run initial sync check after 10 seconds from server boot
+  const initTimer = setTimeout(() => {
     void checkAndTriggerHourlySync();
-  }, 5_000);
+  }, 10_000);
+  if (typeof initTimer.unref === "function") {
+    initTimer.unref();
+  }
 
-  // Set recurring check every 2 minutes for fast updates
-  setInterval(() => {
+  // Set recurring check every 30 minutes (1,800,000 ms)
+  const intervalTimer = setInterval(() => {
     void checkAndTriggerHourlySync();
-  }, 2 * 60 * 1000);
+  }, 30 * 60 * 1000);
+  if (typeof intervalTimer.unref === "function") {
+    intervalTimer.unref();
+  }
 }

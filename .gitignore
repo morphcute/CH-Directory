@@ -1,7 +1,6 @@
 node_modules/
 .next/
-data/*
-!data/app-state.json
+data/
 *.tsbuildinfo
 test-results/
 playwright-report/

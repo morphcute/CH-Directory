@@ -101,6 +101,18 @@ const post = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
+interface SyncProgress {
+  inProgress: boolean;
+  stage: string;
+  current: number;
+  total: number;
+  currentHeroName?: string;
+  message: string;
+  startedAt?: number;
+  completedAt?: number;
+  lastHourlySync?: number;
+}
+
 export function Admin() {
   const [authenticated, setAuthenticated] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -109,6 +121,8 @@ export function Admin() {
     "lester.chquezonprovince@gmail.com",
   );
   const [state, setState] = useState<AppState | null>(null);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const [syncCompletedNotice, setSyncCompletedNotice] = useState<string | null>(null);
   const [tab, setTab] = useState("directory");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState("");
@@ -782,6 +796,45 @@ export function Admin() {
   }, [autoSync, authenticated, state, busy]);
 
   useEffect(() => {
+    if (!authenticated) return;
+    let timer: any;
+    let isCancelled = false;
+
+    async function pollSyncProgress() {
+      try {
+        const prog: SyncProgress = await api("/api/sync/progress");
+        if (isCancelled) return;
+        setSyncProgress(prog);
+
+        if (!prog.inProgress && busy === "sync") {
+          setBusy("");
+          const fresh = await api("/api/app-state");
+          setState(fresh);
+          const totalSynced =
+            prog.total || prog.current || fresh.players?.length || 0;
+          setSyncCompletedNotice(
+            `✓ Sync complete: All ${totalSynced} Community Heroes inspected and updated!`,
+          );
+          setTimeout(() => setSyncCompletedNotice(null), 10000);
+        }
+      } catch {
+        // ignore polling network errors
+      } finally {
+        if (!isCancelled) {
+          const delay = busy === "sync" || syncProgress?.inProgress ? 500 : 8000;
+          timer = setTimeout(pollSyncProgress, delay);
+        }
+      }
+    }
+
+    void pollSyncProgress();
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [authenticated, busy, syncProgress?.inProgress]);
+
+  useEffect(() => {
     if (tab === "raffle" && !raffleData && authenticated) {
       void loadRaffleAdmin();
     }
@@ -922,12 +975,27 @@ export function Admin() {
     });
   }
   async function syncNow() {
-    await run("sync", async () => {
+    setBusy("sync");
+    setError("");
+    setMessage("");
+    setSyncCompletedNotice(null);
+    try {
       const res = await api("/api/sync-now", post({}));
-      const updatedState = await api("/api/app-state");
-      setState(updatedState);
-      setMessage(res.message || "Spreadsheet sources successfully synced.");
-    });
+      if (res.progress) {
+        setSyncProgress(res.progress);
+      }
+      const prog: SyncProgress = await api("/api/sync/progress");
+      setSyncProgress(prog);
+      if (!prog.inProgress && res.synced && !res.started) {
+        const updatedState = await api("/api/app-state");
+        setState(updatedState);
+        setBusy("");
+        setMessage(res.message || "Spreadsheet sources successfully synced.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to trigger sync");
+      setBusy("");
+    }
   }
   async function detectTabs(urlToDetect?: string) {
     if (!state) return;
@@ -1357,6 +1425,115 @@ export function Admin() {
                 </nav>
                 <div className="admin-workspace-content">
                   {feedback}
+                  {/* Top Live Sync Banner when on tabs other than 'sources' */}
+                  {((syncProgress && syncProgress.inProgress) || busy === "sync") && tab !== "sources" && (
+                    <div
+                      style={{
+                        marginBottom: 16,
+                        padding: "12px 16px",
+                        background: "linear-gradient(135deg, #0d1527 0%, #15203b 100%)",
+                        borderRadius: 8,
+                        border: "1px solid #38bdf8",
+                        boxShadow: "0 0 16px rgba(56, 189, 248, 0.15)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <RefreshCw
+                            size={15}
+                            className="busy-spinner"
+                            style={{ color: "#38bdf8" }}
+                          />
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: "#f8fafc" }}>
+                            Background sync in progress…
+                          </span>
+                          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                            {syncProgress?.message || "Inspecting sheets & rosters…"}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            color: "#38bdf8",
+                            background: "rgba(56, 189, 248, 0.12)",
+                            padding: "3px 10px",
+                            borderRadius: 12,
+                            border: "1px solid rgba(56, 189, 248, 0.35)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <span>CH:</span>
+                          <strong style={{ color: "#facc15" }}>
+                            {syncProgress?.current || 0} / {syncProgress?.total || state?.players?.length || "…"}
+                          </strong>
+                          <span>
+                            (
+                            {syncProgress?.total && syncProgress.total > 0
+                              ? `${Math.min(100, Math.round(((syncProgress.current || 0) / syncProgress.total) * 100))}%`
+                              : "..."}
+                            )
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 6,
+                          background: "#0a0f1d",
+                          borderRadius: 4,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${
+                              syncProgress?.total && syncProgress.total > 0
+                                ? Math.min(100, Math.max(3, Math.round(((syncProgress.current || 0) / syncProgress.total) * 100)))
+                                : 10
+                            }%`,
+                            background: "linear-gradient(90deg, #2563eb, #38bdf8, #facc15)",
+                            borderRadius: 4,
+                            transition: "width 0.35s ease-in-out",
+                            boxShadow: "0 0 8px rgba(56, 189, 248, 0.6)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {syncCompletedNotice && (
+                    <div
+                      className="feedback"
+                      style={{
+                        background: "rgba(34, 197, 94, 0.12)",
+                        borderColor: "rgba(34, 197, 94, 0.4)",
+                        color: "#86efac",
+                        marginBottom: 14,
+                        padding: "10px 14px",
+                        borderRadius: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      {syncCompletedNotice}
+                    </div>
+                  )}
                   <fieldset
                     disabled={!!busy}
                     style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
@@ -1886,19 +2063,137 @@ export function Admin() {
                             <button
                               className="button primary"
                               onClick={syncNow}
-                              disabled={!!busy}
+                              disabled={!!busy || (syncProgress?.inProgress ?? false)}
                             >
                               <RefreshCw
                                 size={15}
                                 className={
-                                  busy === "sync" ? "busy-spinner" : ""
+                                  busy === "sync" || syncProgress?.inProgress ? "busy-spinner" : ""
                                 }
                               />
-                              {busy === "sync"
-                                ? "Syncing sheets…"
+                              {syncProgress?.inProgress || busy === "sync"
+                                ? `Syncing sheets (${syncProgress?.current || 0}/${syncProgress?.total || state?.players?.length || "…"})`
                                 : "Sync & check all sheets now"}
                             </button>
                           </div>
+
+                          {((syncProgress && syncProgress.inProgress) || busy === "sync") && (
+                            <div
+                              style={{
+                                marginTop: 14,
+                                marginBottom: 10,
+                                padding: "16px 18px",
+                                background: "linear-gradient(135deg, #0d1527 0%, #15203b 100%)",
+                                borderRadius: 10,
+                                border: "1px solid #38bdf8",
+                                boxShadow: "0 0 20px rgba(56, 189, 248, 0.18)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  marginBottom: 10,
+                                  flexWrap: "wrap",
+                                  gap: 8,
+                                }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <RefreshCw size={16} className="busy-spinner" style={{ color: "#38bdf8" }} />
+                                  <strong style={{ color: "#f8fafc", fontSize: "14px", fontWeight: 700 }}>
+                                    Syncing Community Heroes Roster
+                                  </strong>
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    background: "rgba(56, 189, 248, 0.15)",
+                                    border: "1px solid rgba(56, 189, 248, 0.4)",
+                                    padding: "4px 12px",
+                                    borderRadius: 20,
+                                    fontWeight: 700,
+                                    color: "#38bdf8",
+                                    fontSize: "13px",
+                                    letterSpacing: "0.5px",
+                                  }}
+                                >
+                                  <span>CH Count:</span>
+                                  <span style={{ color: "#facc15", fontSize: "14px", fontWeight: 800 }}>
+                                    {syncProgress?.current || 0} / {syncProgress?.total || state?.players?.length || "…"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* The progress bar track */}
+                              <div
+                                style={{
+                                  width: "100%",
+                                  height: 12,
+                                  background: "#0a0f1d",
+                                  borderRadius: 8,
+                                  overflow: "hidden",
+                                  position: "relative",
+                                  border: "1px solid #1e293b",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: "100%",
+                                    width: `${
+                                      syncProgress?.total && syncProgress.total > 0
+                                        ? Math.min(100, Math.max(3, Math.round(((syncProgress.current || 0) / syncProgress.total) * 100)))
+                                        : 8
+                                    }%`,
+                                    background: "linear-gradient(90deg, #2563eb, #38bdf8, #facc15)",
+                                    borderRadius: 8,
+                                    transition: "width 0.35s ease-in-out",
+                                    boxShadow: "0 0 14px rgba(56, 189, 248, 0.65)",
+                                  }}
+                                />
+                              </div>
+
+                              {/* Stage info and percentage */}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  marginTop: 8,
+                                  fontSize: "12px",
+                                  color: "#94a3b8",
+                                  flexWrap: "wrap",
+                                  gap: 6,
+                                }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                  <span>
+                                    {syncProgress?.message || "Inspecting response sheets and capacity…"}
+                                  </span>
+                                  {syncProgress?.currentHeroName && (
+                                    <span
+                                      style={{
+                                        color: "#e2e8f0",
+                                        fontWeight: 600,
+                                        background: "rgba(255, 255, 255, 0.08)",
+                                        padding: "1px 6px",
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      {syncProgress.currentHeroName}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontWeight: 700, color: "#f8fafc" }}>
+                                  {syncProgress?.total && syncProgress.total > 0
+                                    ? `${Math.min(100, Math.round(((syncProgress.current || 0) / syncProgress.total) * 100))}%`
+                                    : "..."}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           <div
                             className="filter-hint"
                             style={{
@@ -1914,11 +2209,38 @@ export function Admin() {
                           >
                             ✓{" "}
                             <strong style={{ color: "#facc15" }}>
-                              Automatic 1-hour background sync active:
+                              Automatic 30-minute background sync active:
                             </strong>{" "}
                             The server automatically syncs team counts and
-                            rosters from your Google Sheets every hour, even
+                            rosters from your Google Sheets every 30 minutes, even
                             when you close this window or sign out.
+                            {state?.lastHourlySync ? (
+                              <div
+                                style={{
+                                  marginTop: 6,
+                                  color: "#38bdf8",
+                                  fontSize: "11px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <span>Last background sync:</span>
+                                <strong style={{ color: "#f1f5f9" }}>
+                                  {new Date(state.lastHourlySync).toLocaleTimeString("en-US", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  })}
+                                </strong>
+                                <span>
+                                  ({new Date(state.lastHourlySync).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                  })})
+                                </span>
+                              </div>
+                            ) : null}
                           </div>
                         </details>
                       </section>

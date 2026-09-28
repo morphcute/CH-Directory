@@ -2,14 +2,24 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { readDbState, writeDbState, incrementPageViewsDb } from "@/server/db";
+import {
+  DEFAULT_REFRESH_TOKEN,
+  DEFAULT_ADMIN_EMAIL,
+} from "./googleConstants";
 import type { AppState } from "@/types";
+
+export const DEFAULT_SPREADSHEET_URL =
+  process.env.SPREADSHEET_URL ||
+  "https://docs.google.com/spreadsheets/d/1HUANmtnLjlGiNjyiYs4Dgp5rmm_71oH2qFuXMeZXkZw/edit?pli=1&gid=0#gid=0";
 
 export const defaultState: AppState = {
   players: [],
   selectedNicknames: [],
   activeTabName: "",
-  spreadsheetUrl: "",
+  spreadsheetUrl: DEFAULT_SPREADSHEET_URL,
   rawTabsList: [],
+  googleConnectedEmail: DEFAULT_ADMIN_EMAIL,
+  googleRefreshToken: DEFAULT_REFRESH_TOKEN,
 };
 
 function statePath() {
@@ -74,11 +84,20 @@ export async function readState(): Promise<AppState> {
   // 1. Try Neon Database first
   try {
     const dbState = await readDbState();
-    if (dbState && Array.isArray(dbState.players)) {
+    if (dbState && Array.isArray(dbState.players) && dbState.players.length > 0) {
       const normalized = normalizePlayerCounts(dbState.players);
       const stateObj = {
         ...defaultState,
         ...dbState,
+        googleRefreshToken:
+          dbState.googleRefreshToken ||
+          process.env.GOOGLE_REFRESH_TOKEN ||
+          DEFAULT_REFRESH_TOKEN,
+        googleConnectedEmail:
+          dbState.googleConnectedEmail ||
+          process.env.ADMIN_EMAIL ||
+          DEFAULT_ADMIN_EMAIL,
+        spreadsheetUrl: dbState.spreadsheetUrl || DEFAULT_SPREADSHEET_URL,
         players: orderPlayersBySelection(normalized, dbState.selectedNicknames),
       };
       if (inMemoryPageViews !== null) {
@@ -93,28 +112,41 @@ export async function readState(): Promise<AppState> {
   // 2. Fallback to file storage
   try {
     const file = statePath();
-    let content: string;
+    let content = "";
     try {
       content = await readFile(file, "utf8");
     } catch {
       const bundled = path.join(process.cwd(), "data", "app-state.json");
-      content = await readFile(bundled, "utf8");
+      try {
+        content = await readFile(bundled, "utf8");
+      } catch {
+        return defaultState;
+      }
     }
+    if (!content.trim()) return defaultState;
     const data = JSON.parse(content);
-    if (!Array.isArray(data.players)) throw new Error("Invalid directory data");
+    if (!Array.isArray(data.players)) return defaultState;
     const normalized = normalizePlayerCounts(data.players);
     const stateObj = {
       ...defaultState,
       ...data,
+      googleRefreshToken:
+        data.googleRefreshToken ||
+        process.env.GOOGLE_REFRESH_TOKEN ||
+        DEFAULT_REFRESH_TOKEN,
+      googleConnectedEmail:
+        data.googleConnectedEmail ||
+        process.env.ADMIN_EMAIL ||
+        DEFAULT_ADMIN_EMAIL,
+      spreadsheetUrl: data.spreadsheetUrl || DEFAULT_SPREADSHEET_URL,
       players: orderPlayersBySelection(normalized, data.selectedNicknames),
     };
     if (inMemoryPageViews !== null) {
       stateObj.pageViews = Math.max(stateObj.pageViews || 0, inMemoryPageViews);
     }
     return stateObj;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return defaultState;
-    throw error;
+  } catch {
+    return defaultState;
   }
 }
 
@@ -130,6 +162,20 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
     const state: AppState = {
       ...currentState,
       ...update,
+      googleRefreshToken:
+        update.googleRefreshToken ||
+        currentState.googleRefreshToken ||
+        process.env.GOOGLE_REFRESH_TOKEN ||
+        DEFAULT_REFRESH_TOKEN,
+      googleConnectedEmail:
+        update.googleConnectedEmail ||
+        currentState.googleConnectedEmail ||
+        process.env.ADMIN_EMAIL ||
+        DEFAULT_ADMIN_EMAIL,
+      spreadsheetUrl:
+        update.spreadsheetUrl ||
+        currentState.spreadsheetUrl ||
+        DEFAULT_SPREADSHEET_URL,
       players: orderedPlayers,
       selectedNicknames: finalSelectedNicknames,
       lastUpdated: Date.now(),
@@ -146,7 +192,7 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
       // Non-critical if Neon is temporarily unreachable
     }
 
-    // 2. Backup to local file (sanitize tokens so secrets never leak to disk or git)
+    // 2. Backup to runtime file (e.g. /tmp/app-state.json on Vercel)
     try {
       const file = statePath();
       await mkdir(path.dirname(file), { recursive: true });
@@ -175,7 +221,7 @@ export async function incrementPageViews(): Promise<number> {
   const nextViews = inMemoryPageViews;
 
   // Compute Optimization: Do not execute SQL writes to Neon on page views!
-  // Update local file storage without waking Neon database.
+  // Update runtime file storage without waking Neon database.
   try {
     const file = statePath();
     let data: any = {};
@@ -184,8 +230,8 @@ export async function incrementPageViews(): Promise<number> {
       data = JSON.parse(content);
     } catch {
       const bundled = path.join(process.cwd(), "data", "app-state.json");
-      const content = await readFile(bundled, "utf8");
-      data = JSON.parse(content);
+      const content = await readFile(bundled, "utf8").catch(() => "{}");
+      data = JSON.parse(content || "{}");
     }
     data.pageViews = nextViews;
     await writeFile(file, JSON.stringify(data, null, 2), "utf8");

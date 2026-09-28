@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { readState, saveState, incrementPageViews } from "@/server/store";
 import {
   authConfigured,
@@ -22,8 +22,8 @@ import { canRegister, listedPlayers, registrationUrl } from "@/lib/tournaments";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Background sync is available via Organizer 'Sync Now' button or Vercel Cron (/api/cron/sync)
-// Do not start continuous 24/7 intervals to protect Neon DB free tier compute hours
+// Start recurring background sync timer (checks every 30 minutes)
+ensureSyncSchedulerRunning();
 
 type Context = { params: Promise<{ path: string[] }> };
 const attempts = new Map<string, { count: number; reset: number }>();
@@ -93,8 +93,14 @@ export async function GET(request: Request, context: Context) {
         adminEmail: ADMIN_EMAIL,
       });
     if (route === "app-state") {
-      void checkAndTriggerHourlySync();
+      after(async () => {
+        await checkAndTriggerHourlySync();
+      });
       return json(await readState());
+    }
+    if (route === "sync/progress" || route === "sync-progress") {
+      const { getSyncProgress } = await import("@/server/sync");
+      return json(getSyncProgress());
     }
     if (route === "raffle/live-spin") {
       const { getLiveSpinState, getActiveDrawMode } = await import("@/server/liveSpinStore");
@@ -302,7 +308,9 @@ export async function GET(request: Request, context: Context) {
       return json({ url: registrationUrl(player) });
     }
     if (route === "app-state/sync") {
-      void checkAndTriggerHourlySync();
+      after(async () => {
+        await checkAndTriggerHourlySync();
+      });
       const state = await readState();
       return json({
         lastUpdated: state.lastUpdated || 0,
@@ -877,7 +885,35 @@ export async function POST(request: Request, context: Context) {
       return json({ players, timestamp: new Date().toISOString() });
     }
     if (route === "sync-now") {
-      return json(await syncSpreadsheetBackground());
+      const { getSyncProgress, syncSpreadsheetBackground } = await import("@/server/sync");
+      const current = getSyncProgress();
+      if (current.inProgress) {
+        return json({
+          synced: false,
+          inProgress: true,
+          current: current.current,
+          total: current.total,
+          message: `Sync already in progress (${current.current}/${current.total})`,
+        });
+      }
+      const syncPromise = syncSpreadsheetBackground();
+      try {
+        after(async () => {
+          await syncPromise;
+        });
+      } catch {
+        // Fallback for non-serverless test runners
+      }
+      await new Promise((r) => setTimeout(r, 200));
+      const freshProgress = getSyncProgress();
+      return json({
+        synced: true,
+        started: true,
+        inProgress: true,
+        current: freshProgress.current,
+        total: freshProgress.total,
+        message: "Spreadsheet sync started",
+      });
     }
     if (route === "raffle/admin") {
       const body = (await request.json()) as any;
