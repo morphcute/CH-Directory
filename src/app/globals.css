@@ -7833,6 +7833,99 @@ textarea:focus-visible {
 }
 
 /* ==========================================================================
+   RAFFLE LIVE DRAW COUNTDOWN CARD (Displayed before cut-off date)
+   ========================================================================== */
+.raffle-countdown-card {
+  background: radial-gradient(circle at top center, rgba(56, 189, 248, 0.08) 0%, rgba(17, 23, 36, 0.98) 70%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 14px;
+  padding: 24px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.raffle-countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  margin-bottom: 12px;
+}
+
+.raffle-countdown-title {
+  font-size: 19px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px;
+}
+
+.raffle-countdown-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  max-width: 560px;
+  margin: 0 auto 20px;
+  line-height: 1.5;
+}
+
+.raffle-countdown-grid {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.raffle-countdown-box {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 10px;
+  padding: 10px 16px;
+  min-width: 72px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.raffle-countdown-val {
+  font-size: 26px;
+  font-weight: 800;
+  color: #38bdf8;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  font-family: monospace, var(--font-body);
+}
+
+.raffle-countdown-lbl {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.raffle-countdown-footer {
+  font-size: 12px;
+  color: #38bdf8;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(56, 189, 248, 0.08);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid rgba(56, 189, 248, 0.15);
+}
+
+/* ==========================================================================
    CH DIRECTORY — PREMIUM COMMUNITY REDESIGN
    Presentation-only overrides. Existing application behavior remains intact.
    ========================================================================== */
