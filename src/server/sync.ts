@@ -38,8 +38,55 @@ let syncProgress: SyncProgress = {
   message: "Idle",
 };
 
+const STALE_LOCK_MS = 40_000;
+
 export function getSyncProgress(): SyncProgress {
+  if (
+    syncProgress.inProgress &&
+    syncProgress.startedAt &&
+    Date.now() - syncProgress.startedAt > STALE_LOCK_MS
+  ) {
+    syncProgress.inProgress = false;
+    syncProgress.stage = "idle";
+    syncProgress.message = "Idle";
+    syncInProgress = false;
+  }
   return { ...syncProgress };
+}
+
+export function forceResetSyncLock(): void {
+  syncInProgress = false;
+  syncProgress = {
+    inProgress: false,
+    stage: "idle",
+    current: 0,
+    total: 0,
+    message: "Sync lock reset by organizer",
+    completedAt: Date.now(),
+  };
+}
+
+async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let currentIndex = 0;
+
+  async function worker() {
+    while (currentIndex < items.length) {
+      const idx = currentIndex++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
 }
 
 /**
@@ -53,13 +100,18 @@ export async function syncSpreadsheetBackground(): Promise<{
   message: string;
 }> {
   if (syncInProgress) {
-    const current = await readState();
-    return {
-      synced: false,
-      count: current.players.length,
-      lastHourlySync: current.lastHourlySync || 0,
-      message: `Sync in progress (${syncProgress.current}/${syncProgress.total || current.players.length})`,
-    };
+    if (syncProgress.startedAt && Date.now() - syncProgress.startedAt > STALE_LOCK_MS) {
+      console.warn("[Sync] Stale sync lock detected (>40s). Auto-recovering lock.");
+      syncInProgress = false;
+    } else {
+      const current = await readState();
+      return {
+        synced: false,
+        count: current.players.length,
+        lastHourlySync: current.lastHourlySync || 0,
+        message: `Sync in progress (${syncProgress.current}/${syncProgress.total || current.players.length})`,
+      };
+    }
   }
 
   syncInProgress = true;
@@ -136,6 +188,7 @@ export async function syncSpreadsheetBackground(): Promise<{
           state.spreadsheetUrl,
           activeTabToUse || undefined,
           token,
+          true,
         );
 
         if (Array.isArray(rows) && rows.length > 0) {
@@ -244,42 +297,79 @@ export async function syncSpreadsheetBackground(): Promise<{
     syncProgress.message = `Inspecting Community Heroes (0/${basePlayers.length})...`;
 
     let completedCount = 0;
-    // 3. Inspect active players with tournament response sheets in parallel chunks of 10
-    for (let i = 0; i < basePlayers.length; i += 10) {
-      const chunk = basePlayers.slice(i, i + 10);
-      const results = await Promise.all(
-        chunk.map(async (player) => {
-          try {
-            if (!player.active) return player;
-            // Inspect capacity and response sheet counts (and extracts registeredTeams)
-            const inspected = await inspectPlayer(player, token);
+    // 3. Inspect active players with tournament response sheets in parallel
+    const selectedNicks = new Set(
+      (state.selectedNicknames || []).map((n) => n.toLowerCase().trim()),
+    );
+    const hasSelection = selectedNicks.size > 0;
 
-            // Mark status accurately based on actual registered slots vs max teams
-            const regCount =
-              Array.isArray(inspected.registeredTeams) && inspected.registeredTeams.length > 0
-                ? inspected.registeredTeams.length
-                : inspected.teamsRegistered;
-            inspected.teamsRegistered = regCount;
-            const max = inspected.maxTeams || 16;
-            if (inspected.teamsRegistered >= max) {
-              inspected.formStatus = "full";
-            } else if (inspected.formStatus !== "closed") {
-              inspected.formStatus = "open";
-            }
-
-            return inspected;
-          } catch {
-            return player;
-          } finally {
-            completedCount++;
-            syncProgress.current = completedCount;
-            syncProgress.currentHeroName = player.chNickname || player.fullName;
-            syncProgress.message = `Inspecting Community Heroes (${completedCount}/${basePlayers.length})...`;
-          }
-        }),
+    const needsInspection = (p: CHPlayer) => {
+      const isSelected = hasSelection
+        ? selectedNicks.has((p.chNickname || "").toLowerCase().trim())
+        : p.active;
+      const hasLink = Boolean(
+        p.tournamentResponseSheet ||
+          p.registrationFormLink ||
+          p.tournamentPostingLink,
       );
-      updatedPlayers.push(...results);
-    }
+      
+      // If syncOnlyListed is explicitly false, it syncs ALL players with a link.
+      // Otherwise, it only syncs the active/listed ones.
+      if (state.syncOnlyListed === false) {
+        return hasLink;
+      }
+      return isSelected && hasLink;
+    };
+
+    const results = await mapConcurrent(
+      basePlayers,
+      3,
+      async (player) => {
+        if (!needsInspection(player)) {
+          completedCount++;
+          syncProgress.current = completedCount;
+          return player;
+        }
+
+        try {
+          // 25-second timeout per hero with concurrency limiter so sheets are reliably read
+          const inspected = await Promise.race([
+            inspectPlayer(player, token),
+            new Promise<CHPlayer>((resolve) =>
+              setTimeout(() => {
+                resolve({
+                  ...player,
+                  formStatusDetail: "Inspection timed out (taking longer than 25s)",
+                });
+              }, 25000),
+            ),
+          ]);
+
+          const regCount =
+            Array.isArray(inspected.registeredTeams) &&
+            inspected.registeredTeams.length > 0
+              ? inspected.registeredTeams.length
+              : inspected.teamsRegistered;
+          inspected.teamsRegistered = regCount;
+          const max = inspected.maxTeams || 16;
+          if (inspected.teamsRegistered >= max) {
+            inspected.formStatus = "full";
+          } else if (inspected.formStatus !== "closed") {
+            inspected.formStatus = "open";
+          }
+
+          return inspected;
+        } catch {
+          return player;
+        } finally {
+          completedCount++;
+          syncProgress.current = completedCount;
+          syncProgress.currentHeroName = player.chNickname || player.fullName;
+          syncProgress.message = `Inspecting Community Heroes (${completedCount}/${basePlayers.length})...`;
+        }
+      },
+    );
+    updatedPlayers.push(...results);
 
     // 4. Dynamically extract Player Roster Lineup (PRL) cut-off from master spreadsheet
     let dynamicPrlCutoff: string | undefined = undefined;

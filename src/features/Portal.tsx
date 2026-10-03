@@ -103,7 +103,7 @@ export function Portal({ initialState }: { initialState: AppState }) {
     let isMounted = true;
     const trackView = async () => {
       try {
-        const COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes cooldown
+        const COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes cooldown
         const now = Date.now();
         const lastRecorded = localStorage.getItem("ch_pv_time");
         const isCooledDown =

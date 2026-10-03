@@ -196,7 +196,7 @@ export function RafflePage({
   useEffect(() => {
     const trackView = async () => {
       try {
-        const cooldownMs = 30 * 60 * 1000;
+        const cooldownMs = 15 * 60 * 1000;
         const now = Date.now();
         const lastRecorded = localStorage.getItem("ch_pv_time");
         if (lastRecorded && now - Number(lastRecorded) < cooldownMs) return;

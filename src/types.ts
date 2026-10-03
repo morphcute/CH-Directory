@@ -40,6 +40,7 @@ export interface AppState {
   bannerUrl?: string;
   pageViews?: number;
   prlCutoff?: string;
+  syncOnlyListed?: boolean;
 }
 
 export interface SheetTab {

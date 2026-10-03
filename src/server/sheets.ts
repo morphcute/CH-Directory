@@ -207,7 +207,12 @@ export async function getSpreadsheetTabs(value: string, token?: string) {
   };
 }
 
-export async function sheetRows(value: string, tab?: string, token?: string) {
+export async function sheetRows(
+  value: string,
+  tab?: string,
+  token?: string,
+  autoDetectTab = false,
+) {
   const id = extractSpreadsheetId(value);
   if (!id || !/^[\w-]+$/.test(id))
     throw new Error("Enter a valid Google Sheets URL.");
@@ -220,8 +225,8 @@ export async function sheetRows(value: string, tab?: string, token?: string) {
     } catch {}
   }
 
-  // If no tab was specified or tab is empty, auto-detect the directory tab!
-  if (!activeTab) {
+  // Only auto-detect tournament month tab if explicitly requested (e.g. for master spreadsheet)
+  if (!activeTab && autoDetectTab) {
     try {
       const detected = await getSpreadsheetTabs(value, authToken);
       if (detected.autoDetectedTab) {
@@ -293,6 +298,19 @@ export async function sheetRows(value: string, tab?: string, token?: string) {
       }
     }
     if (!res.ok) {
+      console.warn(`[Google Sheets API] HTTP ${res.status} in sheetRows for sheet ${id}. Attempting public CSV export fallback...`);
+      try {
+        const fallbackRes = await safeFetch(
+          `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv${activeTab ? `&sheet=${encodeURIComponent(activeTab)}` : ""}`,
+        );
+        const content = await fallbackRes.text();
+        if (!content.trimStart().startsWith("<")) {
+          return parseCsvOrTsv(content);
+        }
+      } catch {
+        // Fallback failed, continue to standard error handling
+      }
+
       const errJson = await res.json().catch(() => ({}));
       const errMsg = errJson?.error?.message || "";
       if (
@@ -319,6 +337,49 @@ export async function sheetRows(value: string, tab?: string, token?: string) {
     );
   return parseCsvOrTsv(content);
 }
+
+export function findTeamColumnIndex(header: unknown[]): number {
+  const strHeader = header.map((c) => String(c || "").trim());
+
+  // 1. Strong pattern match: "Team Name", "Pangalan ng Team", "Squad Name", etc.
+  // Exclude columns that are player, captain, ign, uid, etc.
+  const isPlayerOrCaptain = (h: string) =>
+    /captain|leader|member|player|ign|uid|server|age|contact|phone|facebook|fb|email|address|link/i.test(h);
+
+  let idx = strHeader.findIndex((col) => {
+    if (isPlayerOrCaptain(col)) return false;
+    return /team\s*name|pangalan\s*ng\s*team|squad\s*name|name\s*of\s*team|clan\s*name|koponan\s*name/i.test(col);
+  });
+
+  // 2. Second pass: standalone team / squad / clan / koponan word without player/captain
+  if (idx === -1) {
+    idx = strHeader.findIndex((col) => {
+      if (isPlayerOrCaptain(col)) return false;
+      return /(?:^|\b)(?:team|squad|koponan|clan)(?:\b|$)/i.test(col);
+    });
+  }
+
+  // 3. Third pass: anything with team / squad / koponan even if "name" is somewhere else
+  if (idx === -1) {
+    idx = strHeader.findIndex((col) => {
+      if (/email|timestamp|phone|age|uid|server|ign/i.test(col)) return false;
+      return /team|squad|koponan/i.test(col) && !/captain/i.test(col);
+    });
+  }
+
+  // 4. Fallback: skip timestamp, email, contact info, id, fb
+  if (idx === -1) {
+    const ignore = /timestamp|date|time|email|phone|contact|number|fb|facebook|id|uid/i;
+    idx = strHeader.findIndex((col) => !ignore.test(col));
+  }
+
+  if (idx === -1 || (idx === 0 && strHeader.length > 1)) {
+    idx = 1;
+  }
+
+  return idx;
+}
+
 export async function inspectPlayer(
   player: CHPlayer,
   token?: string,
@@ -339,17 +400,7 @@ export async function inspectPlayer(
       updated.resolvedResponseSheetUrl = url;
 
       if (rows.length > 1) {
-        const header = (rows[0] as unknown[]).map((c: unknown) => String(c || "").trim());
-        let teamColIdx = header.findIndex((col: string) =>
-          /team\s*name|pangalan\s*ng\s*team|squad\s*name|name\s*of\s*team|team|squad|koponan/i.test(col),
-        );
-        if (teamColIdx === -1) {
-          const ignore = /timestamp|date|time|email|phone|contact|number|fb|facebook|id/i;
-          teamColIdx = header.findIndex((col: string) => !ignore.test(col));
-        }
-        if (teamColIdx === -1 || (teamColIdx === 0 && header.length > 1)) {
-          teamColIdx = 1;
-        }
+        const teamColIdx = findTeamColumnIndex(rows[0] as unknown[]);
         const extracted: string[] = [];
         for (let r = 1; r < rows.length; r++) {
           const row = rows[r] as unknown[];
@@ -363,6 +414,7 @@ export async function inspectPlayer(
           updated.registeredTeams = extracted;
           updated.teamsRegistered = extracted.length;
         } else if (responseRowCount > 0) {
+          updated.registeredTeams = [];
           updated.teamsRegistered = responseRowCount;
         } else {
           updated.registeredTeams = [];
@@ -439,19 +491,7 @@ export async function fetchTeamsFromResponseSheet(
   const rows = (await sheetRows(url, undefined, token)) as unknown[][];
   if (!rows || rows.length <= 1) return [];
 
-  const header = (rows[0] as unknown[]).map((c: unknown) => String(c || "").trim());
-  let teamColIdx = header.findIndex((col: string) =>
-    /team\s*name|pangalan\s*ng\s*team|squad\s*name|name\s*of\s*team|team|squad|koponan/i.test(col),
-  );
-
-  if (teamColIdx === -1) {
-    const ignore = /timestamp|date|time|email|phone|contact|number|fb|facebook|id/i;
-    teamColIdx = header.findIndex((col: string) => !ignore.test(col));
-  }
-
-  if (teamColIdx === -1 || (teamColIdx === 0 && header.length > 1)) {
-    teamColIdx = 1;
-  }
+  const teamColIdx = findTeamColumnIndex(rows[0] as unknown[]);
 
   const teams: string[] = [];
   for (let r = 1; r < rows.length; r++) {

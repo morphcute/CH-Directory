@@ -213,31 +213,25 @@ export function saveState(update: Partial<AppState>): Promise<AppState> {
 let inMemoryPageViews: number | null = null;
 
 export async function incrementPageViews(): Promise<number> {
-  if (inMemoryPageViews === null) {
-    const current = await readState();
-    inMemoryPageViews = current.pageViews || 0;
-  }
-  inMemoryPageViews += 1;
-  const nextViews = inMemoryPageViews;
-
-  // Compute Optimization: Do not execute SQL writes to Neon on page views!
-  // Update runtime file storage without waking Neon database.
   try {
-    const file = statePath();
-    let data: any = {};
-    try {
-      const content = await readFile(file, "utf8");
-      data = JSON.parse(content);
-    } catch {
-      const bundled = path.join(process.cwd(), "data", "app-state.json");
-      const content = await readFile(bundled, "utf8").catch(() => "{}");
-      data = JSON.parse(content || "{}");
+    const dbViews = await incrementPageViewsDb();
+    if (typeof dbViews === "number") {
+      inMemoryPageViews = dbViews;
+      try {
+        const file = statePath();
+        const content = await readFile(file, "utf8").catch(() => "{}");
+        const data = JSON.parse(content || "{}");
+        data.pageViews = dbViews;
+        await writeFile(file, JSON.stringify(data, null, 2), "utf8");
+      } catch {}
+      return dbViews;
     }
-    data.pageViews = nextViews;
-    await writeFile(file, JSON.stringify(data, null, 2), "utf8");
-  } catch {
-    // Non-critical local update
+  } catch (err) {
+    console.error("Failed to increment views in DB, using fallback:", err);
   }
 
+  const current = await readState();
+  const nextViews = (current.pageViews || 0) + 1;
+  inMemoryPageViews = nextViews;
   return nextViews;
 }

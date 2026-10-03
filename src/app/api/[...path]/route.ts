@@ -21,6 +21,7 @@ import { z } from "zod";
 import { canRegister, listedPlayers, registrationUrl } from "@/lib/tournaments";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Start recurring background sync timer (checks every 30 minutes)
 ensureSyncSchedulerRunning();
@@ -28,7 +29,7 @@ ensureSyncSchedulerRunning();
 type Context = { params: Promise<{ path: string[] }> };
 const attempts = new Map<string, { count: number; reset: number }>();
 const recentViewIps = new Map<string, number>();
-const PV_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes cooldown window
+const PV_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes cooldown window
 const PV_COOKIE = "ch_pv_session";
 
 function normalizeIp(ip: string): string {
@@ -101,6 +102,11 @@ export async function GET(request: Request, context: Context) {
     if (route === "sync/progress" || route === "sync-progress") {
       const { getSyncProgress } = await import("@/server/sync");
       return json(getSyncProgress());
+    }
+    if (route === "sync/reset" || route === "sync-reset") {
+      const { forceResetSyncLock } = await import("@/server/sync");
+      forceResetSyncLock();
+      return json({ success: true, message: "Sync lock reset." });
     }
     if (route === "raffle/live-spin") {
       const { getLiveSpinState, getActiveDrawMode } = await import("@/server/liveSpinStore");
@@ -350,9 +356,8 @@ export async function GET(request: Request, context: Context) {
       if (!player) {
         return json({ error: "Community Hero not found." }, 404);
       }
-      if (player.registeredTeams && player.registeredTeams.length > 0) {
-        return json({ teams: player.registeredTeams, count: player.registeredTeams.length, source: "cached" });
-      }
+
+      // Always prioritize fetching live team roster directly from the Community Hero's Google Sheet
       if (player.tournamentResponseSheet) {
         try {
           const { getValidGoogleAccessToken } = await import("@/server/googleToken");
@@ -362,16 +367,26 @@ export async function GET(request: Request, context: Context) {
             player.tournamentResponseSheet,
             token,
           );
-          if (liveTeams.length > 0) {
+          if (Array.isArray(liveTeams)) {
             player.registeredTeams = liveTeams;
             player.teamsRegistered = liveTeams.length;
+            const max = player.maxTeams || 16;
+            if (player.teamsRegistered >= max) {
+              player.formStatus = "full";
+            }
             await saveState({ players: state.players });
             return json({ teams: liveTeams, count: liveTeams.length, source: "sheet" });
           }
-        } catch {
-          // Response sheet could not be read
+        } catch (fetchErr) {
+          console.warn(`[tournament-teams] Live sheet fetch error for ${player.chNickname}, falling back to cache:`, fetchErr);
         }
       }
+
+      // Fallback to cached teams if response sheet is temporarily unreachable
+      if (player.registeredTeams && player.registeredTeams.length > 0) {
+        return json({ teams: player.registeredTeams, count: player.registeredTeams.length, source: "cached" });
+      }
+
       return json({ teams: [], count: 0, source: "none" });
     }
     return json({ error: "Endpoint not found." }, 404);
@@ -459,10 +474,7 @@ export async function POST(request: Request, context: Context) {
         request.headers.get("x-client-ip") ||
         "unknown";
       const ua = request.headers.get("user-agent") || "";
-      const identifier =
-        ip !== "unknown"
-          ? ip
-          : `ua_${Buffer.from(ua).toString("base64").slice(0, 32)}`;
+      const identifier = `${ip}_${Buffer.from(ua).toString("base64").slice(0, 24)}`;
 
       const now = Date.now();
       const lastTime = recentViewIps.get(identifier) || 0;
@@ -471,7 +483,7 @@ export async function POST(request: Request, context: Context) {
       const state = await readState();
       const currentViews = state.pageViews || 0;
 
-      // If already visited within 30-min window, do not increment
+      // If already visited within cooldown window, do not increment
       if (hasCookie || isCooledDown) {
         return json({ pageViews: currentViews, counted: false });
       }
@@ -489,7 +501,7 @@ export async function POST(request: Request, context: Context) {
         httpOnly: false,
         sameSite: "lax",
         path: "/",
-        maxAge: 1800, // 30 minutes
+        maxAge: 900, // 15 minutes
       });
       return response;
     }
@@ -884,17 +896,26 @@ export async function POST(request: Request, context: Context) {
         );
       return json({ players, timestamp: new Date().toISOString() });
     }
+    if (route === "sync/reset" || route === "sync-reset") {
+      const { forceResetSyncLock } = await import("@/server/sync");
+      forceResetSyncLock();
+      return json({ success: true, message: "Sync lock reset." });
+    }
     if (route === "sync-now") {
-      const { getSyncProgress, syncSpreadsheetBackground } = await import("@/server/sync");
+      const { getSyncProgress, syncSpreadsheetBackground, forceResetSyncLock } = await import("@/server/sync");
       const current = getSyncProgress();
       if (current.inProgress) {
-        return json({
-          synced: false,
-          inProgress: true,
-          current: current.current,
-          total: current.total,
-          message: `Sync already in progress (${current.current}/${current.total})`,
-        });
+        if (current.startedAt && Date.now() - current.startedAt > 35_000) {
+          forceResetSyncLock();
+        } else {
+          return json({
+            synced: false,
+            inProgress: true,
+            current: current.current,
+            total: current.total,
+            message: `Sync already in progress (${current.current}/${current.total})`,
+          });
+        }
       }
       const syncPromise = syncSpreadsheetBackground();
       try {

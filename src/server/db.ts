@@ -119,9 +119,59 @@ export async function writeDbState(state: AppState): Promise<boolean> {
 }
 
 export async function incrementPageViewsDb(): Promise<number | null> {
-  // Compute Optimization: Do not update Neon database on visitor page views.
-  // This allows Neon free tier to auto-suspend when inactive and not burn compute hours.
-  return null;
+  const sql = getSql();
+  if (!sql) return null;
+  try {
+    await ensureTable(sql);
+    const rows = await sql`
+      UPDATE app_state
+      SET data = jsonb_set(
+        data,
+        '{pageViews}',
+        to_jsonb(COALESCE((data->>'pageViews')::int, 0) + 1)
+      ),
+      updated_at = CURRENT_TIMESTAMP
+      WHERE id = 'default'
+      RETURNING (data->>'pageViews')::int AS page_views;
+    `;
+    if (rows && rows.length > 0 && typeof rows[0].page_views === "number") {
+      const newViews = rows[0].page_views;
+      if (cachedState) {
+        cachedState.data.pageViews = newViews;
+        cachedState.timestamp = Date.now();
+      }
+      return newViews;
+    }
+    return null;
+  } catch (err) {
+    console.error("Failed to increment pageViews in Neon:", err);
+    return null;
+  }
+}
+
+export async function setPageViewsDb(count: number): Promise<boolean> {
+  const sql = getSql();
+  if (!sql) return false;
+  try {
+    await ensureTable(sql);
+    await sql`
+      UPDATE app_state
+      SET data = jsonb_set(
+        data,
+        '{pageViews}',
+        to_jsonb(${count}::int)
+      ),
+      updated_at = CURRENT_TIMESTAMP
+      WHERE id = 'default';
+    `;
+    if (cachedState) {
+      cachedState.data.pageViews = count;
+      cachedState.timestamp = Date.now();
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 let raffleTablesInitialized = false;

@@ -804,6 +804,9 @@ export function Admin() {
       try {
         const prog: SyncProgress = await api("/api/sync/progress");
         if (isCancelled) return;
+        if (prog.inProgress && prog.startedAt && Date.now() - prog.startedAt > 35_000) {
+          prog.inProgress = false;
+        }
         setSyncProgress(prog);
 
         if (!prog.inProgress && busy === "sync") {
@@ -2063,7 +2066,7 @@ export function Admin() {
                             <button
                               className="button primary"
                               onClick={syncNow}
-                              disabled={!!busy || (syncProgress?.inProgress ?? false)}
+                              disabled={!!busy}
                             >
                               <RefreshCw
                                 size={15}
@@ -2075,6 +2078,31 @@ export function Admin() {
                                 ? `Syncing sheets (${syncProgress?.current || 0}/${syncProgress?.total || state?.players?.length || "…"})`
                                 : "Sync & check all sheets now"}
                             </button>
+                            {syncProgress?.inProgress && (
+                              <button
+                                type="button"
+                                className="button secondary"
+                                style={{
+                                  color: "#f87171",
+                                  borderColor: "rgba(248, 113, 113, 0.4)",
+                                  fontSize: "12px",
+                                }}
+                                onClick={async () => {
+                                  try {
+                                    await api("/api/sync/reset", post({}));
+                                    setSyncProgress(null);
+                                    setBusy("");
+                                    const fresh = await api("/api/app-state");
+                                    setState(fresh);
+                                    setMessage("Sync status reset. Ready to sync.");
+                                  } catch (err: any) {
+                                    setError(err.message || "Failed to reset sync");
+                                  }
+                                }}
+                              >
+                                ✕ Reset stuck sync
+                              </button>
+                            )}
                           </div>
 
                           {((syncProgress && syncProgress.inProgress) || busy === "sync") && (
@@ -2241,6 +2269,15 @@ export function Admin() {
                                 </span>
                               </div>
                             ) : null}
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', fontSize: '12px', color: '#cbd5e1' }}>
+                              <input
+                                type="checkbox"
+                                checked={state?.syncOnlyListed !== false}
+                                onChange={(e) => update({ syncOnlyListed: e.target.checked })}
+                                style={{ accentColor: '#38bdf8', cursor: 'pointer' }}
+                              />
+                              Only background check the sheet for listed/active CHs
+                            </label>
                           </div>
                         </details>
                       </section>
@@ -2298,6 +2335,49 @@ export function Admin() {
                           registration and social links are preserved when you
                           edit a listing.
                         </p>
+                        <div
+                          style={{
+                            marginTop: 20,
+                            paddingTop: 16,
+                            borderTop: "1px solid #1e293b",
+                          }}
+                        >
+                          <h3
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: 700,
+                              color: "#f8fafc",
+                              marginBottom: 6,
+                            }}
+                          >
+                            Traffic & Page Views Counter
+                          </h3>
+                          <p className="info-note" style={{ marginBottom: 12 }}>
+                            Total views recorded across public directory and raffle
+                            pages. Live counts persist automatically in your
+                            database. You can also manually adjust the count here
+                            and click Publish changes.
+                          </p>
+                          <label
+                            className="form-field"
+                            style={{ maxWidth: 240, marginBottom: 8 }}
+                          >
+                            Total Page Views
+                            <input
+                              type="number"
+                              min={0}
+                              value={state.pageViews ?? 0}
+                              onChange={(e) =>
+                                update({
+                                  pageViews: Math.max(
+                                    0,
+                                    parseInt(e.target.value) || 0,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
                       </section>
                     )}
                     {tab === "branding" && (

@@ -74,5 +74,6 @@ export const updateSchema = z.object({
   logoUrl: z.string().max(5000000).optional(),
   bannerUrl: z.string().max(5000000).optional(),
   bannerSettings: z.any().optional(),
+  pageViews: z.number().optional(),
 }).passthrough();
 

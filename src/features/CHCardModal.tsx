@@ -14,6 +14,7 @@ import {
   MapPin,
   Medal,
   QrCode,
+  RefreshCw,
   Trophy,
   Users,
 } from "lucide-react";
@@ -116,25 +117,32 @@ export function CHCardModal({
     }
   }, [regLink, fbUrl]);
 
-  async function toggleTeams() {
-    if (!showTeams && teams.length === 0 && !loadingTeams) {
-      setLoadingTeams(true);
-      setTeamsError("");
-      try {
-        const res = await fetch(`/api/tournament-teams?playerId=${player.id}`);
-        const data = await res.json();
-        if (data.teams && Array.isArray(data.teams)) {
-          setTeams(data.teams);
-        } else if (data.error) {
-          setTeamsError(data.error);
-        }
-      } catch {
-        setTeamsError("Could not load team list.");
-      } finally {
-        setLoadingTeams(false);
+  async function fetchLiveTeams() {
+    setLoadingTeams(true);
+    setTeamsError("");
+    try {
+      const res = await fetch(`/api/tournament-teams?playerId=${player.id}&fresh=1`);
+      const data = await res.json();
+      if (data.teams && Array.isArray(data.teams)) {
+        setTeams(data.teams);
+      } else if (data.error) {
+        setTeamsError(data.error);
       }
+    } catch {
+      setTeamsError("Could not load team list.");
+    } finally {
+      setLoadingTeams(false);
     }
-    setShowTeams((prev) => !prev);
+  }
+
+  async function toggleTeams() {
+    if (!showTeams) {
+      setShowTeams(true);
+      // Fetch fresh live teams directly from the Google Sheet
+      await fetchLiveTeams();
+    } else {
+      setShowTeams(false);
+    }
   }
 
   async function copyAllTeams() {
@@ -400,15 +408,28 @@ export function CHCardModal({
                     <span>
                       <strong>{teams.length}</strong> team{teams.length !== 1 ? "s" : ""} registered
                     </span>
-                    <button
-                      type="button"
-                      className="button outline small"
-                      style={{ padding: "3px 8px", fontSize: 10, minHeight: 24 }}
-                      onClick={copyAllTeams}
-                    >
-                      {copiedTeams ? <Check size={11} style={{ color: "#facc15" }} /> : <Copy size={11} />}
-                      {copiedTeams ? "Copied" : "Copy roster"}
-                    </button>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <button
+                        type="button"
+                        className="button outline small"
+                        style={{ padding: "3px 8px", fontSize: 10, minHeight: 24, display: "inline-flex", alignItems: "center", gap: 4 }}
+                        onClick={fetchLiveTeams}
+                        disabled={loadingTeams}
+                        title="Fetch latest registrations directly from response sheet"
+                      >
+                        <RefreshCw size={11} className={loadingTeams ? "busy-spinner" : ""} />
+                        <span>{loadingTeams ? "Syncing..." : "Sync Sheet"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="button outline small"
+                        style={{ padding: "3px 8px", fontSize: 10, minHeight: 24 }}
+                        onClick={copyAllTeams}
+                      >
+                        {copiedTeams ? <Check size={11} style={{ color: "#facc15" }} /> : <Copy size={11} />}
+                        {copiedTeams ? "Copied" : "Copy roster"}
+                      </button>
+                    </div>
                   </div>
                   <div className="ch-modal-teams-grid">
                     {teams.map((teamName, i) => (
@@ -423,6 +444,16 @@ export function CHCardModal({
                 <div className="ch-modal-teams-empty">
                   <Users size={15} style={{ opacity: 0.4 }} />
                   <p>{teamsError || "No team names found yet in the response sheet."}</p>
+                  <button
+                    type="button"
+                    className="button outline small"
+                    style={{ padding: "4px 10px", fontSize: 11, minHeight: 26, marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5 }}
+                    onClick={fetchLiveTeams}
+                    disabled={loadingTeams}
+                  >
+                    <RefreshCw size={12} className={loadingTeams ? "busy-spinner" : ""} />
+                    <span>{loadingTeams ? "Checking response sheet..." : "Sync with Response Sheet"}</span>
+                  </button>
                 </div>
               )}
             </div>

@@ -15,7 +15,7 @@ import {
   analyzeTabs,
 } from "../src/utils/sheetDetector";
 import { playerSchema } from "../src/server/validation";
-import { allowedRemote } from "../src/server/sheets";
+import { allowedRemote, findTeamColumnIndex } from "../src/server/sheets";
 import { createSession, verifySession, sameOrigin } from "../src/server/auth";
 import type { CHPlayer } from "../src/types";
 
@@ -319,5 +319,44 @@ test("transformRowsToPlayers activates heroes with links even when Column A is u
     lester && lester.active,
     "Lester with registration/posting links should be active even if Col A is blank",
   );
+});
+
+test("findTeamColumnIndex reliably detects team name column and avoids captain/player columns", () => {
+  // Lester's form style: "Your Team Name" is Col C (idx 2)
+  const headerLester = [
+    "Timestamp",
+    "Email Address",
+    "Your Team Name",
+    "1st Player's (Team Captain) Name",
+    "1st Player's Age",
+  ];
+  assert.equal(findTeamColumnIndex(headerLester), 2);
+
+  // Form with "Pangalan ng Team"
+  const headerTagalog = [
+    "Timestamp",
+    "Pangalan ng Team",
+    "Pangalan ng Team Captain",
+    "Contact Number",
+  ];
+  assert.equal(findTeamColumnIndex(headerTagalog), 1);
+
+  // Form with "Squad Name"
+  const headerSquad = [
+    "Timestamp",
+    "Email",
+    "Squad Name",
+    "Leader In-Game Name",
+  ];
+  assert.equal(findTeamColumnIndex(headerSquad), 2);
+
+  // Form with "Team Captain" first, then "Team Name"
+  const headerReversed = [
+    "Timestamp",
+    "Team Captain Name",
+    "Team Name",
+    "Facebook Link",
+  ];
+  assert.equal(findTeamColumnIndex(headerReversed), 2);
 });
 
