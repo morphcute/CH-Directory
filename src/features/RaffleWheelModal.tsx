@@ -1131,6 +1131,7 @@ export function RaffleWheelModal({
                 isOrganizer={true}
                 currentCandidateName={winner?.fullName}
                 claimRemainingSeconds={claimRemaining}
+                entries={entries}
                 onNewMessage={() => {
                   if (modalSidebarTabRef.current !== "chat") {
                     setUnreadModalChatCount((prev) => prev + 1);

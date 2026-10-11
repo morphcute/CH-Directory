@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { readDbChatMessages, insertDbChatMessage, clearDbChatMessages as clearDbChat } from "@/server/db";
 
 export interface RaffleChatMessage {
   id: string;
@@ -18,6 +19,8 @@ declare global {
   var __ch_raffleChatMessages: RaffleChatMessage[] | undefined;
   // eslint-disable-next-line no-var
   var __ch_raffleChatSubscribers: Set<(message: RaffleChatMessage) => void> | undefined;
+  // eslint-disable-next-line no-var
+  var __ch_raffleChatLastFetchTime: number | undefined;
 }
 
 const MAX_STORED_MESSAGES = 100;
@@ -32,7 +35,7 @@ function chatFilePath(): string {
   return path.join(process.cwd(), "data", "raffle-chat.json");
 }
 
-function readPersistedMessages(): RaffleChatMessage[] {
+function readLocalMessages(): RaffleChatMessage[] {
   try {
     const file = chatFilePath();
     const content = readFileSync(file, "utf8");
@@ -48,7 +51,7 @@ function readPersistedMessages(): RaffleChatMessage[] {
   return [];
 }
 
-function writePersistedMessages(messages: RaffleChatMessage[]): void {
+function writeLocalMessages(messages: RaffleChatMessage[]): void {
   try {
     globalThis.__ch_raffleChatMessages = messages;
     const file = chatFilePath();
@@ -60,15 +63,28 @@ function writePersistedMessages(messages: RaffleChatMessage[]): void {
 const subscribers: Set<(message: RaffleChatMessage) => void> =
   globalThis.__ch_raffleChatSubscribers ?? (globalThis.__ch_raffleChatSubscribers = new Set());
 
-export function getRecentChatMessages(raffleId?: string): RaffleChatMessage[] {
-  const all = readPersistedMessages();
+export async function getRecentChatMessages(raffleId?: string): Promise<RaffleChatMessage[]> {
+  // 1. Try Neon Postgres DB first (ensures cross-device and cross-serverless real-time sync)
+  try {
+    const dbMsgs = await readDbChatMessages(raffleId, MAX_STORED_MESSAGES);
+    if (Array.isArray(dbMsgs)) {
+      globalThis.__ch_raffleChatMessages = dbMsgs;
+      writeLocalMessages(dbMsgs);
+      return dbMsgs;
+    }
+  } catch (err) {
+    console.warn("Neon DB error fetching chat messages:", err);
+  }
+
+  // 2. Fallback to local memory / disk cache
+  const all = readLocalMessages();
   if (!raffleId || raffleId === "default" || raffleId === "latest") {
     return all.slice(-MAX_STORED_MESSAGES);
   }
   return all.filter((m) => m.raffleId === raffleId || m.raffleId === "default").slice(-MAX_STORED_MESSAGES);
 }
 
-export function addChatMessage(data: {
+export async function addChatMessage(data: {
   raffleId: string;
   senderName: string;
   senderDeviceId?: string;
@@ -76,13 +92,12 @@ export function addChatMessage(data: {
   isCurrentPick?: boolean;
   badge?: "organizer" | "candidate" | "entrant" | "spectator";
   text: string;
-}): RaffleChatMessage {
-  const current = readPersistedMessages();
-  const cleanText = data.text.trim().slice(0, 250);
-  const cleanSender = data.senderName.trim().slice(0, 60) || "Anonymous";
+}): Promise<RaffleChatMessage> {
+  const cleanText = data.text.trim().slice(0, 300);
+  const cleanSender = data.senderName.trim().slice(0, 80) || "Anonymous";
 
   const message: RaffleChatMessage = {
-    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     raffleId: data.raffleId || "default",
     senderName: cleanSender,
     senderDeviceId: data.senderDeviceId,
@@ -93,9 +108,19 @@ export function addChatMessage(data: {
     timestamp: Date.now(),
   };
 
-  const updated = [...current, message].slice(-MAX_STORED_MESSAGES);
-  writePersistedMessages(updated);
+  // 1. Insert into Neon Postgres DB immediately for all viewers
+  try {
+    await insertDbChatMessage(message);
+  } catch (err) {
+    console.warn("Failed to insert message to Neon:", err);
+  }
 
+  // 2. Update local in-memory and disk store
+  const current = readLocalMessages();
+  const updated = [...current, message].slice(-MAX_STORED_MESSAGES);
+  writeLocalMessages(updated);
+
+  // 3. Immediately broadcast to local SSE subscribers
   subscribers.forEach((listener) => {
     try {
       listener(message);
@@ -112,12 +137,15 @@ export function subscribeChatMessages(listener: (message: RaffleChatMessage) => 
   };
 }
 
-export function clearChatMessages(raffleId?: string): void {
-  if (!raffleId || raffleId === "all") {
-    writePersistedMessages([]);
+export async function clearChatMessages(raffleId?: string): Promise<void> {
+  try {
+    await clearDbChat(raffleId);
+  } catch {}
+  if (!raffleId || raffleId === "all" || raffleId === "default") {
+    writeLocalMessages([]);
     return;
   }
-  const current = readPersistedMessages();
+  const current = readLocalMessages();
   const filtered = current.filter((m) => m.raffleId !== raffleId);
-  writePersistedMessages(filtered);
+  writeLocalMessages(filtered);
 }

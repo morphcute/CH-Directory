@@ -12194,3 +12194,562 @@ textarea:focus-visible {
   100% { transform: scale(1); }
 }
 
+/* ==========================================================
+   MESSENGER GROUP CHAT STYLES (REAL-TIME 1s LIVE DRAW STREAM)
+   ========================================================== */
+
+.raffle-chat-header-icon-stack {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 132, 255, 0.12);
+  border: 1px solid rgba(0, 132, 255, 0.25);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.raffle-chat-online-dot {
+  position: absolute;
+  bottom: 0px;
+  right: 0px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 1.5px solid #0f172a;
+  box-shadow: 0 0 6px #22c55e;
+}
+
+.raffle-chat-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.raffle-chat-room-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.raffle-chat-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 1px 5px;
+  border-radius: 9999px;
+}
+
+.raffle-chat-live-pulse-icon {
+  animation: pulseChatDot 1.5s infinite;
+}
+
+.raffle-chat-room-sub {
+  font-size: 10.5px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Messenger Message Rows */
+.raffle-chat-msg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  animation: chatMsgFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.raffle-chat-msg-row.incoming {
+  justify-content: flex-start;
+}
+
+.raffle-chat-msg-row.outgoing {
+  justify-content: flex-end;
+}
+
+/* Messenger Avatars */
+.raffle-chat-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffffff;
+  flex-shrink: 0;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  user-select: none;
+}
+
+.raffle-chat-avatar.host {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: 1.5px solid #fde047;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.5);
+}
+
+.raffle-chat-avatar.candidate {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 1.5px solid #6ee7b7;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+/* Message Content Box */
+.raffle-chat-msg-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+}
+
+.raffle-chat-msg-row.outgoing .raffle-chat-msg-content-wrapper {
+  align-items: flex-end;
+}
+
+.raffle-chat-msg-row.incoming .raffle-chat-msg-content-wrapper {
+  align-items: flex-start;
+}
+
+.raffle-chat-sender-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 2px;
+  padding-left: 2px;
+}
+
+/* Messenger Bubbles */
+.raffle-chat-bubble {
+  position: relative;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Incoming bubble (Other entrants) */
+.raffle-chat-bubble.bubble-other {
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px 18px 18px 4px;
+}
+
+/* Incoming Host bubble */
+.raffle-chat-bubble.bubble-host {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.95) 100%);
+  color: #ffffff;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.15);
+}
+
+/* Incoming Candidate attendance bubble */
+.raffle-chat-bubble.bubble-candidate {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(30, 41, 59, 0.95) 100%);
+  color: #ffffff;
+  border: 1.5px solid #10b981;
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
+}
+
+/* Outgoing bubble (Me / My Device) */
+.raffle-chat-bubble.bubble-me {
+  background: linear-gradient(135deg, #0084ff 0%, #0099ff 100%);
+  color: #ffffff;
+  border-radius: 18px 18px 4px 18px;
+  box-shadow: 0 2px 10px rgba(0, 132, 255, 0.35);
+}
+
+.raffle-chat-bubble-text {
+  margin: 0;
+}
+
+.raffle-chat-msg-time {
+  font-size: 9.5px;
+  color: #64748b;
+  margin-top: 2px;
+  padding: 0 4px;
+}
+
+.raffle-chat-msg-time.me {
+  text-align: right;
+  color: #94a3b8;
+}
+
+/* Reactions Toolbar */
+.raffle-chat-reactions-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: rgba(2, 6, 23, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.raffle-chat-quick-emojis {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.raffle-chat-quick-emojis::-webkit-scrollbar {
+  display: none;
+}
+
+.raffle-chat-emoji-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.raffle-chat-emoji-btn:hover {
+  transform: scale(1.2);
+  background: rgba(0, 132, 255, 0.2);
+  border-color: rgba(0, 132, 255, 0.4);
+}
+
+/* Messenger Bottom Bar */
+.raffle-chat-bottom-messenger-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px 8px;
+  background: rgba(2, 6, 23, 0.85);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.raffle-chat-identity-pill {
+  display: flex;
+  align-items: center;
+  font-size: 10.5px;
+  color: #94a3b8;
+  padding: 0 4px;
+}
+
+.raffle-chat-messenger-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  padding: 3px 4px 3px 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.raffle-chat-messenger-form:focus-within {
+  border-color: #0084ff;
+  box-shadow: 0 0 10px rgba(0, 132, 255, 0.3);
+}
+
+.raffle-chat-messenger-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 13px;
+  padding: 5px 0;
+}
+
+.raffle-chat-messenger-input::placeholder {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.raffle-chat-messenger-send-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #64748b;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.raffle-chat-messenger-send-btn.active {
+  background: linear-gradient(135deg, #0084ff 0%, #00a3ff 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 132, 255, 0.5);
+  transform: scale(1.04);
+}
+
+.raffle-chat-messenger-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Spectator Claim CTA in Chat */
+.raffle-chat-claim-cta-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.12) 0%, rgba(15, 23, 42, 0.6) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 4px;
+}
+
+.raffle-chat-claim-cta-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #e0f2fe;
+}
+
+.raffle-chat-connect-device-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+  white-space: nowrap;
+}
+
+.raffle-chat-connect-device-btn:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+  transform: translateY(-1px);
+}
+
+/* Connect / Claim Device Modal */
+.raffle-connect-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.88);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 12px;
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+.raffle-connect-modal-dialog {
+  background: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  width: 100%;
+  max-width: 380px;
+  max-height: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.raffle-connect-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.raffle-connect-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.raffle-connect-modal-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.raffle-connect-modal-close:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.raffle-connect-modal-desc {
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.raffle-connect-alert {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.raffle-connect-alert.error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+.raffle-connect-alert.success {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #86efac;
+}
+
+.raffle-connect-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.raffle-connect-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 12.5px;
+}
+
+.raffle-connect-entrants-list {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px;
+  background: rgba(2, 6, 23, 0.4);
+}
+
+.raffle-connect-entry-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.5);
+  transition: background 0.15s ease;
+}
+
+.raffle-connect-entry-item:hover {
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.raffle-connect-entry-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.raffle-connect-entry-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.raffle-connect-entry-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.raffle-connect-select-btn {
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.raffle-connect-select-btn:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.raffle-connect-empty {
+  padding: 18px 8px;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.raffle-connect-modal-footer {
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.raffle-connect-security-note {
+  font-size: 10px;
+  color: #64748b;
+  display: block;
+  text-align: center;
+}
+
+

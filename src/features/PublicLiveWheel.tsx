@@ -815,6 +815,10 @@ export function PublicLiveWheel({
               isOrganizer={isOrganizer}
               currentCandidateName={currentPick?.name}
               claimRemainingSeconds={claimRemaining}
+              entries={entries}
+              onClaimEntry={() => {
+                onRefresh?.();
+              }}
               onNewMessage={() => {
                 if (sidebarTabRef.current !== "chat") {
                   setUnreadChatCount((prev) => prev + 1);

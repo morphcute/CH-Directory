@@ -123,7 +123,7 @@ export async function GET(request: Request, context: Context) {
       const { getRecentChatMessages } = await import("@/server/raffleChatStore");
       const url = new URL(request.url);
       const raffleId = url.searchParams.get("raffleId") || undefined;
-      return json({ messages: getRecentChatMessages(raffleId) });
+      return json({ messages: await getRecentChatMessages(raffleId) });
     }
     if (route === "raffle/live-stream") {
       const { getLiveSpinState, subscribeLiveSpin, getActiveDrawMode } = await import("@/server/liveSpinStore");
@@ -131,7 +131,7 @@ export async function GET(request: Request, context: Context) {
       const { getRecentChatMessages, subscribeChatMessages } = await import("@/server/raffleChatStore");
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
-        start(controller) {
+        async start(controller) {
           const initialData = `data: ${JSON.stringify(getLiveSpinState())}\n\n`;
           controller.enqueue(encoder.encode(initialData));
 
@@ -141,8 +141,11 @@ export async function GET(request: Request, context: Context) {
           const initialViewers = `event: viewers\ndata: ${JSON.stringify({ viewerCount: getLiveViewerCount(), viewers: getLiveViewerList() })}\n\n`;
           controller.enqueue(encoder.encode(initialViewers));
 
-          const initialChat = `event: chat_init\ndata: ${JSON.stringify(getRecentChatMessages())}\n\n`;
-          controller.enqueue(encoder.encode(initialChat));
+          try {
+            const initialChatMessages = await getRecentChatMessages();
+            const initialChat = `event: chat_init\ndata: ${JSON.stringify(initialChatMessages)}\n\n`;
+            controller.enqueue(encoder.encode(initialChat));
+          } catch {}
 
           const unsubscribeSpin = subscribeLiveSpin((state, mode) => {
             try {
@@ -912,6 +915,55 @@ export async function POST(request: Request, context: Context) {
 
       return response;
     }
+    if (route === "raffle/claim-device") {
+      const body = (await request.json()) as any;
+      const fullName = String(body.fullName || "").trim();
+      if (!fullName) {
+        return json({ error: "Please select or type your registered full name." }, 400);
+      }
+
+      const cookieHeader = request.headers.get("cookie") || "";
+      const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
+      let clientDeviceId = match
+        ? decodeURIComponent(match[1])
+        : body.deviceId
+          ? String(body.deviceId).trim()
+          : undefined;
+
+      if (!clientDeviceId) {
+        clientDeviceId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+
+      const clientIp = getClientIp(request);
+      const { claimDbRaffleDevice } = await import("@/server/db");
+      const result = await claimDbRaffleDevice(
+        body.raffleId || "default",
+        fullName,
+        clientDeviceId,
+        clientIp,
+      );
+
+      if (!result.success) {
+        return json({ error: result.error || "Could not link device to entrant." }, 400);
+      }
+
+      const response = json({
+        success: true,
+        entry: result.entry,
+        message: `Successfully connected as ${result.entry.fullName}!`,
+      });
+
+      response.cookies.set("ch_raffle_device", clientDeviceId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 31536000, // 1 year
+        path: "/",
+        sameSite: "lax",
+      });
+
+      return response;
+    }
+
     if (route === "raffle/chat") {
       const body = (await request.json()) as any;
       const organizer = await isOrganizer();
@@ -921,7 +973,7 @@ export async function POST(request: Request, context: Context) {
           return json({ error: "Only the organizer can clear chat messages." }, 401);
         }
         const { clearChatMessages } = await import("@/server/raffleChatStore");
-        clearChatMessages(body.raffleId);
+        await clearChatMessages(body.raffleId);
         return json({ success: true, message: "Chat cleared." });
       }
 
@@ -949,7 +1001,7 @@ export async function POST(request: Request, context: Context) {
       const raffle = await getRaffleState(body.raffleId || "default");
       const currentSpin = getLiveSpinState();
 
-      // Resolve registered entry strictly by deviceId OR cross-browser matching IP
+      // Resolve registered entry strictly by deviceId, cross-browser IP, or verified full name
       let registeredEntry = null;
       if (clientDeviceId && raffle?.entries) {
         registeredEntry = raffle.entries.find((e) => e.deviceId === clientDeviceId) || null;
@@ -958,6 +1010,13 @@ export async function POST(request: Request, context: Context) {
         registeredEntry =
           raffle.entries.find(
             (e) => e.ipAddress && isSameIpOrSubnet(e.ipAddress, clientIp),
+          ) || null;
+      }
+      if (!registeredEntry && body.senderName && raffle?.entries) {
+        const cleanSender = String(body.senderName).trim().toLowerCase();
+        registeredEntry =
+          raffle.entries.find(
+            (e) => e.fullName.trim().toLowerCase() === cleanSender,
           ) || null;
       }
 
@@ -995,7 +1054,7 @@ export async function POST(request: Request, context: Context) {
         );
       }
 
-      const message = addChatMessage({
+      const message = await addChatMessage({
         raffleId: body.raffleId || "default",
         senderName,
         senderDeviceId: clientDeviceId,

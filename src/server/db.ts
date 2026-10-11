@@ -864,3 +864,160 @@ export async function resetDbRaffleEntries(raffleId = "default"): Promise<boolea
     return false;
   }
 }
+
+// ==========================================
+// REAL-TIME RAFFLE LIVE CHAT (NEON POSTGRES)
+// ==========================================
+
+export async function readDbChatMessages(raffleId?: string, limit = 100): Promise<any[]> {
+  const sql = getSql();
+  if (!sql) return [];
+  try {
+    let rows;
+    if (!raffleId || raffleId === "default" || raffleId === "latest") {
+      rows = await sql`
+        SELECT id, raffle_id, sender_name, sender_device_id, is_organizer, is_current_pick, badge, text, created_at_ms
+        FROM raffle_chat_messages
+        ORDER BY created_at_ms ASC
+        LIMIT ${limit};
+      `;
+    } else {
+      rows = await sql`
+        SELECT id, raffle_id, sender_name, sender_device_id, is_organizer, is_current_pick, badge, text, created_at_ms
+        FROM raffle_chat_messages
+        WHERE raffle_id = ${raffleId}
+        ORDER BY created_at_ms ASC
+        LIMIT ${limit};
+      `;
+    }
+    return rows.map((r: any) => ({
+      id: r.id,
+      raffleId: r.raffle_id,
+      senderName: r.sender_name,
+      senderDeviceId: r.sender_device_id || undefined,
+      isOrganizer: Boolean(r.is_organizer),
+      isCurrentPick: Boolean(r.is_current_pick),
+      badge: r.badge || (r.is_organizer ? "organizer" : "entrant"),
+      text: r.text,
+      timestamp: Number(r.created_at_ms),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function insertDbChatMessage(msg: {
+  id: string;
+  raffleId: string;
+  senderName: string;
+  senderDeviceId?: string;
+  isOrganizer?: boolean;
+  isCurrentPick?: boolean;
+  badge?: string;
+  text: string;
+  timestamp: number;
+}): Promise<boolean> {
+  const sql = getSql();
+  if (!sql) return false;
+  try {
+    await sql`
+      INSERT INTO raffle_chat_messages (
+        id, raffle_id, sender_name, sender_device_id, is_organizer, is_current_pick, badge, text, created_at_ms
+      ) VALUES (
+        ${msg.id},
+        ${msg.raffleId || "default"},
+        ${msg.senderName},
+        ${msg.senderDeviceId || null},
+        ${Boolean(msg.isOrganizer)},
+        ${Boolean(msg.isCurrentPick)},
+        ${msg.badge || "entrant"},
+        ${msg.text},
+        ${msg.timestamp}
+      )
+      ON CONFLICT (id) DO NOTHING;
+    `;
+    return true;
+  } catch (err) {
+    console.warn("Failed to insert chat message into Neon:", err);
+    return false;
+  }
+}
+
+export async function clearDbChatMessages(raffleId?: string): Promise<boolean> {
+  const sql = getSql();
+  if (!sql) return false;
+  try {
+    if (!raffleId || raffleId === "all" || raffleId === "default") {
+      await sql`DELETE FROM raffle_chat_messages;`;
+    } else {
+      await sql`DELETE FROM raffle_chat_messages WHERE raffle_id = ${raffleId};`;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ==========================================
+// CONNECT / CLAIM ENTRANT ON NEW DEVICE
+// ==========================================
+
+export async function claimDbRaffleDevice(
+  raffleId: string,
+  fullName: string,
+  deviceId: string,
+  ipAddress?: string,
+): Promise<{ success: boolean; entry?: any; error?: string }> {
+  clearDbCache("raffle");
+  const sql = getSql();
+  if (!sql) return { success: false, error: "Database not available." };
+  try {
+    await ensureRaffleTables(sql);
+    const targetName = fullName.trim();
+    if (!targetName) return { success: false, error: "Full name is required." };
+
+    let targetRaffleId = raffleId;
+    if (!targetRaffleId || targetRaffleId === "default") {
+      const active = await sql`
+        SELECT id FROM raffles WHERE is_active = true AND id NOT LIKE 'test-%' ORDER BY created_at DESC LIMIT 1;
+      `;
+      if (active && active.length > 0) {
+        targetRaffleId = active[0].id;
+      }
+    }
+
+    const rows = await sql`
+      UPDATE raffle_entries
+      SET device_id = ${deviceId},
+          ip_address = COALESCE(${ipAddress || null}, ip_address),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE raffle_id = ${targetRaffleId}
+        AND LOWER(TRIM(full_name)) = LOWER(TRIM(${targetName}))
+      RETURNING id, raffle_id, full_name, device_id, ip_address, prize_won, created_at;
+    `;
+
+    if (rows && rows.length > 0) {
+      const e = rows[0];
+      return {
+        success: true,
+        entry: {
+          id: e.id,
+          raffleId: e.raffle_id,
+          fullName: e.full_name,
+          deviceId: e.device_id,
+          ipAddress: e.ip_address,
+          prizeWon: e.prize_won || null,
+          createdAt: e.created_at ? new Date(e.created_at).toISOString() : new Date().toISOString(),
+        },
+      };
+    }
+
+    return {
+      success: false,
+      error: `"${targetName}" was not found in the registered participants list for this raffle. Please ensure you select your exact registered name.`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to link device to entrant." };
+  }
+}
+
