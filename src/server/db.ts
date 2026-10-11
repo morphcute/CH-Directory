@@ -268,7 +268,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
       raffleRows = await sql`
         SELECT id, title, category, description, cutoff_date, prizes, is_active, is_archived, created_at, updated_at
         FROM raffles
-        WHERE is_archived = false
+        WHERE is_archived = false AND id NOT LIKE 'test-%'
         ORDER BY created_at DESC
         LIMIT 1;
       `;
@@ -351,7 +351,7 @@ export async function readDbActiveRaffles(): Promise<RaffleActiveSummary[] | nul
         COUNT(e.id)::int AS entries_count
       FROM raffles r
       LEFT JOIN raffle_entries e ON e.raffle_id = r.id
-      WHERE r.is_archived = false AND r.is_active = true
+      WHERE r.is_archived = false AND r.is_active = true AND r.id NOT LIKE 'test-%'
       GROUP BY r.id
       ORDER BY r.created_at DESC;
     `;
@@ -648,7 +648,7 @@ export async function submitOrUpdateDbRaffleEntry(
     let raffleRows;
     if (raffleId === "default" || raffleId === "latest") {
       raffleRows = await sql`
-        SELECT id, title, category, cutoff_date, is_active FROM raffles WHERE is_archived = false ORDER BY created_at DESC LIMIT 1;
+        SELECT id, title, category, cutoff_date, is_active FROM raffles WHERE is_archived = false AND id NOT LIKE 'test-%' ORDER BY created_at DESC LIMIT 1;
       `;
     } else {
       raffleRows = await sql`

@@ -77,6 +77,7 @@ interface RaffleResponse {
   liveSpin?: any;
   drawMode?: "wheel" | "duck_race";
   viewerCount?: number;
+  isOrganizer?: boolean;
 }
 
 function getTimeRemaining(cutoffDate?: string): { text: string; urgent: boolean } {
@@ -1190,8 +1191,10 @@ export function RafflePage({
                     prizes={data.prizes || []}
                     onRefresh={loadRaffle}
                     myEntryName={data.myEntry?.fullName}
+                    isOrganizer={Boolean(data.isOrganizer)}
                     initialLiveSpin={data.liveSpin}
                     initialDrawMode={data.drawMode}
+                    raffleId={data.id}
                   />
                 )}
 
@@ -1394,119 +1397,53 @@ export function RafflePage({
                   </div>
                 )}
 
-                {/* Registered Participants Roster (Dropdown accordion when event has started) */}
-                <div
-                  className={`raffle-human-card ${eventStarted ? "participants-dropdown-card" : ""}`}
-                >
-                  {eventStarted ? (
-                    <button
-                      type="button"
-                      className="raffle-participants-accordion-toggle"
-                      onClick={() =>
-                        setParticipantsDropdownOpen((prev) => !prev)
-                      }
-                      aria-expanded={participantsDropdownOpen}
-                    >
-                      <div className="raffle-human-card-title">
-                        <Users size={16} style={{ color: "#94a3b8" }} />
-                        <strong>
-                          Registered Participants ({data.entriesCount})
-                        </strong>
-                      </div>
-                      <div className="raffle-accordion-chevron">
-                        <span>
-                          {participantsDropdownOpen
-                            ? "Hide Roster"
-                            : "View Roster"}
-                        </span>
-                        {participantsDropdownOpen ? (
-                          <ChevronUp size={16} />
-                        ) : (
-                          <ChevronDown size={16} />
-                        )}
-                      </div>
-                    </button>
-                  ) : (
-                    <div
-                      className="raffle-human-card-head"
-                      style={{ flexWrap: "wrap", gap: 10 }}
-                    >
-                      <div className="raffle-human-card-title">
-                        <Users size={16} style={{ color: "#94a3b8" }} />
-                        <strong>
-                          Registered Participants ({data.entriesCount})
-                        </strong>
-                      </div>
+                {/* Registered Participants Roster (Always Open & Visible) */}
+                <div className="raffle-human-card">
+                  <div
+                    className="raffle-human-card-head"
+                    style={{ flexWrap: "wrap", gap: 10 }}
+                  >
+                    <div className="raffle-human-card-title">
+                      <Users size={16} style={{ color: "#38bdf8" }} />
+                      <strong>
+                        Registered Participants ({data.entriesCount})
+                      </strong>
+                    </div>
 
-                      {data.entriesCount > 3 && (
-                        <div
-                          className="ch-search-wrap"
-                          style={{ maxWidth: 220, padding: "4px 10px" }}
-                        >
-                          <Search size={13} className="ch-search-icon" />
-                          <input
-                            type="text"
-                            placeholder="Search name..."
-                            value={searchQuery}
-                            onChange={(e) => {
-                              setSearchQuery(e.target.value);
+                    {data.entriesCount > 3 && (
+                      <div
+                        className="ch-search-wrap"
+                        style={{ maxWidth: 220, padding: "4px 10px" }}
+                      >
+                        <Search size={13} className="ch-search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search name..."
+                          value={searchQuery}
+                          onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setParticipantsPage(1);
+                          }}
+                          className="ch-search-input"
+                          style={{ fontSize: 12 }}
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            className="ch-search-clear"
+                            onClick={() => {
+                              setSearchQuery("");
                               setParticipantsPage(1);
                             }}
-                            className="ch-search-input"
-                            style={{ fontSize: 12 }}
-                          />
-                          {searchQuery && (
-                            <button
-                              type="button"
-                              className="ch-search-clear"
-                              onClick={() => {
-                                setSearchQuery("");
-                                setParticipantsPage(1);
-                              }}
-                            >
-                              ×
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {(!eventStarted || participantsDropdownOpen) && (
-                    <div className="raffle-participants-dropdown-content">
-                      {eventStarted && data.entriesCount > 3 && (
-                        <div style={{ padding: "10px 0 12px" }}>
-                          <div
-                            className="ch-search-wrap"
-                            style={{ maxWidth: 240, padding: "4px 10px" }}
                           >
-                            <Search size={13} className="ch-search-icon" />
-                            <input
-                              type="text"
-                              placeholder="Search name..."
-                              value={searchQuery}
-                              onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                setParticipantsPage(1);
-                              }}
-                              className="ch-search-input"
-                              style={{ fontSize: 12 }}
-                            />
-                            {searchQuery && (
-                              <button
-                                type="button"
-                                className="ch-search-clear"
-                                onClick={() => {
-                                  setSearchQuery("");
-                                  setParticipantsPage(1);
-                                }}
-                              >
-                                ×
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="raffle-participants-dropdown-content">
 
                       {filteredEntries.length === 0 ? (
                         <div
@@ -1671,7 +1608,6 @@ export function RafflePage({
                         </>
                       )}
                     </div>
-                  )}
                 </div>
               </div>
             )}

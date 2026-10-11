@@ -3767,6 +3767,7 @@ export function Admin() {
                                   prizes={raffleForm.prizes}
                                   defaultPrize={selectedRandomPrize}
                                   initialDrawMode={adminDrawMode}
+                                  raffleId={raffleData.id}
                                   onRefresh={loadRaffleAdmin}
                                   onAssignWinner={async (entryId, prizeWon) => {
                                     await handleAssignPrize(entryId, prizeWon);

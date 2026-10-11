@@ -35,7 +35,9 @@ const PV_COOKIE = "ch_pv_session";
 function normalizeIp(ip: string): string {
   if (!ip) return "";
   let clean = ip.trim().toLowerCase();
+  if (clean.startsWith("[") && clean.endsWith("]")) clean = clean.slice(1, -1);
   if (clean.startsWith("::ffff:")) clean = clean.slice(7);
+  if (clean.includes(".") && clean.includes(":")) clean = clean.split(":")[0];
   if (clean === "::1" || clean === "localhost") return "127.0.0.1";
   return clean;
 }
@@ -44,6 +46,7 @@ export function isSameIpOrSubnet(ipA?: string, ipB?: string): boolean {
   if (!ipA || !ipB) return false;
   const a = normalizeIp(ipA);
   const b = normalizeIp(ipB);
+  if (!a || !b) return false;
   if (a === b) return true;
   // IPv6 prefix comparison (/64 subnet)
   if (a.includes(":") && b.includes(":")) {
@@ -116,9 +119,16 @@ export async function GET(request: Request, context: Context) {
       const { getLiveViewerCount, getLiveViewerList } = await import("@/server/liveViewerStore");
       return json({ viewerCount: getLiveViewerCount(), viewers: getLiveViewerList() });
     }
+    if (route === "raffle/chat") {
+      const { getRecentChatMessages } = await import("@/server/raffleChatStore");
+      const url = new URL(request.url);
+      const raffleId = url.searchParams.get("raffleId") || undefined;
+      return json({ messages: getRecentChatMessages(raffleId) });
+    }
     if (route === "raffle/live-stream") {
       const { getLiveSpinState, subscribeLiveSpin, getActiveDrawMode } = await import("@/server/liveSpinStore");
       const { getLiveViewerCount, getLiveViewerList, subscribeViewerUpdates } = await import("@/server/liveViewerStore");
+      const { getRecentChatMessages, subscribeChatMessages } = await import("@/server/raffleChatStore");
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -130,6 +140,9 @@ export async function GET(request: Request, context: Context) {
 
           const initialViewers = `event: viewers\ndata: ${JSON.stringify({ viewerCount: getLiveViewerCount(), viewers: getLiveViewerList() })}\n\n`;
           controller.enqueue(encoder.encode(initialViewers));
+
+          const initialChat = `event: chat_init\ndata: ${JSON.stringify(getRecentChatMessages())}\n\n`;
+          controller.enqueue(encoder.encode(initialChat));
 
           const unsubscribeSpin = subscribeLiveSpin((state, mode) => {
             try {
@@ -147,6 +160,15 @@ export async function GET(request: Request, context: Context) {
           const unsubscribeViewers = subscribeViewerUpdates(({ count, viewers }) => {
             try {
               const data = `event: viewers\ndata: ${JSON.stringify({ viewerCount: count, viewers })}\n\n`;
+              controller.enqueue(encoder.encode(data));
+            } catch {
+              // stream closed
+            }
+          });
+
+          const unsubscribeChat = subscribeChatMessages((msg) => {
+            try {
+              const data = `event: chat_message\ndata: ${JSON.stringify(msg)}\n\n`;
               controller.enqueue(encoder.encode(data));
             } catch {
               // stream closed
@@ -180,6 +202,7 @@ export async function GET(request: Request, context: Context) {
             clearInterval(pingInterval);
             unsubscribeSpin();
             unsubscribeViewers();
+            unsubscribeChat();
             try {
               controller.close();
             } catch {}
@@ -259,17 +282,28 @@ export async function GET(request: Request, context: Context) {
       const urlParamDev = url.searchParams.get("deviceId");
       const deviceId = match ? decodeURIComponent(match[1]) : urlParamDev || undefined;
       const clientIp = getClientIp(request);
+      const organizer = await isOrganizer();
 
-      // STRICT IDENTITY:
-      // An entry will ONLY appear as 'myEntry' if BOTH the exact deviceId AND the matching IP are verified.
-      // Never show another player's registered entry via loose IP or coarse fingerprint ORs.
-      const myEntry = deviceId
-        ? raffle.entries.find(
-            (e) =>
-              e.deviceId === deviceId &&
-              (!e.ipAddress || isSameIpOrSubnet(e.ipAddress, clientIp)),
-          )
+      // AUTOMATIC DEVICE & IP DETECTOR:
+      // Even if participant browses in another browser or incognito, the system recognizes their registered entry!
+      let myEntry = deviceId
+        ? raffle.entries.find((e) => e.deviceId === deviceId)
         : null;
+
+      if (!myEntry && clientIp) {
+        myEntry =
+          raffle.entries.find(
+            (e) => e.ipAddress && isSameIpOrSubnet(e.ipAddress, clientIp),
+          ) || null;
+      }
+
+      const explicitEntrant = url.searchParams.get("entry") || url.searchParams.get("participant");
+      if (!myEntry && explicitEntrant) {
+        myEntry =
+          raffle.entries.find(
+            (e) => e.fullName.trim().toLowerCase() === explicitEntrant.trim().toLowerCase(),
+          ) || null;
+      }
 
       const now = Date.now();
       const cutoffMs = raffle.cutoffDate ? new Date(raffle.cutoffDate).getTime() : Infinity;
@@ -313,7 +347,16 @@ export async function GET(request: Request, context: Context) {
         liveSpin: currentLiveSpin,
         drawMode: currentDrawMode,
         viewerCount: liveViewerCount,
+        isOrganizer: Boolean(organizer),
       });
+
+      if (myEntry?.deviceId && (!match || match[1] !== myEntry.deviceId)) {
+        response.cookies.set("ch_raffle_device", myEntry.deviceId, {
+          path: "/",
+          maxAge: 365 * 24 * 60 * 60,
+          sameSite: "lax",
+        });
+      }
 
       return response;
     }
@@ -868,6 +911,101 @@ export async function POST(request: Request, context: Context) {
       });
 
       return response;
+    }
+    if (route === "raffle/chat") {
+      const body = (await request.json()) as any;
+      const organizer = await isOrganizer();
+
+      if (body.action === "clear") {
+        if (!organizer) {
+          return json({ error: "Only the organizer can clear chat messages." }, 401);
+        }
+        const { clearChatMessages } = await import("@/server/raffleChatStore");
+        clearChatMessages(body.raffleId);
+        return json({ success: true, message: "Chat cleared." });
+      }
+
+      const text = String(body.text || "").trim();
+      if (!text) {
+        return json({ error: "Message cannot be empty." }, 400);
+      }
+      if (text.length > 300) {
+        return json({ error: "Message is too long (maximum 300 characters)." }, 400);
+      }
+
+      const { addChatMessage } = await import("@/server/raffleChatStore");
+      const { getLiveSpinState } = await import("@/server/liveSpinStore");
+      const { getRaffleState } = await import("@/server/raffleStore");
+
+      const cookieHeader = request.headers.get("cookie") || "";
+      const match = cookieHeader.match(/ch_raffle_device=([^;]+)/);
+      const clientDeviceId = match
+        ? decodeURIComponent(match[1])
+        : body.senderDeviceId
+          ? String(body.senderDeviceId).trim()
+          : undefined;
+      const clientIp = getClientIp(request);
+
+      const raffle = await getRaffleState(body.raffleId || "default");
+      const currentSpin = getLiveSpinState();
+
+      // Resolve registered entry strictly by deviceId OR cross-browser matching IP
+      let registeredEntry = null;
+      if (clientDeviceId && raffle?.entries) {
+        registeredEntry = raffle.entries.find((e) => e.deviceId === clientDeviceId) || null;
+      }
+      if (!registeredEntry && clientIp && raffle?.entries) {
+        registeredEntry =
+          raffle.entries.find(
+            (e) => e.ipAddress && isSameIpOrSubnet(e.ipAddress, clientIp),
+          ) || null;
+      }
+
+      let isCurrentPick = false;
+      let badge: "organizer" | "candidate" | "entrant" | "spectator" = "spectator";
+      let senderName = "";
+
+      if (organizer) {
+        senderName = "👑 Organizer";
+        badge = "organizer";
+      } else if (registeredEntry) {
+        // STRICT: Locked to registered entry full name. Cannot be forged.
+        senderName = registeredEntry.fullName;
+        if (
+          currentSpin &&
+          currentSpin.status === "landed" &&
+          ((currentSpin.winnerId && registeredEntry.id === currentSpin.winnerId) ||
+            (currentSpin.winnerName &&
+              registeredEntry.fullName.trim().toLowerCase() ===
+                currentSpin.winnerName.trim().toLowerCase()))
+        ) {
+          isCurrentPick = true;
+          badge = "candidate";
+        } else {
+          badge = "entrant";
+        }
+      } else {
+        // SPECTATORS CANNOT COMMENT! Only verified registered participants and host can send messages.
+        return json(
+          {
+            error:
+              "Only registered participants can comment in the live draw chat. Spectators are in view-only mode.",
+          },
+          403,
+        );
+      }
+
+      const message = addChatMessage({
+        raffleId: body.raffleId || "default",
+        senderName,
+        senderDeviceId: clientDeviceId,
+        isOrganizer: organizer,
+        isCurrentPick,
+        badge,
+        text,
+      });
+
+      return json({ success: true, message });
     }
 
     if (!(await isOrganizer()))

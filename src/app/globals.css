@@ -11565,3 +11565,632 @@ textarea:focus-visible {
   font-size: 12px;
   color: #94a3b8;
 }
+
+/* ==========================================================================
+   RAFFLE LIVE CHAT & ATTENDANCE SPOTLIGHT
+   ========================================================================== */
+
+@keyframes pulseChatDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+@keyframes bannerPulse {
+  0%, 100% { border-left-color: #facc15; box-shadow: 0 0 12px rgba(250, 204, 21, 0.15); }
+  50% { border-left-color: #38bdf8; box-shadow: 0 0 20px rgba(56, 189, 248, 0.25); }
+}
+
+@keyframes pulseClaimBtn {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 14px rgba(250, 204, 21, 0.35); }
+  50% { transform: scale(1.02); box-shadow: 0 0 22px rgba(250, 204, 21, 0.6); }
+}
+
+@keyframes chatMsgFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes candidateSpotlightGlow {
+  0%, 100% { border-color: rgba(250, 204, 21, 0.5); box-shadow: 0 0 12px rgba(250, 204, 21, 0.2); }
+  50% { border-color: rgba(56, 189, 248, 0.7); box-shadow: 0 0 20px rgba(56, 189, 248, 0.35); }
+}
+
+.raffle-sidebar-tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 12px;
+}
+
+.raffle-sidebar-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.raffle-sidebar-tab:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.raffle-sidebar-tab.active {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.3);
+  font-weight: 700;
+}
+
+.raffle-sidebar-tab-badge {
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  padding: 1px 6px;
+  border-radius: 9999px;
+}
+
+.raffle-chat-tab-alert-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #facc15;
+  box-shadow: 0 0 8px #facc15;
+  animation: pulseChatDot 1.2s infinite ease-in-out;
+}
+
+.raffle-live-chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 470px;
+  max-height: 480px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  position: relative;
+}
+
+.raffle-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(2, 6, 23, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.raffle-chat-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.raffle-chat-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.raffle-chat-live-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  animation: pulseChatDot 1.5s infinite;
+}
+
+.raffle-chat-clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #f87171;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.raffle-chat-clear-btn:hover {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+.raffle-chat-candidate-banner {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(250, 204, 21, 0.3);
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+.raffle-chat-candidate-banner.waiting {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.18) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border-left: 3px solid #facc15;
+  animation: bannerPulse 2s infinite ease-in-out;
+}
+
+.raffle-chat-candidate-banner.claimed {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border-left: 3px solid #4ade80;
+}
+
+.raffle-chat-candidate-banner-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #facc15;
+  letter-spacing: 0.5px;
+}
+
+.raffle-chat-candidate-banner.claimed .raffle-chat-candidate-banner-top {
+  color: #4ade80;
+}
+
+.raffle-chat-candidate-banner-desc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+
+.raffle-chat-claim-timer {
+  color: #facc15;
+  font-weight: 700;
+}
+
+.raffle-chat-candidate-proof {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  font-size: 12px;
+  color: #bbf7d0;
+  font-weight: 600;
+}
+
+.raffle-chat-claim-action-btn {
+  margin-top: 8px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+  color: #000000;
+  font-weight: 800;
+  font-size: 12px;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.4);
+  animation: pulseClaimBtn 1.5s infinite;
+}
+
+.raffle-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 180px;
+  scroll-behavior: smooth;
+}
+
+.raffle-chat-empty {
+  text-align: center;
+  padding: 36px 12px;
+  color: #94a3b8;
+  font-size: 12.5px;
+  margin: auto;
+}
+
+.raffle-chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 100%;
+  animation: chatMsgFadeIn 0.2s ease-out;
+}
+
+.raffle-chat-msg.candidate-spotlight {
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.2);
+  animation: candidateSpotlightGlow 2s infinite ease-in-out;
+}
+
+.raffle-chat-msg.organizer-msg .raffle-chat-bubble {
+  border-left: 2px solid #facc15;
+}
+
+.raffle-chat-msg.my-msg .raffle-chat-bubble {
+  border-left: 2px solid #818cf8;
+}
+
+.raffle-chat-msg-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.raffle-chat-sender-name {
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffffff;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raffle-chat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.raffle-chat-badge.organizer {
+  background: rgba(250, 204, 21, 0.18);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+}
+
+.raffle-chat-badge.candidate {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(34, 197, 94, 0.35) 100%);
+  color: #fef08a;
+  border: 1px solid rgba(250, 204, 21, 0.6);
+  font-weight: 800;
+}
+
+.raffle-chat-badge.entrant {
+  background: rgba(129, 140, 248, 0.18);
+  color: #a5b4fc;
+  border: 1px solid rgba(129, 140, 248, 0.3);
+}
+
+.raffle-chat-badge.spectator {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.raffle-chat-time {
+  font-size: 10px;
+  color: #64748b;
+  margin-left: auto;
+}
+
+.raffle-chat-bubble {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #f1f5f9;
+  word-break: break-word;
+}
+
+.raffle-chat-candidate-ping {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #facc15;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.raffle-chat-text {
+  margin: 0;
+}
+
+.raffle-chat-new-msg-toast {
+  position: absolute;
+  bottom: 85px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.raffle-chat-presets-bar {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding: 6px 10px;
+  background: rgba(2, 6, 23, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+
+.raffle-chat-presets-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.raffle-chat-preset-chip {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.raffle-chat-preset-chip:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.raffle-chat-preset-chip.urgent-candidate {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(202, 138, 4, 0.35) 100%);
+  border-color: #facc15;
+  color: #fef08a;
+  font-weight: 700;
+}
+
+.raffle-chat-identity-bar {
+  padding: 5px 12px;
+  font-size: 11px;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.raffle-chat-identity-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.raffle-chat-identity-tag.host {
+  color: #facc15;
+}
+
+.raffle-chat-identity-tag.entrant {
+  color: #a5b4fc;
+}
+
+.raffle-chat-guest-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.raffle-chat-name-input {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #ffffff;
+  padding: 2px 6px;
+  font-size: 11px;
+  outline: none;
+}
+
+.raffle-chat-name-save-btn {
+  background: #38bdf8;
+  color: #000000;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.raffle-chat-change-name-btn {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  font-size: 10.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.raffle-chat-input-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(2, 6, 23, 0.65);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.raffle-chat-input {
+  flex: 1;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #ffffff;
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.raffle-chat-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
+}
+
+.raffle-chat-send-btn {
+  background: #0284c7;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.raffle-chat-send-btn:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.raffle-chat-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Spectator View-Only Mode Card */
+.raffle-chat-spectator-locked-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(2, 6, 23, 0.98) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.raffle-chat-spectator-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.raffle-chat-spectator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+.raffle-chat-spectator-badge strong {
+  color: #e2e8f0;
+}
+
+.raffle-chat-spectator-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  padding: 2px 7px;
+  border-radius: 9999px;
+}
+
+.raffle-chat-spectator-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.raffle-chat-spectator-lock-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+/* Sidebar Notification Badges */
+.raffle-sidebar-notif-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 9999px;
+  line-height: 1;
+  margin-left: 2px;
+  animation: notifBadgeBounce 0.3s ease;
+}
+
+.raffle-sidebar-notif-badge.chat-notif {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.65);
+}
+
+.raffle-sidebar-notif-badge.winner-notif {
+  background: #facc15;
+  color: #0f172a;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.65);
+}
+
+@keyframes notifBadgeBounce {
+  0% { transform: scale(0.6); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+

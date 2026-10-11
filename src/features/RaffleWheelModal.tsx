@@ -16,10 +16,12 @@ import {
   Clock,
   UserCheck,
   Gift,
+  MessageSquare,
 } from "lucide-react";
 import { type RafflePrizeItem, normalizePrizeItems } from "@/types";
 import { LiveViewersModal } from "./LiveViewersModal";
 import type { LiveViewerInfo } from "./useRafflePresence";
+import { RaffleLiveChat } from "./RaffleLiveChat";
 import { render3DRealisticWheel } from "./wheelRenderer3D";
 import {
   init3DDuckRace,
@@ -46,6 +48,7 @@ interface RaffleWheelModalProps {
   prizes: (string | RafflePrizeItem)[];
   defaultPrize?: string;
   initialDrawMode?: "wheel" | "duck_race";
+  raffleId?: string;
   onAssignWinner: (entryId: string, prizeWon: string) => Promise<boolean | void>;
   onRefresh?: () => Promise<void>;
 }
@@ -57,12 +60,19 @@ export function RaffleWheelModal({
   prizes,
   defaultPrize,
   initialDrawMode,
+  raffleId = "default",
   onAssignWinner,
   onRefresh,
 }: RaffleWheelModalProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const [modalSidebarTab, setModalSidebarTab] = useState<"controls" | "chat">("controls");
+  const [unreadModalChatCount, setUnreadModalChatCount] = useState<number>(0);
+  const modalSidebarTabRef = useRef<"controls" | "chat">("controls");
+  useEffect(() => {
+    modalSidebarTabRef.current = modalSidebarTab;
+  }, [modalSidebarTab]);
 
   const [drawMode, setDrawMode] = useState<"wheel" | "duck_race">(initialDrawMode || "duck_race");
   const duckRaceStateRef = useRef<DuckRaceState | null>(null);
@@ -1086,6 +1096,50 @@ export function RaffleWheelModal({
 
           {/* Controls & Winner Panel */}
           <div className="raffle-wheel-sidebar">
+            {/* Sidebar Tab Switcher */}
+            <div className="raffle-sidebar-tabs">
+              <button
+                type="button"
+                className={`raffle-sidebar-tab ${modalSidebarTab === "controls" ? "active" : ""}`}
+                onClick={() => setModalSidebarTab("controls")}
+              >
+                <Trophy size={13} />
+                <span>Draw Controls</span>
+              </button>
+              <button
+                type="button"
+                className={`raffle-sidebar-tab ${modalSidebarTab === "chat" ? "active" : ""}`}
+                onClick={() => {
+                  setModalSidebarTab("chat");
+                  setUnreadModalChatCount(0);
+                }}
+              >
+                <MessageSquare size={13} />
+                <span>Live Chat</span>
+                {unreadModalChatCount > 0 && (
+                  <span className="raffle-sidebar-notif-badge chat-notif">{unreadModalChatCount}</span>
+                )}
+                {winner && (
+                  <span className="raffle-chat-tab-alert-dot" title="Attendance Check in progress" />
+                )}
+              </button>
+            </div>
+
+            <div style={{ display: modalSidebarTab === "chat" ? "flex" : "none", flex: 1, minHeight: 0, flexDirection: "column" }}>
+              <RaffleLiveChat
+                raffleId={raffleId}
+                isOrganizer={true}
+                currentCandidateName={winner?.fullName}
+                claimRemainingSeconds={claimRemaining}
+                onNewMessage={() => {
+                  if (modalSidebarTabRef.current !== "chat") {
+                    setUnreadModalChatCount((prev) => prev + 1);
+                  }
+                }}
+              />
+            </div>
+
+            <div style={{ display: modalSidebarTab === "controls" ? "flex" : "none", flexDirection: "column", gap: 10 }}>
             {/* When drawing is idle or in progress and no winner awaiting attendance */}
             {!winner && (
               <div className="raffle-wheel-card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1236,6 +1290,29 @@ export function RaffleWheelModal({
                       </p>
                     </div>
 
+                    {/* Open Live Chat shortcut */}
+                    <button
+                      type="button"
+                      onClick={() => setModalSidebarTab("chat")}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        padding: "7px 10px",
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        background: "rgba(56, 189, 248, 0.12)",
+                        border: "1px solid rgba(56, 189, 248, 0.3)",
+                        color: "#38bdf8",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <MessageSquare size={13} />
+                      <span>Open Live Chat to check &quot;Present po!&quot;</span>
+                    </button>
+
                     {/* Action buttons: Confirm Present vs Re-pick */}
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
                       <button
@@ -1309,6 +1386,7 @@ export function RaffleWheelModal({
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       </div>

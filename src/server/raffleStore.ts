@@ -164,10 +164,21 @@ export async function updateRaffleSettings(data: {
   return merged;
 }
 
+function normalizeIpStr(ip: string): string {
+  if (!ip) return "";
+  let clean = ip.trim().toLowerCase();
+  if (clean.startsWith("[") && clean.endsWith("]")) clean = clean.slice(1, -1);
+  if (clean.startsWith("::ffff:")) clean = clean.slice(7);
+  if (clean.includes(".") && clean.includes(":")) clean = clean.split(":")[0];
+  if (clean === "::1" || clean === "localhost") return "127.0.0.1";
+  return clean;
+}
+
 function isSameIp(ipA?: string, ipB?: string): boolean {
   if (!ipA || !ipB) return false;
-  const a = ipA.trim().toLowerCase();
-  const b = ipB.trim().toLowerCase();
+  const a = normalizeIpStr(ipA);
+  const b = normalizeIpStr(ipB);
+  if (!a || !b) return false;
   if (a === b) return true;
   if (a.includes(":") && b.includes(":")) {
     const prefixA = a.split(":").slice(0, 4).join(":");
@@ -287,9 +298,11 @@ export async function submitRaffleEntry(
 }
 
 export async function setRaffleWinner(entryId: string, prizeWon: string | null): Promise<boolean> {
+  let dbSuccess = false;
   // 1. Try Neon DB
   try {
     await assignDbRaffleWinner(entryId, prizeWon);
+    dbSuccess = true;
   } catch (err) {
     console.warn("Neon DB assign winner error:", err);
   }
@@ -304,7 +317,7 @@ export async function setRaffleWinner(entryId: string, prizeWon: string | null):
       return true;
     }
   }
-  return false;
+  return dbSuccess;
 }
 
 export async function removeRaffleEntry(entryId: string): Promise<boolean> {
