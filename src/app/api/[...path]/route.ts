@@ -112,8 +112,8 @@ export async function GET(request: Request, context: Context) {
       return json({ success: true, message: "Sync lock reset." });
     }
     if (route === "raffle/live-spin") {
-      const { getLiveSpinState, getActiveDrawMode } = await import("@/server/liveSpinStore");
-      return json({ liveSpin: getLiveSpinState(), drawMode: getActiveDrawMode() });
+      const { getLiveSpinStateAsync, getActiveDrawModeAsync } = await import("@/server/liveSpinStore");
+      return json({ liveSpin: await getLiveSpinStateAsync(), drawMode: await getActiveDrawModeAsync() });
     }
     if (route === "raffle/viewers") {
       const { getLiveViewerCount, getLiveViewerList } = await import("@/server/liveViewerStore");
@@ -126,16 +126,20 @@ export async function GET(request: Request, context: Context) {
       return json({ messages: await getRecentChatMessages(raffleId) });
     }
     if (route === "raffle/live-stream") {
-      const { getLiveSpinState, subscribeLiveSpin, getActiveDrawMode } = await import("@/server/liveSpinStore");
+      const { getLiveSpinStateAsync, subscribeLiveSpin, getActiveDrawModeAsync } = await import("@/server/liveSpinStore");
       const { getLiveViewerCount, getLiveViewerList, subscribeViewerUpdates } = await import("@/server/liveViewerStore");
       const { getRecentChatMessages, subscribeChatMessages } = await import("@/server/raffleChatStore");
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         async start(controller) {
-          const initialData = `data: ${JSON.stringify(getLiveSpinState())}\n\n`;
+          const [initialSpinState, initialDrawMode] = await Promise.all([
+            getLiveSpinStateAsync(),
+            getActiveDrawModeAsync(),
+          ]);
+          const initialData = `data: ${JSON.stringify(initialSpinState)}\n\n`;
           controller.enqueue(encoder.encode(initialData));
 
-          const initialMode = `event: drawMode\ndata: ${JSON.stringify({ drawMode: getActiveDrawMode() })}\n\n`;
+          const initialMode = `event: drawMode\ndata: ${JSON.stringify({ drawMode: initialDrawMode })}\n\n`;
           controller.enqueue(encoder.encode(initialMode));
 
           const initialViewers = `event: viewers\ndata: ${JSON.stringify({ viewerCount: getLiveViewerCount(), viewers: getLiveViewerList() })}\n\n`;
@@ -178,10 +182,13 @@ export async function GET(request: Request, context: Context) {
             }
           });
 
-          let lastBroadcastStateJson = JSON.stringify(getLiveSpinState());
-          const syncInterval = setInterval(() => {
+          let lastBroadcastStateJson = JSON.stringify(initialSpinState);
+          let isSyncing = false;
+          const syncInterval = setInterval(async () => {
+            if (isSyncing) return;
+            isSyncing = true;
             try {
-              const current = getLiveSpinState();
+              const current = await getLiveSpinStateAsync();
               const currentJson = JSON.stringify(current);
               if (currentJson !== lastBroadcastStateJson) {
                 lastBroadcastStateJson = currentJson;
@@ -189,8 +196,10 @@ export async function GET(request: Request, context: Context) {
               }
             } catch {
               clearInterval(syncInterval);
+            } finally {
+              isSyncing = false;
             }
-          }, 300);
+          }, 500);
 
           const pingInterval = setInterval(() => {
             try {
@@ -225,12 +234,14 @@ export async function GET(request: Request, context: Context) {
       const { getRaffleState, getActiveRaffles, getArchivedRaffles } = await import(
         "@/server/raffleStore"
       );
-      const { getLiveSpinState, getActiveDrawMode } = await import(
+      const { getLiveSpinStateAsync, getActiveDrawModeAsync } = await import(
         "@/server/liveSpinStore"
       );
       const { getLiveViewerCount } = await import("@/server/liveViewerStore");
-      const currentLiveSpin = getLiveSpinState();
-      const currentDrawMode = getActiveDrawMode();
+      const [currentLiveSpin, currentDrawMode] = await Promise.all([
+        getLiveSpinStateAsync(),
+        getActiveDrawModeAsync(),
+      ]);
       const liveViewerCount = getLiveViewerCount();
 
       const url = new URL(request.url);
@@ -715,12 +726,17 @@ export async function POST(request: Request, context: Context) {
       if (!(await isOrganizer())) {
         return json({ error: "Unauthorized" }, 401);
       }
-      const { broadcastLiveSpin, getLiveSpinState, setActiveDrawMode, getActiveDrawMode } = await import("@/server/liveSpinStore");
+      const {
+        broadcastLiveSpin,
+        getLiveSpinStateAsync,
+        setActiveDrawMode,
+        getActiveDrawModeAsync,
+      } = await import("@/server/liveSpinStore");
       const body = (await request.json()) as any;
       if (body.action === "set_mode") {
         const drawMode: "wheel" | "duck_race" = body.drawMode === "duck_race" ? "duck_race" : "wheel";
         setActiveDrawMode(drawMode);
-        return json({ success: true, drawMode, liveSpin: getLiveSpinState() });
+        return json({ success: true, drawMode, liveSpin: await getLiveSpinStateAsync() });
       }
       if (body.action === "start") {
         const drawMode: "wheel" | "duck_race" = body.drawMode === "duck_race" ? "duck_race" : "wheel";
@@ -743,7 +759,7 @@ export async function POST(request: Request, context: Context) {
         return json({ success: true, liveSpin: spinState, drawMode });
       }
       if (body.action === "landed") {
-        const current = getLiveSpinState();
+        const current = await getLiveSpinStateAsync();
         const claimSeconds = Number(body.claimSeconds) || 60;
         const claimDeadline = Number(body.claimDeadline) || (Date.now() + claimSeconds * 1000);
         const winnerId = body.winnerId ? String(body.winnerId) : (current?.winnerId || "");
@@ -776,7 +792,7 @@ export async function POST(request: Request, context: Context) {
         return json({ success: true, liveSpin: landedState });
       }
       if (body.action === "claim_timer") {
-        const current = getLiveSpinState();
+        const current = await getLiveSpinStateAsync();
         if (current) {
           const claimSeconds = Number(body.claimSeconds) || 60;
           const claimDeadline = Number(body.claimDeadline) || (Date.now() + claimSeconds * 1000);
@@ -791,7 +807,8 @@ export async function POST(request: Request, context: Context) {
         return json({ success: true, liveSpin: null });
       }
       if (body.action === "awarded") {
-        const current = getLiveSpinState();
+        const current = await getLiveSpinStateAsync();
+        const currentMode = await getActiveDrawModeAsync();
         const updatedEntrants = Array.isArray(body.entrants)
           ? body.entrants
           : current?.entrants?.filter((e) => e.id !== (body.winnerId || current.winnerId));
@@ -806,7 +823,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(updatedEntrants) ? updatedEntrants.length : 0,
           status: "idle" as const,
-          drawMode: current?.drawMode || getActiveDrawMode(),
+          drawMode: current?.drawMode || currentMode,
           isAwarded: true,
           entrants: updatedEntrants,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
@@ -815,7 +832,8 @@ export async function POST(request: Request, context: Context) {
         return json({ success: true, liveSpin: awardedState });
       }
       if (body.action === "shuffle") {
-        const current = getLiveSpinState();
+        const current = await getLiveSpinStateAsync();
+        const currentMode = await getActiveDrawModeAsync();
         const shuffledEntrants = Array.isArray(body.entrants) ? body.entrants : current?.entrants;
         const shuffleState = {
           id: `shuffle-${Date.now()}`,
@@ -828,7 +846,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(shuffledEntrants) ? shuffledEntrants.length : (current?.sliceCount || 1),
           status: "idle" as const,
-          drawMode: current?.drawMode || getActiveDrawMode(),
+          drawMode: current?.drawMode || currentMode,
           entrants: shuffledEntrants,
           excludedIds: Array.isArray(body.excludedIds) ? body.excludedIds : current?.excludedIds,
           shuffledAt: Date.now(),
@@ -837,7 +855,8 @@ export async function POST(request: Request, context: Context) {
         return json({ success: true, liveSpin: shuffleState });
       }
       if (body.action === "repick") {
-        const current = getLiveSpinState();
+        const current = await getLiveSpinStateAsync();
+        const currentMode = await getActiveDrawModeAsync();
         const nextExcluded = Array.isArray(body.excludedIds)
           ? body.excludedIds
           : body.excludedId && current?.excludedIds
@@ -857,7 +876,7 @@ export async function POST(request: Request, context: Context) {
           durationMs: 0,
           sliceCount: Array.isArray(body.entrants) ? body.entrants.length : 0,
           status: "idle" as const,
-          drawMode: current?.drawMode || getActiveDrawMode(),
+          drawMode: current?.drawMode || currentMode,
           entrants: Array.isArray(body.entrants) ? body.entrants : undefined,
           excludedIds: nextExcluded,
         };
@@ -868,7 +887,7 @@ export async function POST(request: Request, context: Context) {
         broadcastLiveSpin(null);
         return json({ success: true, liveSpin: null });
       }
-      return json({ liveSpin: getLiveSpinState() });
+      return json({ liveSpin: await getLiveSpinStateAsync() });
     }
     if (route === "raffle/join") {
       const body = (await request.json()) as { fullName?: string; deviceId?: string; raffleId?: string; fingerprint?: string };

@@ -123,12 +123,17 @@ export function PublicLiveWheel({
     );
     if (isAlreadyAwarded) return null;
 
+    // Filter out stale draws that finished over 2 minutes ago
+    if (liveSpin.claimDeadline && now > liveSpin.claimDeadline + 120_000) {
+      return null;
+    }
+
     return {
       id: liveSpin.winnerId,
       name: liveSpin.winnerName,
       prize: liveSpin.prize || "Giveaway Prize",
     };
-  }, [liveSpin, entries]);
+  }, [liveSpin, entries, now]);
 
   // Synchronized Claim Countdown in seconds (always a consistent number while pick is active)
   const claimRemaining = React.useMemo(() => {

@@ -873,23 +873,23 @@ export async function readDbChatMessages(raffleId?: string, limit = 100): Promis
   const sql = getSql();
   if (!sql) return [];
   try {
-    let rows;
-    if (!raffleId || raffleId === "default" || raffleId === "latest") {
-      rows = await sql`
-        SELECT id, raffle_id, sender_name, sender_device_id, is_organizer, is_current_pick, badge, text, created_at_ms
-        FROM raffle_chat_messages
-        ORDER BY created_at_ms ASC
-        LIMIT ${limit};
-      `;
-    } else {
-      rows = await sql`
-        SELECT id, raffle_id, sender_name, sender_device_id, is_organizer, is_current_pick, badge, text, created_at_ms
-        FROM raffle_chat_messages
-        WHERE raffle_id = ${raffleId}
-        ORDER BY created_at_ms ASC
-        LIMIT ${limit};
-      `;
-    }
+    // Unify all chats for the active event room so messages are never split across disparate views!
+    const activeRows = await sql`
+      SELECT id FROM raffles WHERE is_active = true AND id NOT LIKE 'test-%' ORDER BY created_at DESC LIMIT 1;
+    `;
+    const canonicalActiveId = activeRows?.[0]?.id || "raffle-1790604357601";
+    const targetId = raffleId && raffleId !== "default" && raffleId !== "latest" ? raffleId : canonicalActiveId;
+
+    const rows = await sql`
+      SELECT id, raffle_id, sender_name, sender_device_id, is_organizer, is_current_pick, badge, text, created_at_ms
+      FROM raffle_chat_messages
+      WHERE raffle_id = ${targetId}
+         OR raffle_id = ${canonicalActiveId}
+         OR raffle_id = 'default'
+      ORDER BY created_at_ms ASC
+      LIMIT ${limit};
+    `;
+
     return rows.map((r: any) => ({
       id: r.id,
       raffleId: r.raffle_id,
@@ -920,12 +920,20 @@ export async function insertDbChatMessage(msg: {
   const sql = getSql();
   if (!sql) return false;
   try {
+    let resolvedRaffleId = msg.raffleId;
+    if (!resolvedRaffleId || resolvedRaffleId === "default") {
+      const activeRows = await sql`
+        SELECT id FROM raffles WHERE is_active = true AND id NOT LIKE 'test-%' ORDER BY created_at DESC LIMIT 1;
+      `;
+      resolvedRaffleId = activeRows?.[0]?.id || "raffle-1790604357601";
+    }
+
     await sql`
       INSERT INTO raffle_chat_messages (
         id, raffle_id, sender_name, sender_device_id, is_organizer, is_current_pick, badge, text, created_at_ms
       ) VALUES (
         ${msg.id},
-        ${msg.raffleId || "default"},
+        ${resolvedRaffleId},
         ${msg.senderName},
         ${msg.senderDeviceId || null},
         ${Boolean(msg.isOrganizer)},
@@ -1020,4 +1028,53 @@ export async function claimDbRaffleDevice(
     return { success: false, error: err.message || "Failed to link device to entrant." };
   }
 }
+
+// ==========================================
+// REAL-TIME LIVE SPIN STATE (NEON POSTGRES)
+// ==========================================
+
+export async function readDbLiveSpinState(): Promise<{ state: any; mode: "wheel" | "duck_race" } | null> {
+  const sql = getSql();
+  if (!sql) return null;
+  try {
+    const rows = await sql`
+      SELECT data, updated_at_ms FROM live_spin_state WHERE id = 'default' LIMIT 1;
+    `;
+    if (rows && rows.length > 0 && rows[0].data) {
+      const parsed = rows[0].data;
+      return {
+        state: parsed.state ?? null,
+        mode: parsed.mode || "wheel",
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeDbLiveSpinState(state: any, mode: "wheel" | "duck_race"): Promise<boolean> {
+  const sql = getSql();
+  if (!sql) return false;
+  try {
+    await sql`
+      INSERT INTO live_spin_state (id, data, updated_at_ms, updated_at)
+      VALUES (
+        'default',
+        ${JSON.stringify({ state, mode, updatedAt: Date.now() })}::jsonb,
+        ${Date.now()},
+        CURRENT_TIMESTAMP
+      )
+      ON CONFLICT (id) DO UPDATE
+      SET data = EXCLUDED.data,
+          updated_at_ms = EXCLUDED.updated_at_ms,
+          updated_at = CURRENT_TIMESTAMP;
+    `;
+    return true;
+  } catch (err) {
+    console.warn("Failed to write live spin state to Neon:", err);
+    return false;
+  }
+}
+
 

@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { readDbLiveSpinState, writeDbLiveSpinState } from "@/server/db";
 
 export interface LiveSpinState {
   id: string;
@@ -28,6 +29,8 @@ declare global {
   var __ch_activeDrawMode: ("wheel" | "duck_race") | undefined;
   // eslint-disable-next-line no-var
   var __ch_liveSpinSubscribers: Set<(state: LiveSpinState | null, mode: "wheel" | "duck_race") => void> | undefined;
+  // eslint-disable-next-line no-var
+  var __ch_liveSpinLastDbFetch: number | undefined;
 }
 
 function liveSpinFilePath(): string {
@@ -43,7 +46,7 @@ function liveSpinFilePath(): string {
 let lastKnownGoodState: LiveSpinState | null = null;
 let lastKnownGoodMode: "wheel" | "duck_race" = "wheel";
 
-function readPersistedLiveSpin(): { state: LiveSpinState | null; mode?: "wheel" | "duck_race" } | null {
+function readLocalLiveSpin(): { state: LiveSpinState | null; mode?: "wheel" | "duck_race" } | null {
   try {
     const file = liveSpinFilePath();
     const content = readFileSync(file, "utf8");
@@ -64,7 +67,7 @@ function readPersistedLiveSpin(): { state: LiveSpinState | null; mode?: "wheel" 
   return null;
 }
 
-function writePersistedLiveSpin(state: LiveSpinState | null, mode: "wheel" | "duck_race"): void {
+function writeLocalLiveSpin(state: LiveSpinState | null, mode: "wheel" | "duck_race"): void {
   try {
     lastKnownGoodState = state;
     lastKnownGoodMode = mode;
@@ -80,63 +83,70 @@ const subscribers: Set<(state: LiveSpinState | null, mode: "wheel" | "duck_race"
   globalThis.__ch_liveSpinSubscribers ?? (globalThis.__ch_liveSpinSubscribers = new Set());
 
 export function getActiveDrawMode(): "wheel" | "duck_race" {
-  const persisted = readPersistedLiveSpin();
-  if (persisted?.mode) {
-    globalThis.__ch_activeDrawMode = persisted.mode;
-    return persisted.mode;
-  }
   if (globalThis.__ch_activeDrawMode) return globalThis.__ch_activeDrawMode;
-  if (globalThis.__ch_liveSpinState?.drawMode) return globalThis.__ch_liveSpinState.drawMode;
+  const local = readLocalLiveSpin();
+  if (local?.mode) {
+    globalThis.__ch_activeDrawMode = local.mode;
+    return local.mode;
+  }
   return "wheel";
+}
+
+export async function getActiveDrawModeAsync(): Promise<"wheel" | "duck_race"> {
+  try {
+    const db = await readDbLiveSpinState();
+    if (db?.mode) {
+      globalThis.__ch_activeDrawMode = db.mode;
+      return db.mode;
+    }
+  } catch {}
+  return getActiveDrawMode();
 }
 
 export function setActiveDrawMode(mode: "wheel" | "duck_race"): "wheel" | "duck_race" {
   globalThis.__ch_activeDrawMode = mode;
-  // Read current live spin state so changing draw mode NEVER wipes out the candidate!
   const current = getLiveSpinState();
   if (current) {
     current.drawMode = mode;
   }
-  writePersistedLiveSpin(current || null, mode);
+  writeLocalLiveSpin(current || null, mode);
+  void writeDbLiveSpinState(current || null, mode);
+
   subscribers.forEach((listener) => {
     try {
       listener(current || null, mode);
-    } catch {
-      // safe ignore
-    }
+    } catch {}
   });
   return mode;
 }
 
 export function getLiveSpinState(): LiveSpinState | null {
-  // Always inspect persisted state from disk to guarantee synchronization
-  // across all Next.js worker threads and serverless lambdas
-  const persisted = readPersistedLiveSpin();
+  const local = readLocalLiveSpin();
   let candidate: LiveSpinState | null = null;
 
-  if (persisted && persisted.state) {
-    candidate = persisted.state;
-    if (persisted.mode) {
-      globalThis.__ch_activeDrawMode = persisted.mode;
-    }
+  if (local && local.state !== undefined) {
+    candidate = local.state;
+    if (local.mode) globalThis.__ch_activeDrawMode = local.mode;
   } else if (globalThis.__ch_liveSpinState) {
     candidate = globalThis.__ch_liveSpinState;
   }
 
   if (candidate) {
     const elapsed = Date.now() - candidate.startedAt;
-    // Awarded or idle state expires after 30 seconds to return to ready state
-    // Landed state awaiting attendance check stays valid indefinitely until admin picks another winner, repicks, or awards!
+    // Status validation
+    if (candidate.status === "landed" && !candidate.isAwarded) {
+      // Landed candidate awaiting attendance check remains active indefinitely until host awards or repicks!
+      globalThis.__ch_liveSpinState = candidate;
+      return candidate;
+    }
     const maxActive =
       candidate.isAwarded || candidate.status === "idle"
         ? 30_000
-        : candidate.status === "landed"
-          ? 24 * 60 * 60 * 1000 // Keep landed pick available until admin picks another winner!
-          : (candidate.durationMs || 8000) + 120_000;
+        : (candidate.durationMs || 8000) + 60_000;
 
     if (elapsed > maxActive) {
       globalThis.__ch_liveSpinState = null;
-      writePersistedLiveSpin(null, getActiveDrawMode());
+      writeLocalLiveSpin(null, getActiveDrawMode());
       return null;
     }
     globalThis.__ch_liveSpinState = candidate;
@@ -147,19 +157,63 @@ export function getLiveSpinState(): LiveSpinState | null {
   return null;
 }
 
+export async function getLiveSpinStateAsync(): Promise<LiveSpinState | null> {
+  // 1. Read single source of truth from Neon Postgres DB
+  try {
+    const db = await readDbLiveSpinState();
+    if (db) {
+      if (db.mode) globalThis.__ch_activeDrawMode = db.mode;
+      const candidate = db.state;
+      if (candidate) {
+        const elapsed = Date.now() - candidate.startedAt;
+        if (candidate.status === "landed" && !candidate.isAwarded) {
+          globalThis.__ch_liveSpinState = candidate;
+          writeLocalLiveSpin(candidate, db.mode || "wheel");
+          return candidate;
+        }
+        const maxActive =
+          candidate.isAwarded || candidate.status === "idle"
+            ? 30_000
+            : (candidate.durationMs || 8000) + 60_000;
+
+        if (elapsed <= maxActive) {
+          globalThis.__ch_liveSpinState = candidate;
+          writeLocalLiveSpin(candidate, db.mode || "wheel");
+          return candidate;
+        } else {
+          globalThis.__ch_liveSpinState = null;
+          writeLocalLiveSpin(null, db.mode || "wheel");
+          void writeDbLiveSpinState(null, db.mode || "wheel");
+          return null;
+        }
+      } else {
+        globalThis.__ch_liveSpinState = null;
+        writeLocalLiveSpin(null, db.mode || "wheel");
+        return null;
+      }
+    }
+  } catch (err) {
+    console.warn("Neon DB error fetching live spin state:", err);
+  }
+
+  // 2. Fallback to local memory / disk state
+  return getLiveSpinState();
+}
+
 export function broadcastLiveSpin(state: LiveSpinState | null): LiveSpinState | null {
   globalThis.__ch_liveSpinState = state;
   if (state?.drawMode) {
     globalThis.__ch_activeDrawMode = state.drawMode;
   }
   const currentMode = getActiveDrawMode();
-  writePersistedLiveSpin(state, currentMode);
+  writeLocalLiveSpin(state, currentMode);
+  // Persist to Neon Postgres DB immediately for all viewers on any serverless lambda!
+  void writeDbLiveSpinState(state, currentMode);
+
   subscribers.forEach((listener) => {
     try {
       listener(globalThis.__ch_liveSpinState || null, currentMode);
-    } catch {
-      // safe ignore
-    }
+    } catch {}
   });
   return globalThis.__ch_liveSpinState || null;
 }
@@ -170,6 +224,3 @@ export function subscribeLiveSpin(listener: (state: LiveSpinState | null, mode: 
     subscribers.delete(listener);
   };
 }
-
-
-
