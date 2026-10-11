@@ -74,6 +74,9 @@ interface RaffleResponse {
   activeRaffles?: RaffleActiveSummary[];
   archives?: RaffleArchiveSummary[];
   branding?: RaffleBranding;
+  liveSpin?: any;
+  drawMode?: "wheel" | "duck_race";
+  viewerCount?: number;
 }
 
 function getTimeRemaining(cutoffDate?: string): { text: string; urgent: boolean } {
@@ -183,14 +186,56 @@ export function RafflePage({
 
   useEffect(() => {
     void loadRaffle();
-    // Real-time live sync every 8 seconds while page is active
+
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource("/api/raffle/live-stream");
+      eventSource.onmessage = (event) => {
+        try {
+          if (!event.data) return;
+          const spinData = JSON.parse(event.data);
+          if (spinData) {
+            setData((prev) => (prev ? { ...prev, liveSpin: spinData } : prev));
+            if (spinData.isAwarded) {
+              void loadRaffle();
+            }
+          }
+        } catch {}
+      };
+      eventSource.addEventListener("drawMode", (event: MessageEvent) => {
+        try {
+          if (!event.data) return;
+          const modeData = JSON.parse(event.data);
+          if (modeData?.drawMode) {
+            setData((prev) => (prev ? { ...prev, drawMode: modeData.drawMode } : prev));
+          }
+        } catch {}
+      });
+      eventSource.addEventListener("viewers", (event: MessageEvent) => {
+        try {
+          if (!event.data) return;
+          const viewerData = JSON.parse(event.data);
+          if (typeof viewerData.viewerCount === "number") {
+            setData((prev) => (prev ? { ...prev, viewerCount: viewerData.viewerCount } : prev));
+          }
+        } catch {}
+      });
+    } catch {
+      // EventSource fallback
+    }
+
+    // High-frequency real-time live sync every 2 seconds while page is active
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
         void loadRaffle();
       }
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [raffleId]);
+    }, 2000);
+
+    return () => {
+      if (eventSource) eventSource.close();
+      clearInterval(interval);
+    };
+  }, [raffleId, selectedRaffleId]);
 
   // Count direct raffle visits in the same shared total used by the directory.
   useEffect(() => {
@@ -353,7 +398,13 @@ export function RafflePage({
 
   const cutoffMs = data?.cutoffDate ? new Date(data.cutoffDate).getTime() : 0;
   const cutoffPassed = cutoffMs > 0 ? currentTime >= cutoffMs : false;
-  const eventStarted = Boolean(data?.isEnded || cutoffPassed);
+  const hasActiveLiveDraw = Boolean(
+    data?.liveSpin &&
+    (data.liveSpin.status === "spinning" ||
+     data.liveSpin.status === "landed" ||
+     Boolean(data.liveSpin.winnerName))
+  );
+  const eventStarted = Boolean(data?.isEnded || cutoffPassed || hasActiveLiveDraw);
 
   // When cutoff deadline is reached, immediately re-fetch to ensure fresh entries for the live wheel
   const prevCutoffPassedRef = useRef(cutoffPassed);
@@ -1132,13 +1183,15 @@ export function RafflePage({
                   </div>
                 )}
 
-                {/* REAL-TIME LIVE DRAW WHEEL: ONLY SHOWN AFTER CUT-OFF DATE */}
+                {/* REAL-TIME LIVE DRAW WHEEL: ONLY SHOWN AFTER CUT-OFF DATE OR ACTIVE LIVE DRAW */}
                 {eventStarted && (
                   <PublicLiveWheel
                     entries={data.entries || []}
                     prizes={data.prizes || []}
                     onRefresh={loadRaffle}
                     myEntryName={data.myEntry?.fullName}
+                    initialLiveSpin={data.liveSpin}
+                    initialDrawMode={data.drawMode}
                   />
                 )}
 

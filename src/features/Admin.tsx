@@ -123,7 +123,27 @@ export function Admin() {
   const [state, setState] = useState<AppState | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [syncCompletedNotice, setSyncCompletedNotice] = useState<string | null>(null);
-  const [tab, setTab] = useState("directory");
+  const [tab, setTabState] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const urlTab = new URLSearchParams(window.location.search).get("tab");
+      if (urlTab) return urlTab;
+      const stored = localStorage.getItem("ch_admin_tab");
+      if (stored) return stored;
+    }
+    return "directory";
+  });
+
+  const setTab = (newTab: string) => {
+    setTabState(newTab);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("ch_admin_tab", newTab);
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", newTab);
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
+    }
+  };
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -516,6 +536,17 @@ export function Admin() {
     setError("");
     setMessage("");
     try {
+      let prizesToSave = [...raffleForm.prizes];
+      const pendingPrize = newPrizeName.trim();
+      if (pendingPrize) {
+        prizesToSave.push({
+          name: pendingPrize,
+          winnerCount: Math.max(1, newPrizeCount),
+        });
+        setNewPrizeName("");
+        setNewPrizeCount(1);
+      }
+
       const res = await api(
         "/api/raffle/admin",
         post({
@@ -525,7 +556,7 @@ export function Admin() {
           category: raffleForm.category,
           description: raffleForm.description,
           cutoffDate: raffleForm.cutoffDate,
-          prizes: raffleForm.prizes,
+          prizes: prizesToSave,
           isActive: raffleForm.isActive,
         }),
       );
@@ -541,6 +572,9 @@ export function Admin() {
           isActive:
             res.raffle.isActive !== undefined ? res.raffle.isActive : true,
         });
+        if (Array.isArray(res.activeRaffles)) {
+          setActiveRaffles(res.activeRaffles);
+        }
       }
       setMessage("Raffle settings saved and published to public /raffle page!");
     } catch (err: any) {

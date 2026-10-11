@@ -1,11 +1,25 @@
 import { neon } from "@neondatabase/serverless";
-import type {
-  AppState,
-  RaffleActiveSummary,
-  RaffleData,
-  RaffleArchiveSummary,
-  RafflePrizeItem,
+import {
+  type AppState,
+  type RaffleActiveSummary,
+  type RaffleData,
+  type RaffleArchiveSummary,
+  type RafflePrizeItem,
+  normalizePrizeItems,
 } from "@/types";
+
+function parseDbPrizes(prizesRaw: any): RafflePrizeItem[] {
+  if (!prizesRaw) return [];
+  if (typeof prizesRaw === "string") {
+    try {
+      const parsed = JSON.parse(prizesRaw);
+      return normalizePrizeItems(parsed);
+    } catch {
+      return [];
+    }
+  }
+  return normalizePrizeItems(prizesRaw);
+}
 
 const NEON_DEFAULT_URL =
   "postgresql://neondb_owner:npg_sf48HAgKjVFW@ep-purple-sky-b3f8vspb-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
@@ -29,12 +43,12 @@ let cachedState: CacheItem<AppState> | null = null;
 const STATE_CACHE_TTL_MS = 60_000; // 60 seconds TTL
 
 const cachedRaffles = new Map<string, CacheItem<RaffleData>>();
-const RAFFLE_CACHE_TTL_MS = 30_000; // 30 seconds TTL
+const RAFFLE_CACHE_TTL_MS = 1_500; // 1.5 seconds TTL for instant real-time sync
 
 let cachedActiveRaffles: CacheItem<RaffleActiveSummary[]> | null = null;
 
 let cachedArchives: CacheItem<RaffleArchiveSummary[]> | null = null;
-const ARCHIVES_CACHE_TTL_MS = 60_000; // 60 seconds TTL
+const ARCHIVES_CACHE_TTL_MS = 5_000; // 5 seconds TTL
 
 export function clearDbCache(type?: "state" | "raffle" | "archives" | "all") {
   if (!type || type === "all") {
@@ -210,6 +224,16 @@ async function ensureRaffleTables(sql: any) {
       CREATE INDEX IF NOT EXISTS idx_raffle_entries_device_id ON raffle_entries(device_id);
     `;
     try {
+      await sql`ALTER TABLE raffles ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Diamonds Giveaway';`;
+    } catch {
+      // Column may already exist
+    }
+    try {
+      await sql`ALTER TABLE raffles ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;`;
+    } catch {
+      // Column may already exist
+    }
+    try {
       await sql`ALTER TABLE raffle_entries ADD COLUMN IF NOT EXISTS ip_address VARCHAR(100);`;
       await sql`CREATE INDEX IF NOT EXISTS idx_raffle_entries_ip_address ON raffle_entries(raffle_id, ip_address);`;
     } catch {
@@ -275,7 +299,7 @@ export async function readDbRaffle(raffleId = "default"): Promise<RaffleData | n
       category: r.category || "Diamonds Giveaway",
       description: r.description,
       cutoffDate: r.cutoff_date ? new Date(r.cutoff_date).toISOString() : "",
-      prizes: Array.isArray(r.prizes) ? r.prizes : [],
+      prizes: parseDbPrizes(r.prizes),
       isActive: r.is_active,
       isArchived: Boolean(r.is_archived),
       entries: entryRows.map((entry: any) => ({
@@ -340,7 +364,7 @@ export async function readDbActiveRaffles(): Promise<RaffleActiveSummary[] | nul
       cutoffDate: row.cutoff_date
         ? new Date(row.cutoff_date).toISOString()
         : "",
-      prizes: Array.isArray(row.prizes) ? row.prizes : [],
+      prizes: parseDbPrizes(row.prizes),
       isActive: Boolean(row.is_active),
       entriesCount: Number(row.entries_count) || 0,
       createdAt: row.created_at
@@ -396,7 +420,7 @@ export async function readDbArchivedRaffles(): Promise<RaffleArchiveSummary[]> {
         title: r.title,
         description: r.description,
         cutoffDate: r.cutoff_date ? new Date(r.cutoff_date).toISOString() : "",
-        prizes: Array.isArray(r.prizes) ? r.prizes : [],
+        prizes: parseDbPrizes(r.prizes),
         createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
         entriesCount: count,
         winners: winnerRows.map((w: any) => ({
@@ -553,6 +577,8 @@ export async function writeDbRaffleSettings(data: {
     }
   }
 
+  const cleanPrizes = normalizePrizeItems(data.prizes);
+
   try {
     await ensureRaffleTables(sql);
     await sql`
@@ -563,7 +589,7 @@ export async function writeDbRaffleSettings(data: {
         ${data.category || "Diamonds Giveaway"},
         ${data.description},
         ${data.cutoffDate ? new Date(data.cutoffDate) : null},
-        ${JSON.stringify(data.prizes)}::jsonb,
+        ${JSON.stringify(cleanPrizes)}::jsonb,
         ${data.isActive !== undefined ? data.isActive : true},
         false,
         CURRENT_TIMESTAMP
@@ -578,8 +604,10 @@ export async function writeDbRaffleSettings(data: {
         is_active = EXCLUDED.is_active,
         updated_at = CURRENT_TIMESTAMP;
     `;
+    clearDbCache("all");
     return readDbRaffle(raffleId);
-  } catch {
+  } catch (err) {
+    console.error("writeDbRaffleSettings database error:", err);
     return null;
   }
 }

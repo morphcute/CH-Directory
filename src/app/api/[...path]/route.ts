@@ -165,7 +165,7 @@ export async function GET(request: Request, context: Context) {
             } catch {
               clearInterval(syncInterval);
             }
-          }, 1500);
+          }, 300);
 
           const pingInterval = setInterval(() => {
             try {
@@ -199,6 +199,14 @@ export async function GET(request: Request, context: Context) {
       const { getRaffleState, getActiveRaffles, getArchivedRaffles } = await import(
         "@/server/raffleStore"
       );
+      const { getLiveSpinState, getActiveDrawMode } = await import(
+        "@/server/liveSpinStore"
+      );
+      const { getLiveViewerCount } = await import("@/server/liveViewerStore");
+      const currentLiveSpin = getLiveSpinState();
+      const currentDrawMode = getActiveDrawMode();
+      const liveViewerCount = getLiveViewerCount();
+
       const url = new URL(request.url);
       const requestedId = url.searchParams.get("id") || "default";
       const raffle = await getRaffleState(requestedId);
@@ -240,6 +248,9 @@ export async function GET(request: Request, context: Context) {
           activeRaffles,
           archives,
           branding,
+          liveSpin: currentLiveSpin,
+          drawMode: currentDrawMode,
+          viewerCount: liveViewerCount,
         });
       }
 
@@ -299,6 +310,9 @@ export async function GET(request: Request, context: Context) {
         activeRaffles,
         archives,
         branding,
+        liveSpin: currentLiveSpin,
+        drawMode: currentDrawMode,
+        viewerCount: liveViewerCount,
       });
 
       return response;

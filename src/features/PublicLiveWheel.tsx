@@ -34,9 +34,18 @@ interface PublicLiveWheelProps {
   prizes?: (string | RafflePrizeItem)[];
   onRefresh?: () => void;
   myEntryName?: string;
+  initialLiveSpin?: LiveSpinState | null;
+  initialDrawMode?: "wheel" | "duck_race";
 }
 
-export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: PublicLiveWheelProps) {
+export function PublicLiveWheel({
+  entries,
+  prizes,
+  onRefresh,
+  myEntryName,
+  initialLiveSpin,
+  initialDrawMode = "wheel",
+}: PublicLiveWheelProps) {
   const { viewerCount, setViewerCount, viewersList, setViewersList } = useRafflePresence({
     entryName: myEntryName,
   });
@@ -45,8 +54,8 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  const [liveSpin, setLiveSpin] = useState<LiveSpinState | null>(null);
-  const [activeDrawMode, setActiveDrawMode] = useState<"wheel" | "duck_race">("wheel");
+  const [liveSpin, setLiveSpin] = useState<LiveSpinState | null>(initialLiveSpin ?? null);
+  const [activeDrawMode, setActiveDrawMode] = useState<"wheel" | "duck_race">(initialDrawMode ?? "wheel");
 
   const isLiveSpinning = Boolean(
     liveSpin &&
@@ -329,8 +338,38 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
     }
   }, []);
 
-  // Real-time synchronization via SSE and fallback polling
+  // Sync with initial props
   useEffect(() => {
+    if (initialLiveSpin) {
+      handleLiveSpinUpdate(initialLiveSpin);
+    }
+  }, [initialLiveSpin, handleLiveSpinUpdate]);
+
+  useEffect(() => {
+    if (initialDrawMode) {
+      setActiveDrawMode(initialDrawMode);
+    }
+  }, [initialDrawMode]);
+
+  // Real-time synchronization via SSE and immediate fallback polling
+  useEffect(() => {
+    // 1. Immediately fetch on mount so there is ZERO waiting time
+    const fetchInstantState = async () => {
+      try {
+        const res = await fetch("/api/raffle/live-spin", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          handleLiveSpinUpdate(data.liveSpin ?? null);
+          if (data.drawMode) {
+            setActiveDrawMode(data.drawMode);
+          } else if (data.liveSpin?.drawMode) {
+            setActiveDrawMode(data.liveSpin.drawMode);
+          }
+        }
+      } catch {}
+    };
+    void fetchInstantState();
+
     let eventSource: EventSource | null = null;
     try {
       eventSource = new EventSource("/api/raffle/live-stream");
@@ -366,7 +405,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
       // EventSource fallback to polling
     }
 
-    // Lightweight fallback polling every 2.5 seconds
+    // High-frequency lightweight polling every 1 second
     const interval = setInterval(async () => {
       try {
         if (document.visibilityState === "visible") {
@@ -388,7 +427,7 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
           }
         }
       } catch {}
-    }, 2500);
+    }, 1000);
 
     return () => {
       if (eventSource) eventSource.close();

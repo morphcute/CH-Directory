@@ -15,12 +15,13 @@ import {
   unarchiveDbRaffle,
   updateDbArchivedRaffle,
 } from "@/server/db";
-import type {
-  RaffleActiveSummary,
-  RaffleData,
-  RaffleEntry,
-  RaffleArchiveSummary,
-  RafflePrizeItem,
+import {
+  type RaffleActiveSummary,
+  type RaffleData,
+  type RaffleEntry,
+  type RaffleArchiveSummary,
+  type RafflePrizeItem,
+  normalizePrizeItems,
 } from "@/types";
 
 function localRafflePath(): string {
@@ -125,8 +126,11 @@ export async function updateRaffleSettings(data: {
     } catch {}
   }
 
+  const normalizedPrizes = normalizePrizeItems(data.prizes);
+
   const payload = {
     ...data,
+    prizes: normalizedPrizes,
     id: targetId || "default",
   };
 
@@ -134,7 +138,7 @@ export async function updateRaffleSettings(data: {
   try {
     const updated = await writeDbRaffleSettings(payload);
     if (updated) {
-      void writeLocalRaffle(updated);
+      await writeLocalRaffle(updated);
       return updated;
     }
   } catch (err) {
@@ -149,7 +153,7 @@ export async function updateRaffleSettings(data: {
     category: data.category || local?.category || "Diamonds Giveaway",
     description: data.description,
     cutoffDate: data.cutoffDate,
-    prizes: data.prizes,
+    prizes: normalizedPrizes,
     isActive: data.isActive !== undefined ? data.isActive : (local ? local.isActive : true),
     isArchived: false,
     entries: local?.entries || [],
