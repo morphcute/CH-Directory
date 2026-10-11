@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -354,6 +354,15 @@ export function RafflePage({
   const cutoffMs = data?.cutoffDate ? new Date(data.cutoffDate).getTime() : 0;
   const cutoffPassed = cutoffMs > 0 ? currentTime >= cutoffMs : false;
   const eventStarted = Boolean(data?.isEnded || cutoffPassed);
+
+  // When cutoff deadline is reached, immediately re-fetch to ensure fresh entries for the live wheel
+  const prevCutoffPassedRef = useRef(cutoffPassed);
+  useEffect(() => {
+    if (cutoffPassed && !prevCutoffPassedRef.current) {
+      prevCutoffPassedRef.current = true;
+      void loadRaffle();
+    }
+  }, [cutoffPassed]);
 
   function renderArchiveCards() {
     if (archives.length === 0) {
@@ -1154,7 +1163,7 @@ export function RafflePage({
                       const diff = cutoffMs - currentTime;
                       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                       const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                      const minutes = Math.floor((diff % (1000 * 60)) / (1000 * 60));
+                      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
                       return (

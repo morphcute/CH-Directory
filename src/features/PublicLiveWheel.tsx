@@ -288,18 +288,16 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
     confettiFrameRef.current = requestAnimationFrame(render);
   };
 
-  // Resilient live spin state updater that prevents transient network/worker nulls from destroying the active claim countdown
+  // Resilient live spin state updater: keeps the current landed pick visible until the organizer picks another winner or repicks!
   const handleLiveSpinUpdate = React.useCallback((data: LiveSpinState | null) => {
     if (!data) {
       setLiveSpin((prev) => {
-        // If an active landed candidate is currently in attendance verification and deadline hasn't elapsed, keep it!
+        // Keep active landed candidate! It should display there until the admin picks another winner!
         if (
           prev &&
           prev.status === "landed" &&
           !prev.isAwarded &&
-          prev.winnerName &&
-          prev.claimDeadline &&
-          prev.claimDeadline > Date.now()
+          prev.winnerName
         ) {
           return prev;
         }
@@ -308,7 +306,24 @@ export function PublicLiveWheel({ entries, prizes, onRefresh, myEntryName }: Pub
       return;
     }
 
-    setLiveSpin(data);
+    setLiveSpin((prev) => {
+      // If previous was a landed winner and incoming is idle without a winner and not explicitly repicked/awarded:
+      if (
+        data.status === "idle" &&
+        !data.winnerName &&
+        !data.isAwarded &&
+        prev &&
+        prev.status === "landed" &&
+        !prev.isAwarded &&
+        prev.winnerName &&
+        !data.excludedIds?.includes(prev.winnerId)
+      ) {
+        // Keep the landed pick showing until admin explicitly spins or repicks
+        return prev;
+      }
+      return data;
+    });
+
     if (data.drawMode) {
       setActiveDrawMode(data.drawMode);
     }

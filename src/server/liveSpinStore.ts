@@ -40,20 +40,36 @@ function liveSpinFilePath(): string {
   return path.join(process.cwd(), "data", "live-spin.json");
 }
 
+let lastKnownGoodState: LiveSpinState | null = null;
+let lastKnownGoodMode: "wheel" | "duck_race" = "wheel";
+
 function readPersistedLiveSpin(): { state: LiveSpinState | null; mode?: "wheel" | "duck_race" } | null {
   try {
     const file = liveSpinFilePath();
     const content = readFileSync(file, "utf8");
     const parsed = JSON.parse(content);
     if (parsed && typeof parsed === "object") {
+      if (parsed.state !== undefined) {
+        lastKnownGoodState = parsed.state;
+      }
+      if (parsed.mode) {
+        lastKnownGoodMode = parsed.mode;
+      }
       return parsed;
     }
   } catch {}
+  if (lastKnownGoodState) {
+    return { state: lastKnownGoodState, mode: lastKnownGoodMode };
+  }
   return null;
 }
 
 function writePersistedLiveSpin(state: LiveSpinState | null, mode: "wheel" | "duck_race"): void {
   try {
+    lastKnownGoodState = state;
+    lastKnownGoodMode = mode;
+    globalThis.__ch_liveSpinState = state;
+    globalThis.__ch_activeDrawMode = mode;
     const file = liveSpinFilePath();
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ state, mode, updatedAt: Date.now() }), "utf8");
@@ -76,13 +92,15 @@ export function getActiveDrawMode(): "wheel" | "duck_race" {
 
 export function setActiveDrawMode(mode: "wheel" | "duck_race"): "wheel" | "duck_race" {
   globalThis.__ch_activeDrawMode = mode;
-  if (globalThis.__ch_liveSpinState) {
-    globalThis.__ch_liveSpinState.drawMode = mode;
+  // Read current live spin state so changing draw mode NEVER wipes out the candidate!
+  const current = getLiveSpinState();
+  if (current) {
+    current.drawMode = mode;
   }
-  writePersistedLiveSpin(globalThis.__ch_liveSpinState || null, mode);
+  writePersistedLiveSpin(current || null, mode);
   subscribers.forEach((listener) => {
     try {
-      listener(globalThis.__ch_liveSpinState || null, mode);
+      listener(current || null, mode);
     } catch {
       // safe ignore
     }
@@ -107,14 +125,14 @@ export function getLiveSpinState(): LiveSpinState | null {
 
   if (candidate) {
     const elapsed = Date.now() - candidate.startedAt;
-    // Awarded or idle state expires after 10 seconds to return to ready state
-    // Landed state awaiting attendance check stays valid for up to 30 minutes unless cleared/awarded/repicked
+    // Awarded or idle state expires after 30 seconds to return to ready state
+    // Landed state awaiting attendance check stays valid indefinitely until admin picks another winner, repicks, or awards!
     const maxActive =
       candidate.isAwarded || candidate.status === "idle"
-        ? 10_000
+        ? 30_000
         : candidate.status === "landed"
-          ? 30 * 60 * 1000 // 30 minutes for attendance verification
-          : (candidate.durationMs || 8000) + 60_000;
+          ? 24 * 60 * 60 * 1000 // Keep landed pick available until admin picks another winner!
+          : (candidate.durationMs || 8000) + 120_000;
 
     if (elapsed > maxActive) {
       globalThis.__ch_liveSpinState = null;

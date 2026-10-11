@@ -153,6 +153,20 @@ export async function GET(request: Request, context: Context) {
             }
           });
 
+          let lastBroadcastStateJson = JSON.stringify(getLiveSpinState());
+          const syncInterval = setInterval(() => {
+            try {
+              const current = getLiveSpinState();
+              const currentJson = JSON.stringify(current);
+              if (currentJson !== lastBroadcastStateJson) {
+                lastBroadcastStateJson = currentJson;
+                controller.enqueue(encoder.encode(`data: ${currentJson}\n\n`));
+              }
+            } catch {
+              clearInterval(syncInterval);
+            }
+          }, 1500);
+
           const pingInterval = setInterval(() => {
             try {
               controller.enqueue(encoder.encode(": keepalive\n\n"));
@@ -162,6 +176,7 @@ export async function GET(request: Request, context: Context) {
           }, 15000);
 
           request.signal.addEventListener("abort", () => {
+            clearInterval(syncInterval);
             clearInterval(pingInterval);
             unsubscribeSpin();
             unsubscribeViewers();
@@ -1024,12 +1039,7 @@ export async function POST(request: Request, context: Context) {
           category: body.category ? String(body.category) : "Diamonds Giveaway",
           description: String(body.description || ""),
           cutoffDate: String(body.cutoffDate || new Date(Date.now() + 14 * 86400000).toISOString()),
-          prizes: Array.isArray(body.prizes)
-            ? body.prizes
-            : [
-                { name: "100 Diamonds", winnerCount: 5 },
-                { name: "Starlight Card", winnerCount: 1 },
-              ],
+          prizes: Array.isArray(body.prizes) ? body.prizes : [],
           isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
         });
         const archives = await getArchivedRaffles();

@@ -155,10 +155,7 @@ export function Admin() {
     category: "Diamonds Giveaway",
     description: "",
     cutoffDate: "",
-    prizes: [
-      { name: "100 Diamonds", winnerCount: 5 },
-      { name: "Starlight Card", winnerCount: 1 },
-    ],
+    prizes: [],
     isActive: true,
   });
   const [newPrizeName, setNewPrizeName] = useState("");
@@ -200,10 +197,7 @@ export function Admin() {
     category: "Diamonds Giveaway",
     description: "",
     cutoffDate: "",
-    prizes: [
-      { name: "100 Diamonds", winnerCount: 5 },
-      { name: "Starlight Card", winnerCount: 1 },
-    ],
+    prizes: [],
     isActive: true,
   });
 
@@ -251,10 +245,7 @@ export function Admin() {
           category: res.category || "Diamonds Giveaway",
           description: res.description || "",
           cutoffDate: res.cutoffDate || "",
-          prizes:
-            normalized.length > 0
-              ? normalized
-              : [{ name: "100 Diamonds", winnerCount: 5 }],
+          prizes: normalized,
           isActive: res.isActive !== undefined ? res.isActive : true,
         });
         if (normalized.length > 0) {
@@ -2793,10 +2784,7 @@ export function Admin() {
                                         category: "Diamonds Giveaway",
                                         description: "",
                                         cutoffDate: "",
-                                        prizes: [
-                                          { name: "100 Diamonds", winnerCount: 5 },
-                                          { name: "Starlight Card", winnerCount: 1 },
-                                        ],
+                                        prizes: [],
                                         isActive: true,
                                       });
                                       setShowCreateRaffleModal(true);
@@ -3108,7 +3096,7 @@ export function Admin() {
                                     onChange={(e) =>
                                       setNewPrizeName(e.target.value)
                                     }
-                                    placeholder="Prize name (e.g. 100 Diamonds, Starlight Card…)"
+                                    placeholder="Prize name (e.g. Starlight Card, Diamonds, Skin…)"
                                     className="admin-raffle-prize-builder-input"
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter") {
@@ -3183,60 +3171,82 @@ export function Admin() {
                                   </button>
                                 </div>
 
-                                {/* Current Prizes Tags with Winner Counter Stepper */}
-                                <div className="admin-raffle-prizes-tags-wrap">
-                                  {raffleForm.prizes.map((p, idx) => (
-                                    <div
-                                      key={p.id || idx}
-                                      className="admin-raffle-prize-tag-card"
-                                    >
-                                      <span className="admin-raffle-prize-tag-name">
-                                        {p.name}
-                                      </span>
-                                      <div className="admin-raffle-prize-tag-stepper">
-                                        <span className="admin-raffle-prize-tag-label">
-                                          Winners:
-                                        </span>
+                                {/* Current Prizes with Editable Name & Winner Stepper */}
+                                {raffleForm.prizes.length === 0 ? (
+                                  <div style={{ color: "#94a3b8", fontSize: 12, padding: "8px 0" }}>
+                                    No prize tiers added yet. Use the inputs above to add prizes and allocate winner counts.
+                                  </div>
+                                ) : (
+                                  <div className="admin-raffle-prizes-tags-wrap">
+                                    {raffleForm.prizes.map((p, idx) => (
+                                      <div
+                                        key={p.id || idx}
+                                        className="admin-raffle-prize-tag-card"
+                                      >
                                         <input
-                                          type="number"
-                                          min={1}
-                                          max={500}
-                                          value={p.winnerCount}
+                                          type="text"
+                                          value={p.name}
                                           onChange={(e) => {
-                                            const val = Math.max(
-                                              1,
-                                              parseInt(e.target.value, 10) || 1,
-                                            );
+                                            const val = e.target.value;
                                             setRaffleForm((prev) => {
                                               const copy = [...prev.prizes];
                                               copy[idx] = {
                                                 ...copy[idx],
-                                                winnerCount: val,
+                                                name: val,
                                               };
                                               return { ...prev, prizes: copy };
                                             });
                                           }}
-                                          className="admin-raffle-prize-tag-input"
+                                          placeholder="Prize name"
+                                          className="admin-raffle-prize-tag-name-input"
+                                          title="Edit prize name"
                                         />
+                                        <div className="admin-raffle-prize-tag-stepper">
+                                          <span className="admin-raffle-prize-tag-label">
+                                            Winners:
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            max={500}
+                                            value={p.winnerCount}
+                                            onChange={(e) => {
+                                              const val = Math.max(
+                                                1,
+                                                parseInt(e.target.value, 10) || 1,
+                                              );
+                                              setRaffleForm((prev) => {
+                                                const copy = [...prev.prizes];
+                                                copy[idx] = {
+                                                  ...copy[idx],
+                                                  winnerCount: val,
+                                                };
+                                                return { ...prev, prizes: copy };
+                                              });
+                                            }}
+                                            className="admin-raffle-prize-tag-input"
+                                            title="Edit winner count"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          title={`Remove ${p.name}`}
+                                          onClick={() =>
+                                            setRaffleForm((prev) => ({
+                                              ...prev,
+                                              prizes: prev.prizes.filter(
+                                                (_, i) => i !== idx,
+                                              ),
+                                            }))
+                                          }
+                                          className="admin-raffle-prize-tag-remove"
+                                        >
+                                          ×
+                                        </button>
                                       </div>
-                                      <button
-                                        type="button"
-                                        title={`Remove ${p.name}`}
-                                        onClick={() =>
-                                          setRaffleForm((prev) => ({
-                                            ...prev,
-                                            prizes: prev.prizes.filter(
-                                              (_, i) => i !== idx,
-                                            ),
-                                          }))
-                                        }
-                                        className="admin-raffle-prize-tag-remove"
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
 
                               <label
@@ -4694,7 +4704,7 @@ export function Admin() {
               >
                 <input
                   type="text"
-                  placeholder="Prize name (e.g. 100 Diamonds)"
+                  placeholder="Prize name (e.g. Starlight Card, Skin…)"
                   value={createPrizeName}
                   onChange={(e) => setCreatePrizeName(e.target.value)}
                   onKeyDown={(e) => {
@@ -4787,61 +4797,101 @@ export function Admin() {
                 </button>
               </div>
 
-
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {createRaffleForm.prizes.map((p, idx) => (
-                  <div
-                    key={p.id || idx}
-                    style={{
-                      background: "#0b1120",
-                      border: "1px solid #1e293b",
-                      borderRadius: 8,
-                      padding: "5px 8px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <span style={{ color: "#ffffff", fontSize: 12 }}>
-                      {p.name}
-                    </span>
-                    <span
+              {createRaffleForm.prizes.length === 0 ? (
+                <div style={{ color: "#94a3b8", fontSize: 12, padding: "4px 0" }}>
+                  No prizes added yet. Specify prize name and winners count above.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {createRaffleForm.prizes.map((p, idx) => (
+                    <div
+                      key={p.id || idx}
                       style={{
-                        fontSize: 11,
-                        color: "#38bdf8",
-                        fontWeight: 700,
-                        background: "rgba(56,189,248,0.15)",
-                        padding: "1px 6px",
-                        borderRadius: 4,
+                        background: "#0b1120",
+                        border: "1px solid #1e293b",
+                        borderRadius: 8,
+                        padding: "5px 8px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
                       }}
                     >
-                      × {p.winnerCount}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCreateRaffleForm((prev) => ({
-                          ...prev,
-                          prizes: prev.prizes.filter((_, i) => i !== idx),
-                        }))
-                      }
-                      title={`Remove ${p.name}`}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "#94a3b8",
-                        cursor: "pointer",
-                        fontSize: 14,
-                        padding: "0 2px",
-                        lineHeight: 1,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      <input
+                        type="text"
+                        value={p.name}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCreateRaffleForm((prev) => {
+                            const copy = [...prev.prizes];
+                            copy[idx] = { ...copy[idx], name: val };
+                            return { ...prev, prizes: copy };
+                          });
+                        }}
+                        placeholder="Prize name"
+                        style={{
+                          background: "rgba(15, 23, 42, 0.6)",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          borderRadius: 4,
+                          color: "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          padding: "2px 6px",
+                          width: 120,
+                        }}
+                      />
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 11, color: "#38bdf8", fontWeight: 700 }}>×</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={p.winnerCount}
+                          onChange={(e) => {
+                            const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                            setCreateRaffleForm((prev) => {
+                              const copy = [...prev.prizes];
+                              copy[idx] = { ...copy[idx], winnerCount: val };
+                              return { ...prev, prizes: copy };
+                            });
+                          }}
+                          style={{
+                            width: 44,
+                            background: "rgba(56,189,248,0.15)",
+                            border: "1px solid rgba(56,189,248,0.3)",
+                            borderRadius: 4,
+                            color: "#38bdf8",
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            padding: "2px 4px",
+                            textAlign: "center",
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCreateRaffleForm((prev) => ({
+                            ...prev,
+                            prizes: prev.prizes.filter((_, i) => i !== idx),
+                          }))
+                        }
+                        title={`Remove ${p.name}`}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#94a3b8",
+                          cursor: "pointer",
+                          fontSize: 14,
+                          padding: "0 2px",
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <label className="checkbox-field" style={{ marginBottom: 18 }}>
