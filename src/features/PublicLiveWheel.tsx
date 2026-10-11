@@ -56,10 +56,10 @@ export function PublicLiveWheel({
     entryName: myEntryName,
   });
   const [showViewersModal, setShowViewersModal] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState<"chat" | "info">("chat");
+  const [sidebarTab, setSidebarTab] = useState<"chat" | "info">("info");
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
   const [unreadWinnerCount, setUnreadWinnerCount] = useState<number>(0);
-  const sidebarTabRef = useRef<"chat" | "info">("chat");
+  const sidebarTabRef = useRef<"chat" | "info">("info");
   useEffect(() => {
     sidebarTabRef.current = sidebarTab;
   }, [sidebarTab]);
@@ -775,6 +775,22 @@ export function PublicLiveWheel({
           <div className="raffle-sidebar-tabs">
             <button
               type="button"
+              className={`raffle-sidebar-tab ${sidebarTab === "info" ? "active" : ""}`}
+              onClick={() => {
+                setSidebarTab("info");
+                setUnreadWinnerCount(0);
+              }}
+            >
+              <Trophy size={13} />
+              <span>Draw & Winners</span>
+              {unreadWinnerCount > 0 ? (
+                <span className="raffle-sidebar-notif-badge winner-notif">{unreadWinnerCount}</span>
+              ) : awardedWinners.length > 0 ? (
+                <span className="raffle-sidebar-tab-badge">{awardedWinners.length}</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
               className={`raffle-sidebar-tab ${sidebarTab === "chat" ? "active" : ""}`}
               onClick={() => {
                 setSidebarTab("chat");
@@ -789,22 +805,6 @@ export function PublicLiveWheel({
               {currentPick && (
                 <span className="raffle-chat-tab-alert-dot" title="Winner drawing!" />
               )}
-            </button>
-            <button
-              type="button"
-              className={`raffle-sidebar-tab ${sidebarTab === "info" ? "active" : ""}`}
-              onClick={() => {
-                setSidebarTab("info");
-                setUnreadWinnerCount(0);
-              }}
-            >
-              <Trophy size={13} />
-              <span>Draw & Winners</span>
-              {unreadWinnerCount > 0 ? (
-                <span className="raffle-sidebar-notif-badge winner-notif">{unreadWinnerCount}</span>
-              ) : awardedWinners.length > 0 ? (
-                <span className="raffle-sidebar-tab-badge">{awardedWinners.length}</span>
-              ) : null}
             </button>
           </div>
 
